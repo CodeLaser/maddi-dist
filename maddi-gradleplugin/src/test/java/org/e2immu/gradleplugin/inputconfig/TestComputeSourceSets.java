@@ -15,7 +15,7 @@ public class TestComputeSourceSets {
         ComputeSourceSets css = new ComputeSourceSets(Path.of(".").toAbsolutePath());
         Path workingDirectory = css.getWorkingDirectory();
         assertTrue(workingDirectory.isAbsolute());
-        assertTrue(workingDirectory.toString().endsWith("/run-gradleplugin/."));
+        assertTrue(workingDirectory.toString().endsWith("/maddi-gradleplugin/."));
         Path srcMainJava = Path.of("src/main/java");
         assertTrue(Files.isDirectory(srcMainJava));
         assertFalse(srcMainJava.isAbsolute());
