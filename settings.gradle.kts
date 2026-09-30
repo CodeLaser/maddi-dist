@@ -33,9 +33,22 @@ plugins {
     id("org.jetbrains.intellij.platform.settings") version "2.18.1"
 }
 
+// From source (the default) or pinned (split stage 6): `-PmaddiFromSource=false` drops the included sibling
+// build(s) and resolves every io.codelaser coordinate from Maven local -- which is ~/.m2, or any directory named by
+// `-Dmaven.repo.local=…` -- or from the repository at `-PmaddiRepo=<url>`. Publish first, in each sibling:
+//     ./gradlew publishToMavenLocal [-Dmaven.repo.local=…]
+// build-logic (the conventions plugins) is always taken from ../maddi.
+val maddiFromSource = providers.gradleProperty("maddiFromSource").map { it.toBoolean() }.getOrElse(true)
+val maddiRepo = providers.gradleProperty("maddiRepo").orNull
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        if (!maddiFromSource) {
+            // the published maddi jars: first, so that Maven Central (which carries released
+            // maddi-annotation / maddi-support) cannot answer for them
+            if (maddiRepo != null) maven(url = maddiRepo) else mavenLocal()
+        }
         mavenCentral()
         // Kotlin K2 Analysis API ('*-for-ide' artifacts) -- not on Maven Central. See maddi-kotlin-k2 in maddi.
         maven(url = "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
@@ -51,8 +64,10 @@ dependencyResolutionManagement {
 rootProject.name = "maddi-dist"
 
 // from source: every io.codelaser:maddi-* coordinate below resolves to a project of one of these builds
-includeBuild("../maddi")
-includeBuild("../maddi-mod") // named only in runtimeOnly / shadeRuntime configurations (maddi-tier-guard)
+if (maddiFromSource) {
+    includeBuild("../maddi")
+    includeBuild("../maddi-mod") // named only in runtimeOnly / shadeRuntime configurations (maddi-tier-guard)
+}
 
 include("maddi-cli")
 include("maddi-cli-kotlin")
