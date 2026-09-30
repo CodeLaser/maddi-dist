@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,7 +83,7 @@ public class TestVersionSkew {
                                         + " declares; every other check in this class is then meaningless");
     }
 
-    @DisplayName("every maddi jar in the daemon distribution is at the project version")
+    @DisplayName("every maddi jar in the daemon distribution is at its repository's version")
     @Test
     public void theDaemonDistributionCarriesTheProjectVersion() throws IOException {
         Path lib = DAEMON_INSTALL.resolve("lib");
@@ -96,12 +98,42 @@ public class TestVersionSkew {
         // Refuse the vacuous pass: an empty lib/ would satisfy "every jar matches" without checking anything.
         assertFalse(ours.isEmpty(), "no maddi-*.jar in " + lib + " at all — this gate checked nothing");
 
-        String suffix = "-" + VERSION + ".jar";
-        List<String> stale = ours.stream().filter(n -> !n.endsWith(suffix)).toList();
-        assertTrue(stale.isEmpty(), "the daemon distribution is stale: expected every maddi jar at " + VERSION
-                                    + ", found " + stale + " in " + lib
+        // Since the split each jar carries the version of the repository that builds it: maddi (base), maddi-mod or
+        // this one. The tier list says which, and each sibling's gradle.properties says at what version.
+        Map<String, String> expected = expectedVersionPerModule();
+        List<String> stale = ours.stream().filter(n -> {
+            String module = expected.keySet().stream().filter(m -> n.startsWith(m + "-"))
+                    .max(java.util.Comparator.comparingInt(String::length)).orElse(null);
+            return module == null || !n.equals(module + "-" + expected.get(module) + ".jar");
+        }).toList();
+        assertTrue(stale.isEmpty(), "the daemon distribution is stale: expected every maddi jar at its repository's"
+                                    + " version " + expected + ", found " + stale + " in " + lib
                                     + "\nA daemon built before a rename does not fail, it analyses cleanly and"
                                     + " reports nothing — see this class's javadoc.");
+    }
+
+    /** module name -> the version of the repository it lives in, from the tier list and the siblings' properties. */
+    private static Map<String, String> expectedVersionPerModule() throws IOException {
+        Path maddi = ROOT.resolveSibling("maddi");
+        Map<String, String> versionPerTier = Map.of(
+                "base", declaredVersion(maddi.resolve("gradle.properties")),
+                "mod", declaredVersion(ROOT.resolveSibling("maddi-mod").resolve("gradle.properties")),
+                "dist", VERSION);
+        Map<String, String> result = new TreeMap<>();
+        for (String line : Files.readAllLines(maddi.resolve("build-logic/src/main/resources/tiers.txt"))) {
+            String[] parts = line.split("#", 2)[0].trim().split("\\s+");
+            if (parts.length == 2 && versionPerTier.containsKey(parts[1])) {
+                result.put(parts[0], versionPerTier.get(parts[1]));
+            }
+        }
+        assertFalse(result.isEmpty(), "no tiers read from " + maddi + "; this gate would check nothing");
+        return result;
+    }
+
+    private static String declaredVersion(Path gradleProperties) throws IOException {
+        return Files.readAllLines(gradleProperties).stream().map(String::strip)
+                .filter(l -> l.startsWith("version=")).map(l -> l.substring("version=".length()).strip())
+                .findFirst().orElseThrow(() -> new AssertionError("no `version=` in " + gradleProperties));
     }
 
     @DisplayName("the local plugin repository carries the project version, not only older ones")
