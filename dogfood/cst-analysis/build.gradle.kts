@@ -10,7 +10,7 @@ java {
 
 sourceSets {
     main {
-        java { setSrcDirs(listOf("../../maddi-cst-analysis/src/main/java")) }
+        java { setSrcDirs(listOf("../../../maddi/maddi-cst-analysis/src/main/java")) }
         resources { setSrcDirs(emptyList<String>()) }
     }
 }

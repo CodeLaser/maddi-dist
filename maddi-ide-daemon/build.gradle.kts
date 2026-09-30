@@ -19,6 +19,10 @@ plugins {
     id("java-library-conventions")
     application
 }
+
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+val maddiModVersion: String by project
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
@@ -30,42 +34,42 @@ val k2Runtime: Configuration by configurations.creating {
 }
 
 dependencies {
-    implementation(project(":maddi-callgraph"))  // ComputeCallGraph & co., moved out of prepwork (split stage 2)
-    k2Runtime(project(":maddi-kotlin-k2"))
+    implementation("io.codelaser:maddi-callgraph:$maddiVersion")  // ComputeCallGraph & co., moved out of prepwork (split stage 2)
+    k2Runtime("io.codelaser:maddi-kotlin-k2:$maddiVersion")
     // analysis pipeline (mirrors maddi-run-main)
-    api(project(":maddi-inspection-api"))
+    api("io.codelaser:maddi-inspection-api:$maddiVersion")
     // The modification analysis is a SERVICE (AnalysisEngine): compiled against the interface in base, the
     // implementation (maddi-mod) only on the run-time class path. The ext tier never compiles against mod
     // (tools/tiers/check_tiers.py; split plan §2).
-    implementation(project(":maddi-analysis-api"))
-    runtimeOnly(project(":maddi-run-analysis"))
-    implementation(project(":maddi-graph"))
-    implementation(project(":maddi-util"))
-    implementation(project(":maddi-cst-analysis"))             // PropertyImpl keys, ValueImpl
-    implementation(project(":maddi-cst-impl"))
-    implementation(project(":maddi-cst-io"))
-    implementation(project(":maddi-cst-print"))
-    implementation(project(":maddi-inspection-openjdk"))       // JavaInspectorImpl (the integration one is phased out)
-    implementation(project(":maddi-inspection-resource"))      // InputConfigurationImpl
+    implementation("io.codelaser:maddi-analysis-api:$maddiVersion")
+    runtimeOnly("io.codelaser:maddi-run-analysis:$maddiModVersion")
+    implementation("io.codelaser:maddi-graph:$maddiVersion")
+    implementation("io.codelaser:maddi-util:$maddiVersion")
+    implementation("io.codelaser:maddi-cst-analysis:$maddiVersion")             // PropertyImpl keys, ValueImpl
+    implementation("io.codelaser:maddi-cst-impl:$maddiVersion")
+    implementation("io.codelaser:maddi-cst-io:$maddiVersion")
+    implementation("io.codelaser:maddi-cst-print:$maddiVersion")
+    implementation("io.codelaser:maddi-inspection-openjdk:$maddiVersion")       // JavaInspectorImpl (the integration one is phased out)
+    implementation("io.codelaser:maddi-inspection-resource:$maddiVersion")      // InputConfigurationImpl
     // A project with Kotlin sources: the mixed parse (MixedProjectInspector), the census of what K2 could not read
     // (PlaceholderCensus), and the realm the compiler is loaded in (K2Realm). ⚠ The compiler itself is NOT a
     // dependency: its jars are found at run time (-Dmaddi.k2.home, set by the IDE that downloaded them), and a
     // daemon without them analyses the Java half and says so.
-    implementation(project(":maddi-inspection-mixed"))
-    implementation(project(":maddi-kotlin-api"))
-    implementation(project(":maddi-kotlin-realm"))
-    implementation(project(":maddi-java-bytecode"))
+    implementation("io.codelaser:maddi-inspection-mixed:$maddiVersion")
+    implementation("io.codelaser:maddi-kotlin-api:$maddiVersion")
+    implementation("io.codelaser:maddi-kotlin-realm:$maddiVersion")
+    implementation("io.codelaser:maddi-java-bytecode:$maddiVersion")
 
     // to access resource:/io/codelaser/maddi/aapi/archive/analyzedPackageFiles/libs.jar
-    runtimeOnly(project(":maddi-aapi-archive"))
+    runtimeOnly("io.codelaser:maddi-aapi-archive:$maddiVersion")
 
-    implementation(project(":maddi-run-config"))               // ErrorReport, JsonStreaming reuse
+    implementation("io.codelaser:maddi-run-config:$maddiVersion")               // ErrorReport, JsonStreaming reuse
 
     implementation("ch.qos.logback:logback-classic")
     implementation("com.fasterxml.jackson.core:jackson-databind")
 
     // the e2immu annotations, supplied to every analyzed project as a classpath part (SourceSetImpl.sourceSetOf)
-    implementation(project(":maddi-support"))
+    implementation("io.codelaser:maddi-support:$maddiVersion")
 }
 
 // The openjdk inspector drives javac internals; these exports are required at runtime (see maddi-run-openjdk).

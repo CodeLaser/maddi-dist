@@ -25,6 +25,10 @@ plugins {
     // Gradle 9; see PUBLISHING.md for the Portal's manual-approval step on a first publish.
     id("com.gradle.plugin-publish") version "2.1.1"
 }
+
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+val maddiModVersion: String by project
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
@@ -59,39 +63,39 @@ val shadeAll: Configuration by configurations.creating {
 }
 
 dependencies {
-    shade(project(":maddi-inspection-api"))
-    shadeRuntime(project(":maddi-modification-common"))
-    shadeRuntime(project(":maddi-modification-prepwork"))
-    shadeRuntime(project(":maddi-modification-link"))
-    shadeRuntime(project(":maddi-modification-analyzer"))
-    shade(project(":maddi-graph"))
-    shade(project(":maddi-util"))
-    shade(project(":maddi-cst-analysis"))
+    shade("io.codelaser:maddi-inspection-api:$maddiVersion")
+    shadeRuntime("io.codelaser:maddi-modification-common:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-prepwork:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-link:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-analyzer:$maddiModVersion")
+    shade("io.codelaser:maddi-graph:$maddiVersion")
+    shade("io.codelaser:maddi-util:$maddiVersion")
+    shade("io.codelaser:maddi-cst-analysis:$maddiVersion")
 
-    shade(project(":maddi-cst-impl"))
-    shade(project(":maddi-cst-io"))
-    shade(project(":maddi-cst-print"))
-    shade(project(":maddi-inspection-parser"))
-    shade(project(":maddi-inspection-integration"))
-    shade(project(":maddi-inspection-resource"))
-    shade(project(":maddi-java-bytecode"))
-    shade(project(":maddi-java-parser"))
-    shadeRuntime(project(":maddi-aapi-parser"))
-    testRuntimeOnly(project(":maddi-aapi-archive"))
+    shade("io.codelaser:maddi-cst-impl:$maddiVersion")
+    shade("io.codelaser:maddi-cst-io:$maddiVersion")
+    shade("io.codelaser:maddi-cst-print:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-parser:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-integration:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-resource:$maddiVersion")
+    shade("io.codelaser:maddi-java-bytecode:$maddiVersion")
+    shade("io.codelaser:maddi-java-parser:$maddiVersion")
+    shadeRuntime("io.codelaser:maddi-aapi-parser:$maddiModVersion")
+    testRuntimeOnly("io.codelaser:maddi-aapi-archive:$maddiVersion")
 
-    shade(project(":maddi-run-config"))
-    shade(project(":maddi-run-main")) // GeneralConfiguration/InputConfiguration property mapping
-    shadeRuntime(project(":maddi-run-analysis"))  // the engine run-main asks for at run time (split stage 3)
-    shade(project(":maddi-run-openjdk")) // the openjdk-parser-based RunAnalyzer, run in a forked worker
+    shade("io.codelaser:maddi-run-config:$maddiVersion")
+    shade("io.codelaser:maddi-run-main:$maddiVersion") // GeneralConfiguration/InputConfiguration property mapping
+    shadeRuntime("io.codelaser:maddi-run-analysis:$maddiModVersion")  // the engine run-main asks for at run time (split stage 3)
+    shade("io.codelaser:maddi-run-openjdk:$maddiVersion") // the openjdk-parser-based RunAnalyzer, run in a forked worker
 
     shade("ch.qos.logback:logback-classic")
     shade("com.fasterxml.jackson.core:jackson-databind")
 
     // TestEventualRatchet (slowTest): parses the dogfood input itself and runs the analysis through the engine
     // interface; the engine is on the test run-time class path through shadeRuntime
-    testImplementation(project(":maddi-analysis-api"))
-    testImplementation(project(":maddi-callgraph"))
-    testImplementation(project(":maddi-inspection-openjdk"))
+    testImplementation("io.codelaser:maddi-analysis-api:$maddiVersion")
+    testImplementation("io.codelaser:maddi-callgraph:$maddiVersion")
+    testImplementation("io.codelaser:maddi-inspection-openjdk:$maddiVersion")
     testImplementation("ch.qos.logback:logback-classic")
 
     // GRADLE PLUGIN
@@ -219,7 +223,10 @@ tasks.named<Test>("test") {
 val dogfoodInputConfiguration by tasks.registering(GradleBuild::class) {
     group = "verification"
     description = "Generates the dogfood input configuration that TestEventualRatchet analyses."
-    dependsOn("publishAllPublicationsToLocalPluginRepoRepository", ":maddi-support:jar", ":maddi-util:jar")
+    dependsOn("publishAllPublicationsToLocalPluginRepoRepository",
+            gradle.includedBuild("maddi").task(":maddi-support:jar"),
+            gradle.includedBuild("maddi").task(":maddi-util:jar"),
+            gradle.includedBuild("maddi").task(":maddi-annotation:jar"))
     dir = file("../dogfood")
     tasks = listOf(":cst-impl:maddi-write-input-configuration")
     startParameter.isRefreshDependencies = true

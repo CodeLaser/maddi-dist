@@ -24,6 +24,10 @@ plugins {
     id("java-library-conventions")
     application
 }
+
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+val maddiModVersion: String by project
 java {
     // 26, like maddi-run-kotlin: the Kotlin front-end modules are compiled to the daemon JDK's bytecode version
     sourceCompatibility = JavaVersion.VERSION_26
@@ -38,9 +42,9 @@ val k2Runtime: Configuration by configurations.creating {
 }
 
 dependencies {
-    k2Runtime(project(":maddi-kotlin-k2"))
-    runtimeOnly(project(":maddi-run-kotlin"))    // the driver
-    runtimeOnly(project(":maddi-run-analysis"))  // the AnalysisEngine the driver loads
+    k2Runtime("io.codelaser:maddi-kotlin-k2:$maddiVersion")
+    runtimeOnly("io.codelaser:maddi-run-kotlin:$maddiVersion")    // the driver
+    runtimeOnly("io.codelaser:maddi-run-analysis:$maddiModVersion")  // the AnalysisEngine the driver loads
 }
 
 // the openjdk (javac) front-end that MixedInspector uses reaches into these javac internals

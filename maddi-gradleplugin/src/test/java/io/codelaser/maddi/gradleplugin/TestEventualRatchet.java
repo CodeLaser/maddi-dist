@@ -107,7 +107,7 @@ public class TestEventualRatchet {
      * {@code dogfood/README.md}. A missing directory is a hard failure, not a warning: the whole point
      * of the ratchet is that it cannot pass vacuously.
      */
-    private static final String AAPI = "../maddi-aapi-archive/src/main/resources/io/codelaser/maddi/aapi/archive/analyzedPackageFiles/";
+    private static final String AAPI = "../../maddi/maddi-aapi-archive/src/main/resources/io/codelaser/maddi/aapi/archive/analyzedPackageFiles/";
     private static final List<String> PRELOAD = List.of(AAPI + "jdk", AAPI + "libs/test", AAPI + "libs/log",
             AAPI + "libs/support");
 
@@ -208,7 +208,7 @@ public class TestEventualRatchet {
      */
     private static void assertCoverage() throws IOException {
         java.util.regex.Matcher versionMatcher = java.util.regex.Pattern.compile("(?m)^version=(.+)$")
-                .matcher(Files.readString(Path.of("../gradle.properties")));
+                .matcher(Files.readString(Path.of("../../maddi/gradle.properties"))); // the jars are maddi's (base)
         String version = versionMatcher.find() ? versionMatcher.group(1).trim() : "?";
         Set<String> jars = new TreeSet<>();
         java.util.regex.Matcher jarMatcher = java.util.regex.Pattern

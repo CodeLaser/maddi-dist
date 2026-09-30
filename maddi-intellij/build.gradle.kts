@@ -28,6 +28,9 @@ plugins {
     id("maddi-tier-guard")
 }
 
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+
 group = "io.codelaser"
 // No version here: it comes from the root gradle.properties, the one release train (PUBLISHING.md).
 // This is the user-visible version on JetBrains Marketplace, which rejects a version it has already
@@ -123,7 +126,7 @@ val k2Runtime: Configuration by configurations.creating {
     isCanBeConsumed = false
 }
 dependencies {
-    k2Runtime(project(":maddi-kotlin-k2"))
+    k2Runtime("io.codelaser:maddi-kotlin-k2:$maddiVersion")
 }
 val k2Home = tasks.register<Sync>("k2Home") {
     description = "Gathers the K2 jars into the directory runIde hands the daemon as its Kotlin front end."

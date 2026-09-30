@@ -27,10 +27,14 @@
 //
 // The read sits inside pluginManagement because that block has to come first in a settings script, and
 // the plugin version is one of the things it feeds.
+// Since the split the two versions come from two repositories: the jars are maddi's (../../maddi, base), the
+// plugin is this repository's (maddi-dist).
 pluginManagement {
-    val maddiVersion: String = java.util.Properties().apply {
-        settingsDir.resolve("../gradle.properties").inputStream().use { load(it) }
-    }.getProperty("version") ?: error("no `version` in ../gradle.properties")
+    fun versionIn(file: String): String = java.util.Properties().apply {
+        settingsDir.resolve(file).inputStream().use { load(it) }
+    }.getProperty("version") ?: error("no `version` in $file")
+    val maddiVersion = versionIn("../../maddi/gradle.properties")
+    val pluginVersion = versionIn("../gradle.properties")
     gradle.beforeProject { extra["maddiVersion"] = maddiVersion }
 
     repositories {
@@ -42,7 +46,7 @@ pluginManagement {
     // the plugin is requested without a version in build.gradle.kts; it gets the project's
     resolutionStrategy {
         eachPlugin {
-            if (requested.id.id == "io.codelaser.maddi.analyzer") useVersion(maddiVersion)
+            if (requested.id.id == "io.codelaser.maddi.analyzer") useVersion(pluginVersion)
         }
     }
 }
@@ -54,7 +58,7 @@ dependencyResolutionManagement {
         // is NOT enough: the plugin walks resolved artifacts and only records those with a module or project
         // component identifier, so a file dependency never reaches the input configuration.
         listOf("maddi-annotation", "maddi-support", "maddi-util").forEach {
-            flatDir { dirs("../$it/build/libs") }
+            flatDir { dirs("../../maddi/$it/build/libs") }
         }
     }
 }

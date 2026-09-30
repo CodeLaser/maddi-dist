@@ -23,14 +23,18 @@ plugins {
     id("java-library-conventions")
     application
 }
+
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+val maddiModVersion: String by project
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
 
 dependencies {
-    runtimeOnly(project(":maddi-run-openjdk"))   // the driver; brings the analysis-hints archive (its runtimeOnly)
-    runtimeOnly(project(":maddi-run-analysis"))  // the AnalysisEngine the driver loads
+    runtimeOnly("io.codelaser:maddi-run-openjdk:$maddiVersion")   // the driver; brings the analysis-hints archive (its runtimeOnly)
+    runtimeOnly("io.codelaser:maddi-run-analysis:$maddiModVersion")  // the AnalysisEngine the driver loads
 }
 
 application {

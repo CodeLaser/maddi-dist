@@ -29,6 +29,10 @@ plugins {
     id("com.gradleup.shadow") version "9.2.2"
 }
 
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+val maddiModVersion: String by project
+
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
@@ -71,28 +75,28 @@ val shadeAll: Configuration by configurations.creating {
 
 dependencies {
     // maddi modules (in-tree, same coordinates as the Gradle plugin) — bundled
-    shade(project(":maddi-inspection-api"))
-    shade(project(":maddi-inspection-resource"))
-    shade(project(":maddi-inspection-integration"))
-    shade(project(":maddi-inspection-openjdk"))
-    shade(project(":maddi-cst-api"))
-    shade(project(":maddi-cst-impl"))
-    shade(project(":maddi-cst-io"))
-    shade(project(":maddi-cst-print"))
-    shade(project(":maddi-cst-analysis"))
-    shadeRuntime(project(":maddi-modification-common"))
-    shadeRuntime(project(":maddi-modification-prepwork"))
-    shadeRuntime(project(":maddi-modification-link"))
-    shadeRuntime(project(":maddi-modification-analyzer"))
-    shadeRuntime(project(":maddi-aapi-parser"))
-    shade(project(":maddi-graph"))
-    shade(project(":maddi-util"))
-    shade(project(":maddi-run-config"))
-    shade(project(":maddi-run-main")) // Main constants + exit codes (same as the Gradle plugin)
-    shade(project(":maddi-analysis-api"))  // the engine's hints composer + decorator (WriteAnalysisHintsMojo)
-    shadeRuntime(project(":maddi-run-analysis"))  // the engine run-main asks for at run time (split stage 3)
-    shade(project(":maddi-run-openjdk")) // the openjdk-parser-based RunAnalyzer
-    shade(project(":maddi-aapi-archive")) // the shipped analysis-result jars (resource:.../*.jar)
+    shade("io.codelaser:maddi-inspection-api:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-resource:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-integration:$maddiVersion")
+    shade("io.codelaser:maddi-inspection-openjdk:$maddiVersion")
+    shade("io.codelaser:maddi-cst-api:$maddiVersion")
+    shade("io.codelaser:maddi-cst-impl:$maddiVersion")
+    shade("io.codelaser:maddi-cst-io:$maddiVersion")
+    shade("io.codelaser:maddi-cst-print:$maddiVersion")
+    shade("io.codelaser:maddi-cst-analysis:$maddiVersion")
+    shadeRuntime("io.codelaser:maddi-modification-common:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-prepwork:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-link:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-modification-analyzer:$maddiModVersion")
+    shadeRuntime("io.codelaser:maddi-aapi-parser:$maddiModVersion")
+    shade("io.codelaser:maddi-graph:$maddiVersion")
+    shade("io.codelaser:maddi-util:$maddiVersion")
+    shade("io.codelaser:maddi-run-config:$maddiVersion")
+    shade("io.codelaser:maddi-run-main:$maddiVersion") // Main constants + exit codes (same as the Gradle plugin)
+    shade("io.codelaser:maddi-analysis-api:$maddiVersion")  // the engine's hints composer + decorator (WriteAnalysisHintsMojo)
+    shadeRuntime("io.codelaser:maddi-run-analysis:$maddiModVersion")  // the engine run-main asks for at run time (split stage 3)
+    shade("io.codelaser:maddi-run-openjdk:$maddiVersion") // the openjdk-parser-based RunAnalyzer
+    shade("io.codelaser:maddi-aapi-archive:$maddiVersion") // the shipped analysis-result jars (resource:.../*.jar)
 
     // Maven plugin API — provided by the Maven runtime that hosts the plugin (never bundled)
     compileOnly("org.apache.maven:maven-plugin-api:$mavenVersion")

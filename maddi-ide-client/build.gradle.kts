@@ -23,6 +23,9 @@ plugins {
     `maven-publish` // so an Eclipse/Tycho build can consume this jar from the local Maven repo (publishToMavenLocal)
 }
 
+// maddi (base) and maddi-mod modules are reached by coordinate; settings.gradle.kts includes their builds
+val maddiVersion: String by project
+
 // No version here either: the root gradle.properties supplies it. maddi-eclipse consumes this jar
 // from mavenLocal and pins the coordinate in its pom (<maddi.client.version>), so the two move together.
 
@@ -52,7 +55,7 @@ val k2Runtime: Configuration by configurations.creating {
     isCanBeConsumed = false
 }
 dependencies {
-    k2Runtime(project(":maddi-kotlin-k2"))
+    k2Runtime("io.codelaser:maddi-kotlin-k2:$maddiVersion")
 }
 val k2Home = tasks.register<Sync>("k2Home") {
     from(k2Runtime)
