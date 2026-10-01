@@ -33,21 +33,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * errors over 98 source roots, and not one element annotation. That also contradicted the deliberate
  * {@code setFailFast(false)}, which exists so a mid-edit tree still yields something.
  * <p>
- * ⚠ The broken file here extends a type that does not exist. That shape is chosen, not arbitrary: an
- * unresolved reference on its own is filed as a parse WARNING by the openjdk inspector (javac errors are
- * warnings by design, since maddi routinely runs on a deliberately partial classpath), so it would leave
- * {@code haveErrors()} false and never reach the code under test. An unresolvable SUPERTYPE is different — the
- * constructor's implicit {@code super()} gets a null symbol, and {@code ScanCompilationUnit} raises a real
- * parse ERROR. That is exactly the shape seen in the field on {@code CommonMojo extends AbstractMojo}.
+ * ⚠ The broken file here has a SYNTAX error, and that shape is chosen, not arbitrary: an unresolved reference
+ * is filed as a parse WARNING by the openjdk inspector (maddi routinely runs on a deliberately partial classpath),
+ * so it would leave {@code haveErrors()} false and never reach the code under test. Until 2026-10-01 the fixture
+ * extended a type that does not exist, the field shape ({@code CommonMojo extends AbstractMojo}): the implicit
+ * {@code super()} then raised a parse ERROR in {@code ScanCompilationUnit}. That is an unresolved symbol too,
+ * and is now dropped with a warning, which is the behaviour this daemon wants anyway — so the premise assertion
+ * below fired, as it was written to.
  */
 public class TestPartialParse {
 
-    // extends a type that does not exist: the implicit super() cannot be attributed -> parse ERROR
+    // mid-edit: an unclosed parameter list. A syntax error is a parse ERROR, not a partial-classpath warning
     private static final String BROKEN = """
             package p;
-            public class Broken extends does.not.Exist {
-                public Broken() {
-                }
+            public class Broken {
+                int oops( {
             }
             """;
 
