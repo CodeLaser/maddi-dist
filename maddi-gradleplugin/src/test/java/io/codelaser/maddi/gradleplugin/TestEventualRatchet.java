@@ -83,7 +83,7 @@ public class TestEventualRatchet {
 
     /**
      * Membership is not enough: a survivor can keep its name in the list while its after-mark LEVEL drops. That
-     * happened in #51 -- the whole Info/Element family slid from {@code @Immutable(hc=true)} to {@code @FinalFields}
+     * happened in CodeLaser/maddi#51 -- the whole Info/Element family slid from {@code @Immutable(hc=true)} to {@code @FinalFields}
      * after the mark and the survivor list did not move. These keystones must stay at least immutable-hc after the
      * mark; each one caps everything that reads it as a super, so a drop here is never local.
      */
@@ -181,7 +181,7 @@ public class TestEventualRatchet {
             }
             if (!belowHc.isEmpty()) {
                 sb.append("LEVEL DROP (").append(belowHc.size()).append(") -- keystone(s) below @Immutable(hc=true)")
-                        .append(" after the mark; membership alone does not see this (the #51 shape). Diagnose with")
+                        .append(" after the mark; membership alone does not see this (the CodeLaser/maddi#51 shape). Diagnose with")
                         .append(" EC_TYPE_DEBUG=<fqn>: the ECTYPE 'MUTABLE: ... not excused' / 'DEPENDENT: ...'")
                         .append(" lines name the blocker:\n");
                 belowHc.forEach(t -> sb.append("    ").append(t).append('\n'));
