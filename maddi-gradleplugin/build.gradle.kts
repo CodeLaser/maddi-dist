@@ -64,6 +64,11 @@ val shadeAll: Configuration by configurations.creating {
 
 dependencies {
     shade("io.codelaser:maddi-inspection-api:$maddiVersion")
+    testImplementation("io.codelaser:maddi-cst-analysis:$maddiVersion")
+    implementation("io.codelaser:maddi-cst-api:$maddiVersion")
+    testImplementation("io.codelaser:maddi-inspection-api:$maddiVersion")
+    testImplementation("io.codelaser:maddi-inspection-resource:$maddiVersion")
+    testImplementation("io.codelaser:maddi-run-config:$maddiVersion")
     shadeRuntime("io.codelaser:maddi-modification-common:$maddiModVersion")
     shadeRuntime("io.codelaser:maddi-modification-prepwork:$maddiModVersion")
     shadeRuntime("io.codelaser:maddi-modification-link:$maddiModVersion")

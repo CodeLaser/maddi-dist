@@ -76,6 +76,7 @@ val shadeAll: Configuration by configurations.creating {
 dependencies {
     // maddi modules (in-tree, same coordinates as the Gradle plugin) — bundled
     shade("io.codelaser:maddi-inspection-api:$maddiVersion")
+    testImplementation("io.codelaser:maddi-cst-api:$maddiVersion")
     shade("io.codelaser:maddi-inspection-resource:$maddiVersion")
     shade("io.codelaser:maddi-inspection-integration:$maddiVersion")
     shade("io.codelaser:maddi-inspection-openjdk:$maddiVersion")
@@ -100,6 +101,7 @@ dependencies {
 
     // Maven plugin API — provided by the Maven runtime that hosts the plugin (never bundled)
     compileOnly("org.apache.maven:maven-plugin-api:$mavenVersion")
+    testImplementation("org.apache.maven:maven-model:$mavenVersion")
     compileOnly("org.apache.maven:maven-core:$mavenVersion")
     compileOnly("org.apache.maven:maven-artifact:$mavenVersion")
     compileOnly("org.apache.maven:maven-model:$mavenVersion")

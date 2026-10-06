@@ -35,6 +35,7 @@ val k2Runtime: Configuration by configurations.creating {
 
 dependencies {
     implementation("io.codelaser:maddi-callgraph:$maddiVersion")  // ComputeCallGraph & co., moved out of prepwork (split stage 2)
+    testImplementation("io.codelaser:maddi-cst-api:$maddiVersion")
     k2Runtime("io.codelaser:maddi-kotlin-k2:$maddiVersion")
     // analysis pipeline (mirrors maddi-run-main)
     api("io.codelaser:maddi-inspection-api:$maddiVersion")
