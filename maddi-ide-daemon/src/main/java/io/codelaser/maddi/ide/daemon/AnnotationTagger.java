@@ -100,7 +100,7 @@ public class AnnotationTagger {
                 if (!mi.isConstructor() && mi.hasReturnValue()) {
                     if (isMutable(a, PropertyImpl.IMMUTABLE_METHOD)) out.add(neg("@Mutable", true));
                     if (isDependent(a, PropertyImpl.INDEPENDENT_METHOD)) out.add(neg("@Dependent", true));
-                    if (isNullable(a, PropertyImpl.NOT_NULL_METHOD)) out.add(neg("@Nullable", true));
+                    if (isNullable(a, PropertyImpl.NULLABILITY_METHOD)) out.add(neg("@Nullable", true));
                 }
             }
             case FieldInfo fi -> {
@@ -109,7 +109,7 @@ public class AnnotationTagger {
                 }
                 if (isMutable(a, PropertyImpl.IMMUTABLE_FIELD)) out.add(neg("@Mutable", true));
                 if (isDependent(a, PropertyImpl.INDEPENDENT_FIELD)) out.add(neg("@Dependent", true));
-                if (isNullable(a, PropertyImpl.NOT_NULL_FIELD)) out.add(neg("@Nullable", true));
+                if (isNullable(a, PropertyImpl.NULLABILITY_FIELD)) out.add(neg("@Nullable", true));
             }
             case ParameterInfo pi -> {
                 if (!pi.parameterizedType().isPrimitiveStringClass() && isModified(a, PropertyImpl.UNMODIFIED_PARAMETER)) {
@@ -118,7 +118,7 @@ public class AnnotationTagger {
                 }
                 if (isMutable(a, PropertyImpl.IMMUTABLE_PARAMETER)) out.add(neg("@Mutable", true));
                 if (isDependent(a, PropertyImpl.INDEPENDENT_PARAMETER)) out.add(neg("@Dependent", true));
-                if (isNullable(a, PropertyImpl.NOT_NULL_PARAMETER)) out.add(neg("@Nullable", true));
+                if (isNullable(a, PropertyImpl.NULLABILITY_PARAMETER)) out.add(neg("@Nullable", true));
             }
             case TypeInfo ti -> {
                 if (isMutable(a, PropertyImpl.IMMUTABLE_TYPE)) out.add(neg("@Mutable", true));
@@ -199,8 +199,8 @@ public class AnnotationTagger {
     }
 
     private static boolean isNullable(PropertyValueMap a, Property property) {
-        Value.NotNullProperty v = a.getOrNull(property, ValueImpl.NotNullImpl.class);
-        return v != null && v.isNullable();
+        Value.Nullability v = a.getOrNull(property, ValueImpl.NullabilityImpl.class);
+        return v != null && v.state() == io.codelaser.maddi.cst.api.type.NullableState.NULLABLE;
     }
 
     private static boolean containerType(TypeInfo type) {
