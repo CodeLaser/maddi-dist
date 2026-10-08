@@ -64,6 +64,7 @@ io.codelaser.maddi.cst.api.analysis.Value.FieldValue
 io.codelaser.maddi.cst.api.analysis.Value.GetSetEquivalent
 io.codelaser.maddi.cst.api.analysis.Value.Independent
 io.codelaser.maddi.cst.api.analysis.Value.IndicesOfEscapes
+io.codelaser.maddi.cst.api.analysis.Value.Nullability
 io.codelaser.maddi.cst.api.analysis.Value.PostConditions
 io.codelaser.maddi.cst.api.analysis.Value.Precondition
 io.codelaser.maddi.cst.api.analysis.Value.SetOfStrings
@@ -206,6 +207,7 @@ io.codelaser.maddi.cst.impl.analysis.ValueImpl.GetSetEquivalentImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.GetSetValueImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.IndependentImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.IndicesOfEscapesImpl
+io.codelaser.maddi.cst.impl.analysis.ValueImpl.NullabilityImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.PostConditionsImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.PreconditionImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.SetOfStringsImpl
