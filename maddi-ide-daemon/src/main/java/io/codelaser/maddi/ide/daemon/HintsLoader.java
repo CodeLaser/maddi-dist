@@ -38,7 +38,8 @@ import java.util.jar.JarFile;
  * modification/immutability/independence of JDK and common-library types instead of falling back to
  * shallow defaults. The hints ship in {@code maddi-aapi-archive}, on the daemon's own classpath.
  * <p>
- * Two sets are loaded: the JDK hints (loose {@code jdk/*.json}) and {@code libs.jar} (slf4j, junit).
+ * Two sets are loaded: the JDK hints (loose {@code jdk/*.json}) and {@code libs.jar}, which holds every library in
+ * the archive's library list: slf4j, junit and the Kotlin standard library ({@code kotlin/*.json}).
  * Works whether the archive is on the classpath as a jar (installed daemon) or as a resources
  * directory (running from the repo). Best-effort: a failure is logged and analysis proceeds.
  */
