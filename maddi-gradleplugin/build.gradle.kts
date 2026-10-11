@@ -86,7 +86,9 @@ dependencies {
     shade("io.codelaser:maddi-java-bytecode:$maddiVersion")
     shade("io.codelaser:maddi-java-parser:$maddiVersion")
     shadeRuntime("io.codelaser:maddi-aapi-parser:$maddiModVersion")
-    testRuntimeOnly("io.codelaser:maddi-aapi-archive:$maddiVersion")
+    // the shipped analysis results (resource:.../openjdk.jar, libs.jar), which a run preloads unless configured
+    // otherwise (ShippedAnalysisResults); bundled as the Maven plugin bundles them
+    shadeRuntime("io.codelaser:maddi-aapi-archive:$maddiVersion")
 
     shade("io.codelaser:maddi-run-config:$maddiVersion")
     shade("io.codelaser:maddi-run-main:$maddiVersion") // GeneralConfiguration/InputConfiguration property mapping

@@ -99,6 +99,8 @@ public abstract class CommonMojo extends AbstractMojo {
 
     // --- analysis-hints configuration (the three use cases) ---
 
+    // empty: the results shipped with maddi (bundled in this plugin) are loaded, unless the goal writes results or
+    // hints; "none" loads nothing, "default" names the shipped results in a list (ShippedAnalysisResults)
     @Parameter(property = "preloadAnalysisResultsDirs", defaultValue = "")
     private String preloadAnalysisResultsDirs;
 

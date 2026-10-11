@@ -42,7 +42,10 @@ libraries.
 
 - `preloadAnalysisResultsDirs` (list of strings):
   - Directories of pre-computed analysis results (`.json`) to load for library types (use case 1).
-  - When absent, results are read from the default location; when present and empty, none are read.
+  - When absent, the results shipped with maddi are loaded: the JDK, JUnit Jupiter, AssertJ, the logging APIs
+    and the Kotlin standard library. `none` loads nothing; `default` names the shipped results in a list
+    (`default,my/results`). A run that writes results or hints (`analysisResultsTargetDir`, `updatedHintsDir`)
+    loads nothing implicitly.
 
 - `hintsPackages` (list of strings):
   - Restricts which packages of hint sources are processed (use cases 2 and 3).
