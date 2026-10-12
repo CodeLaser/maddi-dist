@@ -1,0 +1,23 @@
+<idea-plugin>
+    <id>io.codelaser.maddi.j2k</id>
+    <name>maddi J2K baseline</name>
+    <vendor url="https://codelaser.io">CodeLaser</vendor>
+    <description><![CDATA[
+        Benchmark tool, not published: the headless command <code>maddi-j2k</code> converts a module's Java sources
+        to Kotlin with IntelliJ's own Java-to-Kotlin converter, the way the "Convert Java File to Kotlin File" action
+        does.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <!-- without it the Kotlin plugin, in its default K2 mode, refuses to load a plugin that depends on it -->
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <appStarter id="maddi-j2k" implementation="io.codelaser.maddi.j2k.J2kStarter"/>
+    </extensions>
+</idea-plugin>
