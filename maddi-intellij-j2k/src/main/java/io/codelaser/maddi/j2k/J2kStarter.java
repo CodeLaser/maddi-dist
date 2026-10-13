@@ -46,6 +46,9 @@ import java.util.List;
  the dialogs: the answer to "also correct the code outside the converted files?" is yes, which is what makes the
  module's Java tests compile against the converted classes. The project must have been imported already (`idea.sh
  warmup`, with -Dproject.jdk); scripts/j2k-baseline/j2k.py in maddi-mod drives both steps.
+ `idea.sh maddi-j2k <project dir> @<list>` converts the .java files the list names instead (one path per line, relative
+ to the project): selecting those files and converting them together. guava's larger packages fail in one call with
+ 'PSI and index do not match' on files J2K itself has edited (CodeLaser/maddi-mod#36).
  */
 public final class J2kStarter implements ApplicationStarter {
 
@@ -79,7 +82,17 @@ public final class J2kStarter implements ApplicationStarter {
         }
         // args.get(0) is the command name
         Path projectDir = Path.of(args.get(1)).toAbsolutePath().normalize();
-        Path sourceRoot = projectDir.resolve(args.get(2)).normalize();
+        List<Path> listed = null;
+        if (args.get(2).startsWith("@")) {
+            try {
+                listed = java.nio.file.Files.readAllLines(Path.of(args.get(2).substring(1))).stream()
+                        .filter(l -> !l.isBlank()).map(l -> projectDir.resolve(l.strip()).normalize()).toList();
+            } catch (java.io.IOException e) {
+                log("cannot read " + args.get(2) + ": " + e);
+                return 2;
+            }
+        }
+        Path sourceRoot = listed != null ? projectDir : projectDir.resolve(args.get(2)).normalize();
 
         Project project = ProjectUtil.openOrImport(projectDir, null, true);
         if (project == null) {
@@ -96,9 +109,17 @@ public final class J2kStarter implements ApplicationStarter {
             log("no source root " + sourceRoot);
             return 1;
         }
+        List<Path> only = listed;
         List<PsiJavaFile> files = ReadAction.compute(() -> {
             List<PsiJavaFile> list = new ArrayList<>();
             PsiManager psiManager = PsiManager.getInstance(project);
+            if (only != null) {
+                for (Path path : only) {
+                    VirtualFile vf = LocalFileSystem.getInstance().findFileByNioFile(path);
+                    if (vf != null && psiManager.findFile(vf) instanceof PsiJavaFile javaFile) list.add(javaFile);
+                }
+                return list;
+            }
             VfsUtilCore.iterateChildrenRecursively(root, null, vf -> {
                 if (!vf.isDirectory() && "java".equals(vf.getExtension())) {
                     PsiFile psi = psiManager.findFile(vf);
