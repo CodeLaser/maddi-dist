@@ -46,6 +46,14 @@ public abstract class CommonMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     private MavenSession session;
 
+    protected MavenProject getProject() {
+        return project;
+    }
+
+    protected MavenSession getSession() {
+        return session;
+    }
+
     @Parameter(property = "jre", defaultValue = "")
     private String jre;
 

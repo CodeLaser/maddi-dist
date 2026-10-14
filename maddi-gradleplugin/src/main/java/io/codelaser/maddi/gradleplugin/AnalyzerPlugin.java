@@ -93,6 +93,9 @@ public class AnalyzerPlugin implements Plugin<Project> {
                     task.setDescription("Writes out the input configuration of the project to a json file");
                     task.getConfigurationJson().set(configurationJson);
                     task.getOutputFile().set(project.getLayout().getBuildDirectory().file("inputConfiguration.json"));
+                    task.getBuildRoot().set(project.getRootDir().getAbsolutePath());
+                    task.getIncludedBuildRoots().set(project.provider(() -> project.getGradle().getIncludedBuilds()
+                            .stream().map(b -> b.getProjectDir().getAbsolutePath()).toList()));
                     dependOnCompileTasks(task, project);
                 });
     }

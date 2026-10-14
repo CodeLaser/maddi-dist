@@ -57,6 +57,44 @@ public class TestAnalyzerPluginFunctional {
     }
 
     /**
+     * The written configuration declares the files Gradle read, hashed when the task ran (BuildFiles): a server
+     * tells a stale capture by them. With the configuration cache: the hashes are taken at execution, not stored.
+     */
+    @Test
+    public void writtenConfigurationDeclaresItsBuildFiles(@TempDir Path projectDir) throws IOException {
+        writeSimpleJavaProject(projectDir);
+        Files.writeString(projectDir.resolve("gradle.properties"), """
+                org.gradle.configuration-cache=true
+                org.gradle.configuration-cache.problems=fail
+                """);
+        Files.writeString(projectDir.resolve("src/main/java/module-info.java"), "module tp { }\n");
+        GradleRunner runner = GradleRunner.create()
+                .withProjectDir(projectDir.toFile())
+                .withPluginClasspath()
+                .withArguments(AnalyzerExtension.WRITE_INPUT_CONFIGURATION_TASK_NAME, "--stacktrace")
+                .forwardOutput();
+        runner.build();
+        Path json = projectDir.resolve("build/inputConfiguration.json");
+        com.fasterxml.jackson.databind.JsonNode first = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json.toFile()).get("buildFiles");
+        System.out.println("buildFiles: " + first.toPrettyString());
+        assertEquals("gradle-plugin", first.get("declaredBy").asText(), first.toString());
+        java.util.List<String> files = new java.util.ArrayList<>();
+        first.get("sha256").fieldNames().forEachRemaining(files::add);
+        assertEquals(java.util.List.of("build.gradle.kts", "gradle.properties", "settings.gradle.kts",
+                "src/main/java/module-info.java"), files, first.toString());
+
+        Files.writeString(projectDir.resolve("build.gradle.kts"),
+                Files.readString(projectDir.resolve("build.gradle.kts")) + "\n// edited\n");
+        runner.build();
+        com.fasterxml.jackson.databind.JsonNode second = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json.toFile()).get("buildFiles");
+        assertEquals(first.get("sha256").get("settings.gradle.kts"), second.get("sha256").get("settings.gradle.kts"));
+        org.junit.jupiter.api.Assertions.assertNotEquals(first.get("sha256").get("build.gradle.kts"),
+                second.get("sha256").get("build.gradle.kts"));
+    }
+
+    /**
      * Modernization proof: with the configuration cache enabled and {@code problems=fail}, the task must store the
      * entry on the first run (a hard failure on any configuration-cache incompatibility) and reuse it on the second.
      */
