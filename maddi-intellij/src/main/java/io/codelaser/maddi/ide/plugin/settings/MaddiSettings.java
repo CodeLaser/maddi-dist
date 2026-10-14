@@ -52,7 +52,7 @@ public final class MaddiSettings implements PersistentStateComponent<MaddiSettin
         public boolean offerKotlinDownload = true;
     }
 
-    private State state = new State();
+    private final State state = new State();
 
     public static MaddiSettings getInstance() {
         return ApplicationManager.getApplication().getService(MaddiSettings.class);

@@ -485,24 +485,10 @@ public class ComputeSourceSets {
         return configurations;
     }
 
-    Path toRelativePath(File file) {
-        Path path = file.getAbsoluteFile().toPath();
-        try {
-            return workingDirectory.relativize(path);
-        } catch (IllegalArgumentException iae) {
-            return path;
-        }
-    }
-
-    static URI makeURI(Path path) {
-        assert !path.isAbsolute();
-        return URI.create("file:" + path);
-    }
-
     // Classpath parts (jars in ~/.gradle/caches, project-dependency class dirs) must carry an ABSOLUTE,
     // hierarchical file URI: maddi's openjdk inspector does a bare Path.of(classPathPart.uri()) with no
     // working-directory resolution, and Path.of throws IllegalArgumentException ("URI is not hierarchical")
-    // on the opaque "file:<relative>" form makeURI produces. These paths are machine-specific anyway, so a
+    // on an opaque "file:<relative>" URI. These paths are machine-specific anyway, so a
     // relative form buys no portability. (Source directories stay relative: the inspector resolves those
     // against the configured working directory.)
     static URI absoluteURI(File file) {
