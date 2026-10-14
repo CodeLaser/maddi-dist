@@ -34,7 +34,8 @@ public class WriteInputConfigurationMojo extends CommonMojo {
             if (outputFile.getParentFile().mkdirs()) {
                 getLog().info("Created directories for " + outputFile.getAbsolutePath());
             }
-            InputConfiguration inputConfiguration = makeInputConfiguration().withBuildFiles(buildFiles());
+            InputConfiguration made = makeInputConfiguration();
+            InputConfiguration inputConfiguration = made.withBuildFiles(buildFiles(made));
             ObjectMapper mapper = JsonStreaming.objectMapper();
             mapper.writerWithDefaultPrettyPrinter().writeValue(outputFile, inputConfiguration);
             getLog().info("Input configuration exported to: " + outputFile.getAbsolutePath());
@@ -45,19 +46,21 @@ public class WriteInputConfigurationMojo extends CommonMojo {
 
     /*
      The files Maven read to configure this build, hashed now: every pom.xml under the reactor's top-level directory,
-     .mvn/**, and module-info (BuildFiles.MAVEN_GLOBS); and the parent POMs read from disk outside it.
+     .mvn/** (BuildFiles.MAVEN_GLOBS); the parent POMs read from disk outside it; and the module-info of each of
+     the configuration's source directories.
      */
-    private BuildFiles buildFiles() {
+    private BuildFiles buildFiles(InputConfiguration configuration) {
         MavenProject top = getSession().getTopLevelProject();
         Path root = (top != null ? top : getProject()).getBasedir().toPath();
         List<Path> parents = new ArrayList<>();
         for (MavenProject parent = getProject().getParent(); parent != null; parent = parent.getParent()) {
             if (parent.getFile() != null) parents.add(parent.getFile().toPath());
         }
-        return buildFiles(root, parents);
+        return buildFiles(root, parents, configuration);
     }
 
-    static BuildFiles buildFiles(Path root, List<Path> parentPoms) {
-        return BuildFilesCapture.capture(BuildFiles.MAVEN_PLUGIN, root, BuildFiles.MAVEN_GLOBS, parentPoms);
+    static BuildFiles buildFiles(Path root, List<Path> parentPoms, InputConfiguration configuration) {
+        return BuildFilesCapture.capture(BuildFiles.MAVEN_PLUGIN, root, BuildFiles.MAVEN_GLOBS, parentPoms,
+                configuration);
     }
 }

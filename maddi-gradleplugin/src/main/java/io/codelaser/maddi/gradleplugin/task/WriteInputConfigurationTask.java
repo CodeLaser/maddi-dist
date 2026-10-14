@@ -74,8 +74,8 @@ public abstract class WriteInputConfigurationTask extends DefaultTask {
         try {
             Configuration configuration = objectMapper.readerFor(Configuration.class)
                     .readValue(getConfigurationJson().get());
-            InputConfiguration inputConfiguration = configuration.inputConfiguration()
-                    .withBuildFiles(buildFiles());
+            InputConfiguration read = configuration.inputConfiguration();
+            InputConfiguration inputConfiguration = read.withBuildFiles(buildFiles(read));
             File parent = outputFile.getParentFile();
             if (parent != null && parent.mkdirs()) {
                 LOGGER.debug("Created parent directories for output file {}", outputFile);
@@ -90,10 +90,10 @@ public abstract class WriteInputConfigurationTask extends DefaultTask {
 
     /*
      The files Gradle read to configure this build, hashed now: the settings file, every build script, the version
-     catalogs, gradle.properties, buildSrc, the wrapper properties, and module-info (BuildFiles.GRADLE_GLOBS); the same
-     in every included build outside the root.
+     catalogs, gradle.properties, buildSrc and the wrapper properties (BuildFiles.GRADLE_GLOBS); the same in every
+     included build outside the root; and the module-info of each of the configuration's source directories.
      */
-    private BuildFiles buildFiles() {
+    private BuildFiles buildFiles(InputConfiguration configuration) {
         Path root = Path.of(getBuildRoot().get());
         List<Path> named = new ArrayList<>();
         for (String included : getIncludedBuildRoots().get()) {
@@ -102,6 +102,6 @@ public abstract class WriteInputConfigurationTask extends DefaultTask {
             BuildFilesCapture.capture(BuildFiles.GRADLE_PLUGIN, includedRoot, BuildFiles.GRADLE_GLOBS, List.of())
                     .sha256().keySet().forEach(relative -> named.add(includedRoot.resolve(relative)));
         }
-        return BuildFilesCapture.capture(BuildFiles.GRADLE_PLUGIN, root, BuildFiles.GRADLE_GLOBS, named);
+        return BuildFilesCapture.capture(BuildFiles.GRADLE_PLUGIN, root, BuildFiles.GRADLE_GLOBS, named, configuration);
     }
 }
