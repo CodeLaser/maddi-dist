@@ -52,7 +52,7 @@ public final class MaddiDaemonProcess implements Closeable {
      * changed launch parameter is what makes the setting mean something.
      */
     public synchronized void ensureStarted(Path installDir, Path jdkHome, int xmxMb, Path logFile)
-            throws IOException, InterruptedException {
+            throws IOException {
         ensureStarted(installDir, jdkHome, xmxMb, null, logFile);
     }
 
@@ -64,7 +64,7 @@ public final class MaddiDaemonProcess implements Closeable {
      *                           A change relaunches the daemon: the front end is installed once per JVM.
      */
     public synchronized void ensureStarted(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome,
-                                           Path logFile) throws IOException, InterruptedException {
+                                           Path logFile) throws IOException {
         Launch wanted = new Launch(installDir, jdkHome, xmxMb, kotlinFrontEndHome);
         if (handle != null && handle.process().isAlive() && client != null && wanted.equals(launched)) return;
         closeQuietly();

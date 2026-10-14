@@ -198,7 +198,7 @@ public abstract class CommonMojo extends AbstractMojo {
         return pp + "." + name;
     }
 
-    protected static Map<MethodInfo, Integer> methodCallFrequencies(ParseResult parseResult) throws IOException {
+    protected static Map<MethodInfo, Integer> methodCallFrequencies(ParseResult parseResult) {
         Map<MethodInfo, Integer> methodHistogram = new HashMap<>();
         parseResult.primaryTypes().stream()
                 .flatMap(TypeInfo::recursiveSubTypeStream)

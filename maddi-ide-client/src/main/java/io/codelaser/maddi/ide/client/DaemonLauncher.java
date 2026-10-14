@@ -62,7 +62,7 @@ public final class DaemonLauncher {
      * @param logFile     file to tee the daemon's stdout/stderr into (appended); {@code null} discards it
      */
     public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, long startTimeoutMillis, Path logFile)
-            throws IOException, InterruptedException {
+            throws IOException {
         return launch(installDir, jdkHome, jvmArgs, java.util.Map.of(), startTimeoutMillis, logFile);
     }
 
@@ -72,7 +72,7 @@ public final class DaemonLauncher {
      */
     public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, java.util.Map<String, String> environment,
                          long startTimeoutMillis, Path logFile)
-            throws IOException, InterruptedException {
+            throws IOException {
         Path launcher = launcherScript(installDir);
         // A bundle that ships the daemon via a copy step (e.g. the Eclipse plugin) may lose the executable
         // bit; restore it. No-op on Windows and when already executable.
