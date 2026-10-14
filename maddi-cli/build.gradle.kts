@@ -18,6 +18,9 @@
  * carry the engine, so the launcher that ships lives here, in mod, and compiles nothing of its own.
  *
  *   ./gradlew :maddi-cli:run --args="…"          ./gradlew :maddi-cli:distZip   → maddi-<version>.zip
+ *
+ * The Java-to-Kotlin and Java-to-C# translators come with the driver (its --translate kotlin|csharp, with the
+ * analysis's nullability facts): bin/maddi --compile-log build.log --translate kotlin --translate-output out
  */
 plugins {
     id("java-library-conventions")
