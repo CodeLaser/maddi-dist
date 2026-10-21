@@ -199,10 +199,7 @@ public class InputConfigurationAssembler {
     }
 
     private static boolean hasModuleInfo(List<Path> sourceDirs) {
-        for (Path dir : sourceDirs) {
-            if (Files.isRegularFile(dir.resolve("module-info.java"))) return true;
-        }
-        return false;
+        return sourceDirs.stream().anyMatch(dir -> Files.isRegularFile(dir.resolve("module-info.java")));
     }
 
     /** The original flat form: one source list, one class path, and {@code build()}'s auto-wiring. */
