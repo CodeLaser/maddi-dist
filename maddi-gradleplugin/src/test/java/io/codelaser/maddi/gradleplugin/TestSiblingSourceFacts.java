@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -94,6 +96,39 @@ public class TestSiblingSourceFacts {
 
         // ...and the consumer's own flags are its own: this is not one list copied onto both
         assertTrue(strings(consumer, "warningFlags").isEmpty(), "the consumer sets no warning flags");
+
+        // the language facts travel the same way: the sibling's own level, through its facts file
+        assertEquals(17, alpha.get("languageLevel").asInt());
+        assertEquals(21, consumer.get("languageLevel").asInt());
+        assertNull(consumer.get("enablePreview"), "false is written as absent");
+        // a set with no release: sourceCompatibility is its language level, and it states no API
+        JsonNode consumerTest = null;
+        for (JsonNode set : config.get("sourceSets")) {
+            if ("consumer/test".equals(set.get("name").asText())) consumerTest = set;
+        }
+        assertNotNull(consumerTest, names.toString());
+        // javac accepts --enable-preview only at its own release, so the test task compiles at the running JDK's
+        assertEquals(Runtime.version().feature(), consumerTest.get("languageLevel").asInt(),
+                "the test task's own, not main's 21");
+        assertNull(consumerTest.get("sourceRelease"), "sourceCompatibility is not --release");
+        assertTrue(consumerTest.get("enablePreview").asBoolean(), "the test task passes --enable-preview");
+    }
+
+    /**
+     * A facts file written by a plugin that predates the language facts: they read as {@code 0} and false, and
+     * the rest is unchanged. The sibling's plugin version is not ours to choose.
+     */
+    @Test
+    public void anOlderFactsFileReadsWithoutTheLanguageFacts(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve(io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile.FILE_NAME);
+        Files.writeString(file, "{\"sourceRelease\":17,\"addModules\":[],\"warningFlags\":[\"-Werror\"]}");
+        io.codelaser.maddi.gradleplugin.inputconfig.SourceFacts facts =
+                io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile.read(file.toFile());
+        assertNotNull(facts);
+        assertEquals(17, facts.sourceRelease());
+        assertEquals(List.of("-Werror"), facts.warningFlags());
+        assertEquals(0, facts.languageLevel());
+        assertFalse(facts.enablePreview());
     }
 
     /**
@@ -141,8 +176,14 @@ public class TestSiblingSourceFacts {
         Files.writeString(dir.resolve("consumer/build.gradle.kts"), """
                 plugins { id("io.codelaser.maddi.analyzer") }
                 tasks.named<JavaCompile>("compileJava") { options.release.set(21) }
+                tasks.named<JavaCompile>("compileTestJava") {
+                    val own = JavaVersion.current().majorVersion
+                    sourceCompatibility = own; targetCompatibility = own; options.compilerArgs.add("--enable-preview")
+                }
                 dependencies { implementation(project(":alpha")) }
                 """);
+        Path testSrc = Files.createDirectories(dir.resolve("consumer/src/test/java/consumer"));
+        Files.writeString(testSrc.resolve("CTest.java"), "package consumer;\npublic class CTest { }\n");
         Files.writeString(src.resolve("C.java"), """
                 package consumer;
                 public class C {

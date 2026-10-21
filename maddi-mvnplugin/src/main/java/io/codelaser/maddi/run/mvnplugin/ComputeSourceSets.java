@@ -71,7 +71,7 @@ public class ComputeSourceSets {
             SourceSet mainSourceSet = PluginSourceSets.sourceSet(projectName + "/main", buildUnit, sourcePaths,
                     Path.of(project.getBuild().getOutputDirectory()), encoding, false, restrictToPackages,
                     sourceRelease(project, false), addModules(project, false), addExports(project, false),
-                    warningFlags(project, false));
+                    warningFlags(project, false), languageLevel(project, false), enablePreview(project, false));
             if (mainSourceSet != null) {
                 mainSourceSet = mainSourceSet.withDependencies(List.copyOf(deps));
                 sourceSetsByName.put(mainSourceSet.name(), mainSourceSet);
@@ -88,7 +88,7 @@ public class ComputeSourceSets {
                     Path.of(project.getBuild().getTestOutputDirectory()), encoding, true,
                     restrictToTestPackages, sourceRelease(project, true), addModules(project, true),
                     addExports(project, true),
-                    warningFlags(project, true));
+                    warningFlags(project, true), languageLevel(project, true), enablePreview(project, true));
             if (testSourceSet != null) {
                 testSourceSet = testSourceSet.withDependencies(List.copyOf(deps));
                 sourceSetsByName.put(testSourceSet.name(), testSourceSet);
@@ -277,6 +277,41 @@ public class ComputeSourceSets {
             if (release > 0) return release;
         }
         return 0;
+    }
+
+    /**
+     * The Java LANGUAGE level of this compilation: the release when stated (it sets the language level too), else
+     * {@code <testSource>}/{@code <source>}, else {@code maven.compiler.{testSource,source}}, configuration before
+     * property as for {@link #sourceRelease}; {@code 0} when the build states none. ⚠ Not {@link #sourceRelease},
+     * which is the API and drives the parse: this is for a consumer of the configuration, as the compile-log
+     * route's {@code languageLevel} is.
+     */
+    static int languageLevel(MavenProject project, boolean test) {
+        int release = sourceRelease(project, test);
+        if (release > 0) return release;
+        for (String key : test ? new String[]{"testSource", "source"} : new String[]{"source"}) {
+            int source = PluginSourceSets.parseRelease(interpolate(project, compilerConfiguration(project, key, test)));
+            if (source > 0) return source;
+        }
+        for (String key : test
+                ? new String[]{"maven.compiler.testSource", "maven.compiler.source"}
+                : new String[]{"maven.compiler.source"}) {
+            int source = PluginSourceSets.parseRelease(project.getProperties().getProperty(key));
+            if (source > 0) return source;
+        }
+        return 0;
+    }
+
+    /**
+     * javac's {@code --enable-preview} for this compilation. ⚠ Two spellings, as {@code -Werror} has: in
+     * {@code <compilerArgs>}, and {@code maven-compiler-plugin}'s own {@code <enablePreview>} parameter (property
+     * {@code maven.compiler.enablePreview}), which passes the flag to javac itself.
+     */
+    static boolean enablePreview(MavenProject project, boolean test) {
+        if (PluginSourceSets.enablePreviewFrom(resolvedCompilerArgs(project, test))) return true;
+        String configured = interpolate(project, compilerConfiguration(project, "enablePreview", test));
+        if (configured != null && !configured.isBlank()) return Boolean.parseBoolean(configured.trim());
+        return Boolean.parseBoolean(project.getProperties().getProperty("maven.compiler.enablePreview", "false"));
     }
 
     /**

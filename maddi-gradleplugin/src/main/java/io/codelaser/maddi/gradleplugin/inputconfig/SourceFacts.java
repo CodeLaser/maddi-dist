@@ -46,9 +46,15 @@ import java.util.List;
  * @param warningFlags  the resolved warning policy — {@code -Xlint:*}, {@code -Werror}, {@code -nowarn}.
  *                      ⚠ Resolved, not declared: OpenSearch adds {@code -Werror} once at the root and six
  *                      compile tasks subtract it again, and only this list knows which.
+ * @param languageLevel the Java language level: {@code options.release} when set, else the task's
+ *                      {@code sourceCompatibility}, which Gradle passes to javac as {@code -source}; {@code 0}
+ *                      when neither. For a consumer of the configuration (which syntax a refactoring may
+ *                      write); the parse does not use it. {@code 0} too in a file an older plugin wrote.
+ * @param enablePreview javac's {@code --enable-preview} among {@code options.compilerArgs}; false in a file an
+ *                      older plugin wrote.
  */
 public record SourceFacts(int sourceRelease, List<String> addModules, List<String> addExports,
-                          List<String> warningFlags) {
+                          List<String> warningFlags, int languageLevel, boolean enablePreview) {
 
     public SourceFacts {
         addModules = addModules == null ? List.of() : List.copyOf(addModules);

@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Where the module states the Java API level it is compiled against.
@@ -155,6 +157,41 @@ public class TestSourceRelease {
     @Test
     public void abstainsWhenNothingIsStated() {
         assertEquals(0, ComputeSourceSets.sourceRelease(project(null, null), false));
+    }
+
+    /**
+     * The LANGUAGE level, for a consumer of the configuration: the release when stated, else {@code <source>}
+     * (where {@link #sourceAloneStatesNothingAboutTheApi} keeps the API at 0), else the property; per set.
+     */
+    @Test
+    public void languageLevelIsTheReleaseElseTheSource() {
+        assertEquals(17, ComputeSourceSets.languageLevel(project(compilerPlugin(configuration("release", "17")), null), false));
+        MavenProject source = project(null, compilerPlugin(configuration("source", "1.8")));
+        assertEquals(8, ComputeSourceSets.languageLevel(source, false));
+        assertEquals(0, ComputeSourceSets.sourceRelease(source, false), "still no API");
+        MavenProject viaProperty = project(null, null);
+        viaProperty.getProperties().setProperty("maven.compiler.source", "17");
+        viaProperty.getProperties().setProperty("maven.compiler.testSource", "21");
+        assertEquals(17, ComputeSourceSets.languageLevel(viaProperty, false));
+        assertEquals(21, ComputeSourceSets.languageLevel(viaProperty, true), "the test set's own");
+        assertEquals(0, ComputeSourceSets.languageLevel(project(null, null), false));
+    }
+
+    /** {@code --enable-preview}, in both of Maven's spellings: {@code <compilerArgs>}, and {@code <enablePreview>}. */
+    @Test
+    public void enablePreviewInBothSpellings() {
+        Xpp3Dom args = new Xpp3Dom("configuration");
+        Xpp3Dom compilerArgs = new Xpp3Dom("compilerArgs");
+        Xpp3Dom arg = new Xpp3Dom("arg");
+        arg.setValue("--enable-preview");
+        compilerArgs.addChild(arg);
+        args.addChild(compilerArgs);
+        assertTrue(ComputeSourceSets.enablePreview(project(compilerPlugin(args), null), false));
+        assertTrue(ComputeSourceSets.enablePreview(project(compilerPlugin(configuration("enablePreview", "true")), null), false));
+        MavenProject viaProperty = project(null, null);
+        viaProperty.getProperties().setProperty("maven.compiler.enablePreview", "true");
+        assertTrue(ComputeSourceSets.enablePreview(viaProperty, false));
+        assertFalse(ComputeSourceSets.enablePreview(project(null, null), false));
     }
 
     // ------------------------------------------------------------------ fixture

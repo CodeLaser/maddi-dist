@@ -392,11 +392,11 @@ public class ComputeSourceSets {
         // "whatever JDK maddi happens to run on" for each of them.
         // ⚠ NULL IS STILL A CASE, and it is the version-skew one: a producer without this plugin, or with an
         // older one, publishes no such file. Then this is exactly what it was before.
-        SourceFacts f = facts == null ? new SourceFacts(0, List.of(), List.of(), List.of()) : facts;
+        SourceFacts f = facts == null ? new SourceFacts(0, List.of(), List.of(), List.of(), 0, false) : facts;
         SourceSet sourceSet = PluginSourceSets.sourceSet(sourceSetName, projectPath, paths, classOutput,
                 encodingString == null ? null : Charset.forName(encodingString), false,
                 PluginOptions.splitToSetOrNull(restrictTo), f.sourceRelease(), f.addModules(), f.addExports(),
-                f.warningFlags());
+                f.warningFlags(), f.languageLevel(), f.enablePreview());
         // null when none of the published directories exists any more. Map.of would throw on it, and a Result
         // holding no source set is exactly what "this project contributes nothing" means.
         Map<String, SourceSet> byName = new HashMap<>();
@@ -539,7 +539,7 @@ public class ComputeSourceSets {
         SourceFacts facts = factsOf(project, gradleSourceSet);
         return PluginSourceSets.sourceSet(maddiSourceSetName, buildUnit, paths, classOutput, sourceEncoding,
                 test, restrictToPackages, facts.sourceRelease(), facts.addModules(), facts.addExports(),
-                facts.warningFlags());
+                facts.warningFlags(), facts.languageLevel(), facts.enablePreview());
     }
 
     /**
@@ -554,7 +554,29 @@ public class ComputeSourceSets {
         return new SourceFacts(sourceReleaseOf(project, gradleSourceSet),
                 addModulesOf(project, gradleSourceSet),
                 addExportsOf(project, gradleSourceSet),
-                warningFlagsOf(project, gradleSourceSet));
+                warningFlagsOf(project, gradleSourceSet),
+                languageLevelOf(project, gradleSourceSet),
+                enablePreviewOf(project, gradleSourceSet));
+    }
+
+    /**
+     * The Java LANGUAGE level this source set compiles at: {@code options.release} when set (it sets the language
+     * level too), else the task's {@code sourceCompatibility}, which Gradle passes to javac as {@code -source};
+     * {@code 0} when neither says anything. ⚠ Not {@link #sourceReleaseOf}, which is the API and drives the parse:
+     * this is for a consumer of the configuration, as the compile-log route's {@code languageLevel} is.
+     */
+    private static int languageLevelOf(Project project, org.gradle.api.tasks.SourceSet gradleSourceSet) {
+        int release = sourceReleaseOf(project, gradleSourceSet);
+        if (release > 0) return release;
+        Task task = project.getTasks().findByName(gradleSourceSet.getCompileJavaTaskName());
+        return task instanceof JavaCompile compile ? PluginSourceSets.parseRelease(compile.getSourceCompatibility()) : 0;
+    }
+
+    /** javac's {@code --enable-preview} among this source set's resolved {@code options.compilerArgs}. */
+    private static boolean enablePreviewOf(Project project, org.gradle.api.tasks.SourceSet gradleSourceSet) {
+        Task task = project.getTasks().findByName(gradleSourceSet.getCompileJavaTaskName());
+        return task instanceof JavaCompile compile
+               && PluginSourceSets.enablePreviewFrom(compile.getOptions().getCompilerArgs());
     }
 
     /**
