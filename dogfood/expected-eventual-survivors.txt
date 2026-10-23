@@ -55,6 +55,10 @@
 # for FF==FF under the gate, the contraction discharges unconditional FF). From this pin on, TestEventualRatchet
 # also asserts LEVELS: its HC_KEYSTONES (Element, Expression, Statement, Info, MethodInfo, TypeInfo, ...) must stay
 # @Immutable(hc=true) after the mark -- #51 showed the whole family sliding to @FinalFields with this list unmoved.
+# 2026-10-23, the first maddi slowTest gate (two runs, identical sets): TypeInfo.$2 is TypeInfo.$8, the same lambda
+# renumbered after the six of TypeInfo.localTypeStream (maddi 0fee9ecc5); TypePrinterImpl.Member is new (the record of
+# maddi 1d5dedf35); InequalitySolver leaves: maddi 55a749de0 deleted its unused Runtime field, its one eventual
+# dependency, and it is @Immutable(hc=true) outright now (bisected: that commit alone moves 319 -> 318).
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
 io.codelaser.maddi.cst.api.analysis.Value.AssignedToField
@@ -151,7 +155,7 @@ io.codelaser.maddi.cst.api.info.MethodInfo
 io.codelaser.maddi.cst.api.info.MethodPrinter
 io.codelaser.maddi.cst.api.info.ParameterInfo
 io.codelaser.maddi.cst.api.info.TypeInfo
-io.codelaser.maddi.cst.api.info.TypeInfo.$2
+io.codelaser.maddi.cst.api.info.TypeInfo.$8
 io.codelaser.maddi.cst.api.info.TypeParameter
 io.codelaser.maddi.cst.api.info.TypePrinter
 io.codelaser.maddi.cst.api.output.Qualification
@@ -298,7 +302,6 @@ io.codelaser.maddi.cst.impl.expression.eval.EvalSum.Factor
 io.codelaser.maddi.cst.impl.expression.eval.EvalUnaryOperator
 io.codelaser.maddi.cst.impl.expression.util.ExpressionComparator.Unwrapped
 io.codelaser.maddi.cst.impl.expression.util.ExtractComponentsOfTooComplex
-io.codelaser.maddi.cst.impl.expression.util.InequalitySolver
 io.codelaser.maddi.cst.impl.expression.util.LhsRhs
 io.codelaser.maddi.cst.impl.info.CompilationUnitPrinterImpl
 io.codelaser.maddi.cst.impl.info.CompilationUnitPrinterImpl.ImportDataImpl
@@ -325,6 +328,7 @@ io.codelaser.maddi.cst.impl.info.TypeInspectionImpl
 io.codelaser.maddi.cst.impl.info.TypeParameterInspection
 io.codelaser.maddi.cst.impl.info.TypeParameterInspectionImpl
 io.codelaser.maddi.cst.impl.info.TypePrinterImpl
+io.codelaser.maddi.cst.impl.info.TypePrinterImpl.Member
 io.codelaser.maddi.cst.impl.output.QualificationImpl
 io.codelaser.maddi.cst.impl.output.TextBlockFormattingImpl
 io.codelaser.maddi.cst.impl.output.TextImpl
