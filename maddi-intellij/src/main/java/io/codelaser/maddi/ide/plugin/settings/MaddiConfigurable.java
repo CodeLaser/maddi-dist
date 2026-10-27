@@ -17,9 +17,17 @@
 
 package io.codelaser.maddi.ide.plugin.settings;
 
-import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.options.ConfigurationException;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
+import com.intellij.openapi.projectRoots.JavaSdk;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ui.configuration.SdkComboBox;
+import com.intellij.openapi.roots.ui.configuration.SdkComboBoxModel;
+import com.intellij.openapi.roots.ui.configuration.SdkListItem;
+import com.intellij.openapi.roots.ui.configuration.projectRoot.ProjectSdksModel;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.ui.JBIntSpinner;
@@ -34,7 +42,13 @@ import javax.swing.JPanel;
 /** Settings → Tools → maddi. Configures the maddi JDK (25+), the daemon, and the display surfaces. */
 public class MaddiConfigurable implements Configurable {
 
-    private TextFieldWithBrowseButton jdkHomeField;
+    // the JDK chooser of Project Structure: the IDE's registered JDKs (25+ only), plus Add / Download JDK
+    private ProjectSdksModel sdksModel;
+    private SdkComboBox jdkCombo;
+    // a JDK home in the settings that is not registered in the IDE (typed in before this chooser existed): shown as
+    // a reference item, so that it is kept unless the user picks another
+    private SdkListItem unregisteredItem;
+    private String unregisteredHome;
     private TextFieldWithBrowseButton daemonInstallField;
     private TextFieldWithBrowseButton kotlinFrontEndField;
     private JBCheckBox offerKotlinDownload;
@@ -53,9 +67,12 @@ public class MaddiConfigurable implements Configurable {
 
     @Override
     public @Nullable JComponent createComponent() {
-        jdkHomeField = new TextFieldWithBrowseButton();
-        FileChooserDescriptor folder = FileChooserDescriptorFactory.createSingleFolderDescriptor();
-        jdkHomeField.addBrowseFolderListener(null, folder.withTitle("Select a JDK 25+ home"));
+        // application-level settings have no project: the default project's, as File → New Projects Setup uses
+        Project project = ProjectManager.getInstance().getDefaultProject();
+        sdksModel = new ProjectSdksModel();
+        sdksModel.reset(project);
+        jdkCombo = new SdkComboBox(SdkComboBoxModel.createJdkComboBoxModel(project, sdksModel,
+                type -> type instanceof JavaSdk, type -> type instanceof JavaSdk, MaddiJdks::suitable));
 
         daemonInstallField = new TextFieldWithBrowseButton();
         daemonInstallField.addBrowseFolderListener(null,
@@ -77,8 +94,9 @@ public class MaddiConfigurable implements Configurable {
         warnNearMisses = new JBCheckBox("Warn about near misses");
 
         JPanel panel = FormBuilder.createFormBuilder()
-                .addLabeledComponent("maddi JDK (25+) home:", jdkHomeField, 1, false)
-                .addTooltip("maddi runs on this JDK and reads java.base from it. NOT the analyzed project's SDK.")
+                .addLabeledComponent("maddi JDK (25+):", jdkCombo, 1, false)
+                .addTooltip("maddi runs on this JDK and reads java.base from it. NOT the analyzed project's SDK."
+                        + " None listed? Add or download one from the list.")
                 .addLabeledComponent("Daemon install override:", daemonInstallField, 1, false)
                 .addLabeledComponent("Daemon max heap (MB):", xmxSpinner, 1, false)
                 .addLabeledComponent("Kotlin front end override:", kotlinFrontEndField, 1, false)
@@ -104,7 +122,8 @@ public class MaddiConfigurable implements Configurable {
     @Override
     public boolean isModified() {
         MaddiSettings.State s = state();
-        return !jdkHomeField.getText().equals(nullToEmpty(s.jdkHome))
+        return !selectedJdkHome().equals(nullToEmpty(s.jdkHome))
+                || sdksModel.isModified()
                 || !daemonInstallField.getText().equals(nullToEmpty(s.daemonInstallDir))
                 || xmxSpinner.getNumber() != s.daemonXmxMb
                 || !kotlinFrontEndField.getText().equals(nullToEmpty(s.kotlinFrontEndDir))
@@ -118,9 +137,11 @@ public class MaddiConfigurable implements Configurable {
     }
 
     @Override
-    public void apply() {
+    public void apply() throws ConfigurationException {
+        // a JDK added or downloaded from the list is registered in the IDE, as Project Structure does
+        if (sdksModel.isModified()) sdksModel.apply();
         MaddiSettings.State s = state();
-        s.jdkHome = jdkHomeField.getText().trim();
+        s.jdkHome = selectedJdkHome();
         s.daemonInstallDir = daemonInstallField.getText().trim();
         s.daemonXmxMb = xmxSpinner.getNumber();
         s.kotlinFrontEndDir = kotlinFrontEndField.getText().trim();
@@ -136,7 +157,7 @@ public class MaddiConfigurable implements Configurable {
     @Override
     public void reset() {
         MaddiSettings.State s = state();
-        jdkHomeField.setText(nullToEmpty(s.jdkHome));
+        resetJdk(nullToEmpty(s.jdkHome).trim());
         daemonInstallField.setText(nullToEmpty(s.daemonInstallDir));
         xmxSpinner.setNumber(s.daemonXmxMb);
         kotlinFrontEndField.setText(nullToEmpty(s.kotlinFrontEndDir));
@@ -147,6 +168,38 @@ public class MaddiConfigurable implements Configurable {
         hintPlacement.setSelectedItem(s.hintPlacement);
         showGutterIcons.setSelected(s.showGutterIcons);
         warnNearMisses.setSelected(s.warnNearMisses);
+    }
+
+    /**
+     * Select the settings' JDK; when they name none, the default JDK ({@link MaddiJdks#defaultJdk()}), which then
+     * shows as a modification, so that OK stores it.
+     */
+    private void resetJdk(String home) {
+        unregisteredItem = null;
+        unregisteredHome = null;
+        Sdk sdk = home.isEmpty() ? MaddiJdks.defaultJdk() : MaddiJdks.byHome(home);
+        if (sdk != null) {
+            jdkCombo.setSelectedSdk(sdk.getName());
+        } else if (!home.isEmpty()) {
+            unregisteredHome = home;
+            unregisteredItem = jdkCombo.addSdkReferenceItem(JavaSdk.getInstance(), home, null, true);
+            jdkCombo.setSelectedItem(unregisteredItem);
+        } else {
+            jdkCombo.setSelectedItem(null);
+        }
+    }
+
+    private String selectedJdkHome() {
+        if (unregisteredItem != null && jdkCombo.getSelectedItem() == unregisteredItem) return unregisteredHome;
+        Sdk sdk = jdkCombo.getSelectedSdk();
+        return sdk == null || sdk.getHomePath() == null ? "" : sdk.getHomePath();
+    }
+
+    @Override
+    public void disposeUIResources() {
+        if (sdksModel != null) sdksModel.disposeUIResources();
+        sdksModel = null;
+        jdkCombo = null;
     }
 
     private static MaddiSettings.State state() {

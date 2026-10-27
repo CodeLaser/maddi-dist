@@ -36,7 +36,7 @@ import org.jetbrains.annotations.NotNull;
 public final class MaddiSettings implements PersistentStateComponent<MaddiSettings.State> {
 
     public static final class State {
-        /** Home of a JDK 25+ to run the daemon on and to analyze against. Required. */
+        /** Home of a JDK 25+ to run the daemon on and to analyze against. Empty: the default JDK (MaddiJdks). */
         public String jdkHome = "";
         /** Override for the daemon distribution dir; empty = use the copy bundled in the plugin. */
         public String daemonInstallDir = "";

@@ -34,6 +34,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 
 import java.net.URI;
@@ -107,13 +108,15 @@ public final class MaddiAnalysisService implements Disposable {
 
     private void analyze(ProgressIndicator indicator) throws Exception {
         MaddiSettings.State settings = MaddiSettings.getInstance().getState();
-        String jdkHome = settings.jdkHome == null ? "" : settings.jdkHome.trim();
+        // the settings' JDK, else the IDE's default JDK when it is 25 or later, else the newest registered one
+        String jdkHome = ReadAction.compute(() -> MaddiJdks.effectiveHome(settings));
         if (jdkHome.isEmpty()) {
             jdkHome = System.getProperty("maddi.jdk.home", "").trim(); // dev fallback (runIde)
         }
         if (jdkHome.isEmpty()) {
-            publishFailure("configuration", "no JDK 25+ home is set (Settings → maddi)");
-            notifyUser("Set a JDK 25+ home in Settings → maddi before analyzing.", NotificationType.WARNING);
+            publishFailure("configuration", "no JDK 25+ is set in Settings → Tools → maddi, and the IDE has none");
+            notifyUser("maddi needs a JDK 25 or later: choose or download one in Settings → Tools → maddi.",
+                    NotificationType.WARNING);
             return;
         }
         indicator.setText("maddi: starting daemon");
