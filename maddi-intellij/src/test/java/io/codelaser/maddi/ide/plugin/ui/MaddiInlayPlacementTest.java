@@ -78,7 +78,7 @@ public class MaddiInlayPlacementTest extends DeclarativeInlayHintsProviderTestCa
                 public class Box {
                     /*<# block [@NotModified] #>*/
                     public int get() { return 0; }
-                    public void set(Mutable m/*<# @Modified #>*/) { }
+                    public void set(/*<# @Modified #>*/Mutable m) { }
                 }
                 """);
     }
@@ -87,9 +87,31 @@ public class MaddiInlayPlacementTest extends DeclarativeInlayHintsProviderTestCa
         doPlacementTest(HintPlacement.INLINE, """
                 public class Box/*<# @Container #>*/ {
                     public int get/*<# @NotModified #>*/() { return 0; }
-                    public void set(Mutable m/*<# @Modified #>*/) { }
+                    public void set(/*<# @Modified #>*/Mutable m) { }
                 }
                 """);
+    }
+
+    /** A type parameter is a PsiClass to IntelliJ: it must not get its class's hints (maddi-dist#6, Pair<A, B>). */
+    public void testTypeParameterGetsNoTypeHint() {
+        String source = """
+                public class Pair<A, B> {
+                }
+                """;
+        myFixture.configureByText("Pair.java", source);
+        String path = myFixture.getFile().getVirtualFile().getPath();
+        AnalysisModel.ElementAnnotation type = new AnalysisModel.ElementAnnotation(
+                path, 1, 1, 2, 1, "TYPE", "Pair", List.of(CONTAINER.text()), List.of(CONTAINER), Map.of());
+        MaddiAnalysisService.getInstance(getProject()).applyResult(new AnalysisModel.Result(
+                "test", List.of(), List.of(type), List.of(), 0, 0, 0, AnalysisModel.OUTCOME_CERTIFIED));
+        MaddiSettings.State state = MaddiSettings.getInstance().getState();
+        state.inlineHintsMode = InlineHintsMode.ALL;
+        state.hintPlacement = HintPlacement.INLINE;
+        doTestProviderWithConfigured(source, """
+                public class Pair/*<# @Container #>*/<A, B> {
+                }
+                """, new MaddiInlayProvider(), Map.of(), null, false,
+                DeclarativeInlayHintsProviderTestCase.ProviderTestMode.SIMPLE);
     }
 
     private void doPlacementTest(HintPlacement placement, String expected) {

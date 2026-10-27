@@ -51,14 +51,14 @@ public class MaddiKotlinInlayTest extends DeclarativeInlayHintsProviderTestCase 
     }
 
     /**
-     * Every kind lands after its name. The constructor's {@code val x} is a parameter AND a field over the same
+     * Every kind but a parameter lands after its name; a parameter's hint goes before it, where Kotlin writes an annotation. The constructor's {@code val x} is a parameter AND a field over the same
      * range; the parameter's verdict is the one shown, since the name sits in the parameter list.
      */
     public void testInline() {
         doTest(HintPlacement.INLINE, """
-                class Point/*<# @Immutable #>*/(val x/*<# @NotModified #>*/: Int, y: Int) {
+                class Point/*<# @Immutable #>*/(/*<# @NotModified #>*/val x: Int, y: Int) {
                     val sum/*<# @Final #>*/: Int = x + y
-                    fun plus/*<# @Independent #>*/(other/*<# @Unmodified #>*/: Point): Point = Point(x + other.x, 0)
+                    fun plus/*<# @Independent #>*/(/*<# @Unmodified #>*/other: Point): Point = Point(x + other.x, 0)
                 }
                 """);
     }
@@ -66,11 +66,11 @@ public class MaddiKotlinInlayTest extends DeclarativeInlayHintsProviderTestCase 
     public void testAboveDeclaration() {
         doTest(HintPlacement.ABOVE_DECLARATION, """
                 /*<# block [@Immutable] #>*/
-                class Point(val x/*<# @NotModified #>*/: Int, y: Int) {
+                class Point(/*<# @NotModified #>*/val x: Int, y: Int) {
                     /*<# block [@Final] #>*/
                     val sum: Int = x + y
                     /*<# block [@Independent] #>*/
-                    fun plus(other/*<# @Unmodified #>*/: Point): Point = Point(x + other.x, 0)
+                    fun plus(/*<# @Unmodified #>*/other: Point): Point = Point(x + other.x, 0)
                 }
                 """);
     }
@@ -89,7 +89,26 @@ public class MaddiKotlinInlayTest extends DeclarativeInlayHintsProviderTestCase 
         state.inlineHintsMode = InlineHintsMode.ALL;
         state.hintPlacement = HintPlacement.INLINE;
         doTestProviderWithConfigured(source, """
-                fun List/*<# @NotModified #>*/<String>.firstOr(d/*<# @Unmodified #>*/: String): String = firstOrNull() ?: d
+                fun /*<# @NotModified #>*/List<String>.firstOr(/*<# @Unmodified #>*/d: String): String = firstOrNull() ?: d
+                """, new MaddiKotlinInlayProvider(), Map.of(), null, false,
+                DeclarativeInlayHintsProviderTestCase.ProviderTestMode.SIMPLE);
+    }
+
+    /** An enum entry is a KtClass, but maddi's element is a FIELD: it must not get the enum's hints (maddi-dist#6). */
+    public void testEnumEntryIsAField() {
+        String source = """
+                enum class Color { RED, GREEN }
+                """;
+        myFixture.configureByText("Color.kt", source);
+        String path = myFixture.getFile().getVirtualFile().getPath();
+        MaddiAnalysisService.getInstance(getProject()).applyResult(result(List.of(), List.of(
+                element(path, 1, 1, 1, 31, "TYPE", "Color", "@ImmutableContainer"),
+                element(path, 1, 20, 1, 22, "FIELD", "Color.RED", "@NotModified"))));
+        MaddiSettings.State state = MaddiSettings.getInstance().getState();
+        state.inlineHintsMode = InlineHintsMode.ALL;
+        state.hintPlacement = HintPlacement.INLINE;
+        doTestProviderWithConfigured(source, """
+                enum class Color/*<# @ImmutableContainer #>*/ { RED/*<# @NotModified #>*/, GREEN }
                 """, new MaddiKotlinInlayProvider(), Map.of(), null, false,
                 DeclarativeInlayHintsProviderTestCase.ProviderTestMode.SIMPLE);
     }

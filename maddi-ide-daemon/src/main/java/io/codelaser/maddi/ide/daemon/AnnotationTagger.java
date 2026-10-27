@@ -108,7 +108,31 @@ public class AnnotationTagger {
             }
         }
         addNegatives(info, out, decorated);
-        return out;
+        return refine(info, out, decorated);
+    }
+
+    /**
+     * Two rules over the whole list. (1) What the author wrote on the element is not shown again as computed: the
+     * source already says {@code @IgnoreModifications}, {@code @Finalizer}, {@code @ImmutableContainer}; a computed
+     * value that breaks the contract is the guard's finding, not a second annotation (maddi-dist#6). (2) A
+     * {@code @Fluent} method returns {@code this}, which makes it {@code @Independent}: implied, so a context default.
+     */
+    private static List<DaemonProtocol.Annotation> refine(Info info, List<DaemonProtocol.Annotation> out,
+                                                          Set<String> decorated) {
+        Set<String> written = new HashSet<>();
+        for (AnnotationExpression ae : info.annotations()) {
+            if (ae.typeInfo() != null) written.add(ae.typeInfo().simpleName());
+        }
+        boolean fluent = decorated.contains("Fluent");
+        if (written.isEmpty() && !fluent) return out;
+        List<DaemonProtocol.Annotation> refined = new ArrayList<>(out.size());
+        for (DaemonProtocol.Annotation a : out) {
+            String name = nameOf(a.text());
+            if (written.contains(name)) continue;
+            refined.add(fluent && "Independent".equals(name) && !a.contextDefault()
+                    ? new DaemonProtocol.Annotation(a.text(), a.polarity(), true) : a);
+        }
+        return refined;
     }
 
     /**

@@ -76,7 +76,7 @@ public class MaddiInlayFilterTest extends DeclarativeInlayHintsProviderTestCase 
         doFilterTest(InlineHintsMode.ALL, """
                 public class Box/*<# @Container #>*/ {
                     public int get/*<# @NotModified #>*/() { return 0; }
-                    public void set(Mutable m/*<# @Modified #>*/) { }
+                    public void set(/*<# @Modified #>*/Mutable m) { }
                 }
                 """);
     }
@@ -86,7 +86,7 @@ public class MaddiInlayFilterTest extends DeclarativeInlayHintsProviderTestCase 
         doFilterTest(InlineHintsMode.HIDE_CONTEXT_DEFAULTS, """
                 public class Box/*<# @Container #>*/ {
                     public int get() { return 0; }
-                    public void set(Mutable m/*<# @Modified #>*/) { }
+                    public void set(/*<# @Modified #>*/Mutable m) { }
                 }
                 """);
     }
@@ -104,7 +104,7 @@ public class MaddiInlayFilterTest extends DeclarativeInlayHintsProviderTestCase 
         doFilterTest(InlineHintsMode.NEGATIVE_ONLY, """
                 public class Box {
                     public int get() { return 0; }
-                    public void set(Mutable m/*<# @Modified #>*/) { }
+                    public void set(/*<# @Modified #>*/Mutable m) { }
                 }
                 """);
     }

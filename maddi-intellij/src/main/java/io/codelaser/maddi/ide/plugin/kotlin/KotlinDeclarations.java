@@ -22,6 +22,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.lexer.KtTokens;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
+import org.jetbrains.kotlin.psi.KtEnumEntry;
 import org.jetbrains.kotlin.psi.KtNamedDeclaration;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtParameter;
@@ -78,6 +79,9 @@ public final class KotlinDeclarations {
             || declaration.getNameIdentifier() != leaf) {
             return null;
         }
+        // an enum entry is a KtClass, but maddi analyses it as a field of its enum: as a TYPE it showed the enum's
+        // verdict on every constant (maddi-dist#6)
+        if (declaration instanceof KtEnumEntry) return "FIELD";
         if (declaration instanceof KtClassOrObject) return "TYPE";
         if (declaration instanceof KtNamedFunction) return "METHOD";
         if (declaration instanceof KtProperty) return "FIELD";   // no backing field: see kindsOf

@@ -29,6 +29,8 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiParameter;
+import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
@@ -68,7 +70,7 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         if (annotations.isEmpty()) return null;
         Document doc = file.getViewProvider().getDocument();
         if (doc == null) return null;
-        return new Collector(annotations, doc, mode, settings.hintPlacement, this::kindsOf);
+        return new Collector(annotations, doc, mode, settings.hintPlacement, this::kindsOf, this::parameterHintOffset);
     }
 
     /**
@@ -81,6 +83,18 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         return kind == null ? List.of() : List.of(kind);
     }
 
+    /**
+     * Where a parameter's hint goes, given its name: where an annotation is written, before the type in Java
+     * ({@code final @Nullable String s}). Java's; the Kotlin provider overrides it.
+     */
+    protected int parameterHintOffset(@NotNull PsiElement leaf) {
+        if (leaf.getParent() instanceof PsiParameter parameter) {
+            return parameter.getTypeElement() != null ? parameter.getTypeElement().getTextRange().getStartOffset()
+                    : parameter.getTextRange().getStartOffset();
+        }
+        return leaf.getTextRange().getStartOffset();
+    }
+
     private static final String PARAMETER = "PARAMETER";
 
     private static final class Collector implements SharedBypassCollector {
@@ -89,14 +103,17 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         private final InlineHintsMode mode;
         private final HintPlacement placement;
         private final java.util.function.Function<PsiElement, List<String>> kinds;
+        private final java.util.function.ToIntFunction<PsiElement> parameterOffset;
 
         Collector(List<AnalysisModel.ElementAnnotation> annotations, Document doc, InlineHintsMode mode,
-                  HintPlacement placement, java.util.function.Function<PsiElement, List<String>> kinds) {
+                  HintPlacement placement, java.util.function.Function<PsiElement, List<String>> kinds,
+                  java.util.function.ToIntFunction<PsiElement> parameterOffset) {
             this.annotations = annotations;
             this.doc = doc;
             this.mode = mode;
             this.placement = placement;
             this.kinds = kinds;
+            this.parameterOffset = parameterOffset;
         }
 
         @Override
@@ -127,11 +144,15 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         }
 
         /**
-         * A parameter's annotations always go next to the parameter; for everything else the placement is a
-         * setting, defaulting to a line of its own above the declaration (see {@link HintPlacement}).
+         * A parameter's annotations always go where they would be written, before the parameter's type (Java) or
+         * the parameter (Kotlin); for everything else the placement is a setting, defaulting to a line of its own
+         * above the declaration (see {@link HintPlacement}).
          */
         private InlayPosition position(PsiElement identifier, String kind) {
-            if (PARAMETER.equals(kind) || placement == HintPlacement.INLINE) {
+            if (PARAMETER.equals(kind)) {
+                return new InlineInlayPosition(parameterOffset.applyAsInt(identifier), false, 0);
+            }
+            if (placement == HintPlacement.INLINE) {
                 return new InlineInlayPosition(identifier.getTextRange().getEndOffset(), true, 0);
             }
             // anchored on the identifier: the hint lands above that line, indented to match the declaration
@@ -140,7 +161,8 @@ public class MaddiInlayProvider implements InlayHintsProvider {
     }
 
     private static @Nullable String javaKindOf(PsiElement parent) {
-        if (parent instanceof PsiClass) return "TYPE";
+        // a type parameter is a PsiClass too: 'Pair<A, B>' showed the class's verdict three times (maddi-dist#6)
+        if (parent instanceof PsiClass && !(parent instanceof PsiTypeParameter)) return "TYPE";
         if (parent instanceof PsiMethod) return "METHOD";
         if (parent instanceof PsiField) return "FIELD";
         if (parent instanceof PsiParameter) return "PARAMETER";

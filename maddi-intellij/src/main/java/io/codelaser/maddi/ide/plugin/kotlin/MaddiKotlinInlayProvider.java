@@ -19,6 +19,7 @@ package io.codelaser.maddi.ide.plugin.kotlin;
 import com.intellij.psi.PsiElement;
 import io.codelaser.maddi.ide.plugin.ui.MaddiInlayProvider;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.kotlin.psi.KtParameter;
 
 import java.util.List;
 
@@ -28,5 +29,14 @@ public class MaddiKotlinInlayProvider extends MaddiInlayProvider {
     @Override
     protected List<String> kindsOf(@NotNull PsiElement leaf) {
         return KotlinDeclarations.kindsOf(leaf);
+    }
+
+    /** Before the parameter, where Kotlin writes its annotations ({@code @Nullable val name: String}). */
+    @Override
+    protected int parameterHintOffset(@NotNull PsiElement leaf) {
+        if (leaf.getParent() instanceof KtParameter parameter && parameter.getNameIdentifier() == leaf) {
+            return parameter.getTextRange().getStartOffset();
+        }
+        return leaf.getTextRange().getStartOffset(); // an extension receiver: before its type
     }
 }

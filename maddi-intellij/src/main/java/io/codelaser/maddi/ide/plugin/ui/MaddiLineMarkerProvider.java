@@ -24,6 +24,7 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
@@ -90,7 +91,8 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
     protected List<String> kindsOf(PsiElement leaf) {
         if (!(leaf instanceof PsiIdentifier)) return List.of();
         PsiElement parent = leaf.getParent();
-        if (parent instanceof PsiClass) return List.of("TYPE");
+        // a type parameter is a PsiClass too: its name would get its class's verdict (maddi-dist#6)
+        if (parent instanceof PsiClass && !(parent instanceof PsiTypeParameter)) return List.of("TYPE");
         if (parent instanceof PsiMethod) return List.of("METHOD");
         if (parent instanceof PsiField) return List.of("FIELD");
         return List.of();
