@@ -156,8 +156,11 @@ public final class DaemonProtocol {
 
     /**
      * One rendered annotation with the metadata the inline-hints filter needs.
-     * polarity ∈ POSITIVE (proven-stronger: @NotModified/@Immutable/@Container/@Independent/@NotNull/@Final),
-     * NEGATIVE (baseline: @Modified/@Mutable/@Dependent/@Nullable), NEUTRAL (@GetSet/@Identity/@Fluent/…).
+     * polarity ∈ POSITIVE (proven-stronger: @NotModified/@Immutable/@Container/@Independent/@NotNull/@Final/
+     * @UnmodifiableView where the result is not immutable, @FinalFields, and @Modified(hc=true): only the hidden
+     * content is modified), NEGATIVE (baseline:
+     * @Modified/@Mutable/@Dependent/@Nullable, and @StaticSideEffects), NEUTRAL (@GetSet/@Identity/@Fluent/…),
+     * EVENTUAL (after-mark verdicts, see AnnotationTagger).
      * contextDefault = the value is implied by the enclosing declaration (a container's @NotModified params,
      * a plain method's @Modified, …), so it can be hidden as clutter; surprising values (a @Modified param in a
      * @Container) are NOT context defaults.

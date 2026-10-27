@@ -30,10 +30,12 @@ import io.codelaser.maddi.cst.api.info.ParameterInfo;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.output.Qualification;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
+import io.codelaser.maddi.cst.api.type.ParameterizedType;
 import io.codelaser.maddi.cst.impl.analysis.PropertyImpl;
 import io.codelaser.maddi.cst.impl.analysis.ValueImpl;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -44,7 +46,9 @@ import java.util.Set;
  * The <em>positive</em> (proven-stronger) and neutral annotations come from the engine's decorator ({@link AnalysisEngine#decorator}) (keeping its
  * exact formatting, e.g. {@code @Immutable(hc=true)}); the <em>negative</em> (baseline) ones — {@code @Modified},
  * {@code @Mutable}, {@code @Dependent}, {@code @Nullable} — which the decorator omits, are computed here from
- * the analysis values. They are mutually exclusive per concept, so nothing is double-rendered.
+ * the analysis values. They are mutually exclusive per concept, so nothing is double-rendered: where the
+ * decorator does print a {@code @Modified} (the hidden-content-only {@code @Modified(hc=true)}), the baseline one
+ * is left out.
  */
 public class AnnotationTagger {
     public static final String POSITIVE = "POSITIVE";
@@ -56,9 +60,11 @@ public class AnnotationTagger {
     // "visible" without any client change. See road-to-immutability section 060 and docs/design/eventual-info-hierarchy.md.
     public static final String EVENTUAL = "EVENTUAL";
 
-    // annotation simple names by polarity (the core safety concepts)
+    // annotation simple names by polarity (the core safety concepts). @UnmodifiableView is a weaker guarantee than
+    // @Immutable(hc=true) on the result, but a guarantee all the same: nothing is added or removed through it.
     private static final Set<String> POSITIVE_NAMES = Set.of(
-            "NotModified", "Immutable", "ImmutableContainer", "Container", "Independent", "NotNull", "Final");
+            "NotModified", "Immutable", "ImmutableContainer", "Container", "Independent", "NotNull", "Final",
+            "UnmodifiableView", "FinalFields");
     // the four baseline "absence of a safety guarantee" concepts, plus @StaticSideEffects: not a missing
     // guarantee but a genuine outward effect (this method reaches into global/static state) the designer should
     // always see, so it is rendered with the same attention polarity rather than carried as neutral
@@ -78,44 +84,64 @@ public class AnnotationTagger {
 
     public List<DaemonProtocol.Annotation> tag(Info info) {
         List<DaemonProtocol.Annotation> out = new ArrayList<>();
+        Set<String> decorated = new HashSet<>();
         for (AnnotationExpression ae : decorator.annotations(info)) {
             String text = ae.print(simpleNames).toString();
             String name = nameOf(text);
+            decorated.add(name);
+            if ("UnmodifiableView".equals(name) && immutableResult(info)) {
+                // the analysis calls any unmodifiable result a view, a String or a record as much as
+                // Collections.unmodifiableList; where the result is immutable, the view is the weaker claim and says
+                // nothing new. It is left for the views proper, whose result is mutable through another reference.
+                continue;
+            }
             if (isEventual(ae, name)) {
                 // an eventual verdict is novel information, never implied by the enclosing declaration, so it is
                 // never a context default (which the default filter would hide) -- always show it.
                 out.add(new DaemonProtocol.Annotation(text, EVENTUAL, false));
+            } else if (isModifiedHcOnly(ae, name)) {
+                // only the hidden content is modified: the decorator prints it "like @NotModified is", a proven
+                // verdict stronger than the @Modified baseline, and never implied by the enclosing declaration
+                out.add(new DaemonProtocol.Annotation(text, POSITIVE, false));
             } else {
                 out.add(new DaemonProtocol.Annotation(text, polarity(name), positiveContextDefault(info, name)));
             }
         }
-        addNegatives(info, out);
+        addNegatives(info, out, decorated);
         return out;
     }
 
-    private void addNegatives(Info info, List<DaemonProtocol.Annotation> out) {
+    /**
+     * @param decorated the simple names the decorator already printed for {@code info}. Since
+     *                  {@code @Modified(hc=true)} (maddi-mod#25) the decorator prints a {@code @Modified} of its
+     *                  own, and the plain baseline beside it would show the element twice, once in each polarity.
+     */
+    private void addNegatives(Info info, List<DaemonProtocol.Annotation> out, Set<String> decorated) {
         PropertyValueMap a = info.analysis();
+        boolean modifiedDecorated = decorated.contains("Modified");
         switch (info) {
             case MethodInfo mi -> {
-                if (!mi.isConstructor() && isModified(a, PropertyImpl.NON_MODIFYING_METHOD)) {
+                if (!mi.isConstructor() && !modifiedDecorated && isModified(a, PropertyImpl.NON_MODIFYING_METHOD)) {
                     out.add(neg("@Modified", true)); // methods modify by default
                 }
                 if (!mi.isConstructor() && mi.hasReturnValue()) {
-                    if (isMutable(a, PropertyImpl.IMMUTABLE_METHOD)) out.add(neg("@Mutable", true));
+                    mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_METHOD, true, out);
                     if (isDependent(a, PropertyImpl.INDEPENDENT_METHOD)) out.add(neg("@Dependent", true));
                     if (isNullable(a, PropertyImpl.NULLABILITY_METHOD)) out.add(neg("@Nullable", true));
                 }
             }
             case FieldInfo fi -> {
-                if (!fi.type().isPrimitiveStringClass() && isModified(a, PropertyImpl.UNMODIFIED_FIELD)) {
+                if (!fi.type().isPrimitiveStringClass() && !modifiedDecorated
+                    && isModified(a, PropertyImpl.UNMODIFIED_FIELD)) {
                     out.add(neg("@Modified", false)); // a modified field is always informative
                 }
-                if (isMutable(a, PropertyImpl.IMMUTABLE_FIELD)) out.add(neg("@Mutable", true));
+                mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_FIELD, true, out);
                 if (isDependent(a, PropertyImpl.INDEPENDENT_FIELD)) out.add(neg("@Dependent", true));
                 if (isNullable(a, PropertyImpl.NULLABILITY_FIELD)) out.add(neg("@Nullable", true));
             }
             case ParameterInfo pi -> {
-                if (!pi.parameterizedType().isPrimitiveStringClass() && isModified(a, PropertyImpl.UNMODIFIED_PARAMETER)) {
+                if (!pi.parameterizedType().isPrimitiveStringClass() && !modifiedDecorated
+                    && isModified(a, PropertyImpl.UNMODIFIED_PARAMETER)) {
                     // a modified parameter — "this method changes your argument" — is always worth showing
                     out.add(neg("@Modified", false));
                 }
@@ -124,12 +150,46 @@ public class AnnotationTagger {
                 if (isNullable(a, PropertyImpl.NULLABILITY_PARAMETER)) out.add(neg("@Nullable", true));
             }
             case TypeInfo ti -> {
-                if (isMutable(a, PropertyImpl.IMMUTABLE_TYPE)) out.add(neg("@Mutable", true));
+                // a type's own @FinalFields is informative, as its @Immutable is; on a field or a method result it
+                // is the same kind of baseline the @Mutable it replaces was
+                mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_TYPE, false, out);
                 if (isDependent(a, PropertyImpl.INDEPENDENT_TYPE)) out.add(neg("@Dependent", true));
             }
             default -> {
             }
         }
+    }
+
+    /**
+     * {@code @Mutable}, or {@code @FinalFields} when that is the level: {@link Value.Immutable#isMutable()} counts
+     * {@code FINAL_FIELDS} as mutable, and the decorator prints {@code @FinalFields} only in its after-mark form, so
+     * without this an all-final type that is still modified read {@code @Mutable}. Parameters keep {@code @Mutable}:
+     * {@code @FinalFields} does not target them.
+     */
+    private static void mutableOrFinalFields(PropertyValueMap a, Property property, boolean finalFieldsContextDefault,
+                                             List<DaemonProtocol.Annotation> out) {
+        Value.Immutable v = a.getOrNull(property, ValueImpl.ImmutableImpl.class);
+        if (v == null || !v.isMutable()) return;
+        if (v.isFinalFields()) {
+            out.add(new DaemonProtocol.Annotation("@FinalFields", POSITIVE, finalFieldsContextDefault));
+        } else {
+            out.add(neg("@Mutable", true));
+        }
+    }
+
+    /**
+     * The method's result is at least {@code @Immutable(hc=true)}: by the method's own verdict, or else by its return
+     * type's. The second is needed because the analysis leaves the method's verdict implied for a {@code String} or
+     * a record result, as the decorator leaves it unprinted.
+     */
+    private static boolean immutableResult(Info info) {
+        if (!(info instanceof MethodInfo mi)) return false;
+        Value.Immutable v = mi.analysis().getOrNull(PropertyImpl.IMMUTABLE_METHOD, ValueImpl.ImmutableImpl.class);
+        if (v != null && !v.isMutable()) return true;
+        ParameterizedType returnType = mi.returnType();
+        if (returnType.isPrimitiveStringClass()) return true;
+        TypeInfo typeInfo = returnType.arrays() == 0 ? returnType.typeInfo() : null;
+        return typeInfo != null && immutableType(typeInfo);
     }
 
     /** A positive annotation is a context default when the enclosing declaration already implies it. */
@@ -169,6 +229,11 @@ public class AnnotationTagger {
     private static boolean isEventual(AnnotationExpression ae, String name) {
         if (ALWAYS_EVENTUAL_NAMES.contains(name)) return true;
         return POSITIVE_NAMES.contains(name) && !ae.extractString("after", "").isBlank();
+    }
+
+    /** {@code @Modified(hc=true)}: detected from the attribute, as {@link #isEventual} detects {@code after=}. */
+    private static boolean isModifiedHcOnly(AnnotationExpression ae, String name) {
+        return "Modified".equals(name) && ae.extractBoolean("hc");
     }
 
     private static String polarity(String name) {

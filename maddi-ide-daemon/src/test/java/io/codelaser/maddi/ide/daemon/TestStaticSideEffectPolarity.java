@@ -54,7 +54,7 @@ public class TestStaticSideEffectPolarity {
     @DisplayName("a computed @StaticSideEffects verdict is decorated and tagged NEGATIVE, end-to-end")
     @Test
     public void test(@TempDir Path dir) throws Exception {
-        // the static-side-effect analysis is off by default; the engine switches it on for this run only
+        // on by default since maddi-mod#65; the explicit switch keeps the test independent of that default
         DaemonProtocol.Result r = analyze(dir, "x/X.java", SOURCE, new WarmAnalysisService(true));
         assertEquals(0, r.parseErrorCount(), "unexpected parse errors");
 
