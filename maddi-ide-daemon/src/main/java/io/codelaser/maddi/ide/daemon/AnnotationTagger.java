@@ -127,7 +127,7 @@ public class AnnotationTagger {
                 if (!mi.isConstructor() && mi.hasReturnValue()) {
                     mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_METHOD, true, out);
                     if (isDependent(a, PropertyImpl.INDEPENDENT_METHOD)) out.add(neg("@Dependent", true));
-                    nullability(a, PropertyImpl.NULLABILITY_METHOD, mi.returnType(), out);
+                    if (!kotlinSource(info)) nullability(a, PropertyImpl.NULLABILITY_METHOD, mi.returnType(), out);
                 }
             }
             case FieldInfo fi -> {
@@ -137,7 +137,7 @@ public class AnnotationTagger {
                 }
                 mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_FIELD, true, out);
                 if (isDependent(a, PropertyImpl.INDEPENDENT_FIELD)) out.add(neg("@Dependent", true));
-                nullability(a, PropertyImpl.NULLABILITY_FIELD, fi.type(), out);
+                if (!kotlinSource(info)) nullability(a, PropertyImpl.NULLABILITY_FIELD, fi.type(), out);
             }
             case ParameterInfo pi -> {
                 if (!pi.parameterizedType().isPrimitiveStringClass() && !modifiedDecorated
@@ -147,7 +147,7 @@ public class AnnotationTagger {
                 }
                 if (isMutable(a, PropertyImpl.IMMUTABLE_PARAMETER)) out.add(neg("@Mutable", true));
                 if (isDependent(a, PropertyImpl.INDEPENDENT_PARAMETER)) out.add(neg("@Dependent", true));
-                nullability(a, PropertyImpl.NULLABILITY_PARAMETER, pi.parameterizedType(), out);
+                if (!kotlinSource(info)) nullability(a, PropertyImpl.NULLABILITY_PARAMETER, pi.parameterizedType(), out);
             }
             case TypeInfo ti -> {
                 // a type's own @FinalFields is informative, as its @Immutable is; on a field or a method result it
@@ -282,6 +282,26 @@ public class AnnotationTagger {
             default -> {
             }
         }
+    }
+
+    /*
+     A declaration in a Kotlin source file: its type says whether it takes null, and the compiler holds it to that, so
+     an inferred @Nullable/@NotNull is noise at best. The pass infers for Java, where nothing is declared; on Kotlin it
+     put @Nullable on parameters declared non-null (maddi-kotlin-demo Snapshot(lines: List<String>), 2026-10-27).
+     */
+    private static boolean kotlinSource(Info info) {
+        TypeInfo owner = switch (info) {
+            case TypeInfo ti -> ti;
+            case MethodInfo mi -> mi.typeInfo();
+            case FieldInfo fi -> fi.owner();
+            case ParameterInfo pi -> pi.methodInfo().typeInfo();
+            default -> null;
+        };
+        if (owner == null) return false;
+        TypeInfo primary = owner.primaryType();
+        if (primary.compilationUnitOrEnclosingType().isRight()) return false;
+        java.net.URI uri = primary.compilationUnit().uri();
+        return uri != null && uri.getPath() != null && uri.getPath().endsWith(".kt");
     }
 
     private static boolean containerType(TypeInfo type) {

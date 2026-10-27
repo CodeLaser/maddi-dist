@@ -125,6 +125,39 @@ public class TestKotlinSources {
         assertTrue(parameters.stream().allMatch(fqn -> fqn.contains("<init>")), () -> "parameters: " + parameters);
     }
 
+    /**
+     * A Kotlin declaration's type says whether it takes null, so the nullability pass's inference is not shown on it:
+     * {@code Snapshot(lines: List<String>)} came out {@code @Nullable}. A Java declaration in the same project keeps
+     * its {@code @Nullable}.
+     */
+    @Test
+    public void noInferredNullabilityOnKotlin(@TempDir Path projectDir) throws Exception {
+        Path kDir = write(projectDir, "k/src", "k/Snapshot.kt", """
+                package k
+
+                class Snapshot(lines: List<String>) {
+                    val lines: List<String> = lines.toList()
+                    fun first(): String? = lines.firstOrNull()
+                }
+                """);
+        Path jDir = write(projectDir, "j/src", "j/Orr.java", """
+                package j;
+                public class Orr {
+                    public String orDefault(String s, String d) { return s == null ? d : s; }
+                }
+                """);
+        DaemonProtocol.Result result = analyze(projectDir, List.of(
+                set("k/main", kDir, List.of()),
+                set("j/main", jDir, List.of())));
+        List<String> kotlinNullness = result.elementAnnotations().stream()
+                .filter(e -> e.fqn().startsWith("k."))
+                .flatMap(e -> e.annotations().stream().map(a -> e.fqn() + " " + a.text()))
+                .filter(t -> t.endsWith("@Nullable") || t.endsWith("@NotNull")).toList();
+        assertEquals(List.of(), kotlinNullness);
+        assertTrue(DaemonAnalysisFixture.displayFor(result, "PARAMETER", "j.Orr.orDefault(String,String):0")
+                .contains("@Nullable"), () -> "Java keeps its inference: " + result.elementAnnotations());
+    }
+
     /** An extension function's receiver is its parameter 0, positioned at the receiver type. */
     @Test
     public void extensionReceiver(@TempDir Path projectDir) throws Exception {
