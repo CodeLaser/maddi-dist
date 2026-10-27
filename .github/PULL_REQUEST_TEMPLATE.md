@@ -18,4 +18,5 @@ TARGET BRANCH: `devel`, not `main`. GitHub proposes `main` (the default branch);
 - [ ] `./gradlew build` passes (compile + everything not tagged `slow`).
 - [ ] New or changed behaviour has a test.
 - [ ] Any test that parses a real-world corpus is tagged `@Tag("slow")`.
-- [ ] Every commit is signed off (`git commit -s`) — the [DCO](../DCO).
+- [ ] I have signed the [Contributor License Agreement](https://github.com/CodeLaser/maddi/blob/devel/CLA.md);
+      the bot on this PR asks for it once, and one signature covers maddi, maddi-mod and maddi-dist.

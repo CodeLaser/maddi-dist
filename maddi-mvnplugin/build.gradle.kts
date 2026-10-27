@@ -1,15 +1,18 @@
 /*
  * maddi: a modification analyzer for duplication detection and immutability.
- * Copyright 2020-2025, Bart Naudts, https://github.com/CodeLaser/maddi
+ * Copyright 2020-2026, CodeLaser BV, https://github.com/CodeLaser/maddi
  *
- * This program is free software: you can redistribute it and/or modify it under the
- * terms of the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your option) any later version.
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
- * more details. You should have received a copy of the GNU Lesser General Public
- * License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 
@@ -178,8 +181,8 @@ publishing {
                 url.set("https://github.com/CodeLaser/maddi")
                 licenses {
                     license {
-                        name.set("LGPL-3.0-or-later")
-                        url.set("https://www.gnu.org/licenses/lgpl-3.0.en.html")
+                        name.set("Apache-2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                     }
                 }
                 // Central validation refuses a POM without developers and scm.
@@ -210,17 +213,16 @@ tasks.processResources {
     }
 }
 
-// The Central deploy, mirroring maddi-annotation. Unlike that module this one is LGPL-3.0-or-later:
-// the plugin shades the analyzer, and the analyzer's licence travels with it.
+// The Central deploy, mirroring maddi-annotation. 
 jreleaser {
     gitRootSearch = true
 
     project {
         name.set("maddi-mvnplugin")
         description = "Run the maddi analyzer (modification analysis for duplication detection and immutability) from Maven."
-        license.set("LGPL-3.0-or-later")
+        license.set("Apache-2.0")
         authors.set(listOf("Bart Naudts"))
-        copyright.set("2020-2026 Bart Naudts")
+        copyright.set("2020-2026 CodeLaser BV")
 
         links {
             homepage.set("https://github.com/CodeLaser/maddi")

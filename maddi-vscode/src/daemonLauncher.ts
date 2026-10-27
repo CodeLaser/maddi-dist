@@ -1,7 +1,7 @@
 /*
  * maddi: a modification analyzer for duplication detection and immutability.
- * Copyright 2020-2025, Bart Naudts, https://github.com/CodeLaser/maddi
- * LGPL v3 or later; see the module sources for the full header.
+ * Copyright 2020-2026, CodeLaser BV, https://github.com/CodeLaser/maddi
+ * Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { ChildProcess, spawn } from 'child_process';
