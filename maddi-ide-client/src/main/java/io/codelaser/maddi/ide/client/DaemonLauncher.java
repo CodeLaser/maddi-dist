@@ -28,8 +28,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -42,6 +46,10 @@ import java.util.regex.Pattern;
 public final class DaemonLauncher {
     private static final Pattern PORT_LINE = Pattern.compile("DAEMON_PORT=(\\d+)");
     private static final Pattern PID_LINE = Pattern.compile("DAEMON_PID=(\\d+)");
+    private static final int TAIL_LINES = 30;
+    // end of the daemon's output; compared by identity
+    @SuppressWarnings("StringOperationCanBeSimplified")
+    private static final String END = new String("<end of output>");
 
     /** A running daemon: its process, the port it listens on, and (best-effort) its pid. */
     public record Handle(Process process, int port, long pid) implements Closeable {
@@ -102,28 +110,90 @@ public final class DaemonLauncher {
         BufferedReader stdout = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
 
+        // Read on a thread: readLine blocks, so a daemon that hangs without a word would otherwise never time out,
+        // and the deadline was only checked between lines. EOF arrives as END.
+        BlockingQueue<String> lines = new LinkedBlockingQueue<>();
+        Thread reader = new Thread(() -> {
+            try {
+                String line;
+                while ((line = stdout.readLine()) != null) lines.add(line);
+            } catch (IOException ignored) {
+                // the process ended
+            } finally {
+                lines.add(END);
+            }
+        }, "maddi-daemon-stdout-start");
+        reader.setDaemon(true);
+        reader.start();
+
         int port = -1;
         long pid = process.pid();
+        Deque<String> tail = new ArrayDeque<>();
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(startTimeoutMillis);
-        String line;
-        while (System.nanoTime() < deadline && (line = stdout.readLine()) != null) {
-            appendLog(log, line);
-            Matcher pm = PORT_LINE.matcher(line);
-            if (pm.find()) {
-                port = Integer.parseInt(pm.group(1));
-                break;
+        boolean ended = false;
+        try {
+            while (port < 0) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) break;
+                String line = lines.poll(remaining, TimeUnit.NANOSECONDS);
+                if (line == null) break; // timed out
+                if (line == END) {
+                    ended = true;
+                    break;
+                }
+                appendLog(log, line);
+                tail.addLast(line);
+                if (tail.size() > TAIL_LINES) tail.removeFirst();
+                Matcher pm = PORT_LINE.matcher(line);
+                if (pm.find()) port = Integer.parseInt(pm.group(1));
+                Matcher idm = PID_LINE.matcher(line);
+                if (idm.find()) pid = Long.parseLong(idm.group(1));
             }
-            Matcher idm = PID_LINE.matcher(line);
-            if (idm.find()) pid = Long.parseLong(idm.group(1));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
         if (port < 0) {
+            String why = startFailure(process, ended, startTimeoutMillis, jdkHome, tail, logFile);
             process.destroyForcibly();
             if (log != null) closeQuietly(log);
-            throw new IOException("daemon did not announce DAEMON_PORT within " + startTimeoutMillis + "ms");
+            throw new IOException(why);
         }
-        // keep draining stdout so the process never blocks on a full pipe (daemon logs there)
-        drainInBackground(stdout, log);
+        // the reader thread keeps draining stdout so the process never blocks on a full pipe (daemon logs there)
+        drainInBackground(lines, log);
         return new Handle(process, port, pid);
+    }
+
+    /**
+     * Why the daemon did not start, in words a user can act on: whether it EXITED (and with what code), or stayed
+     * silent; on which JDK; the last lines it printed; and where the full output is.
+     */
+    static String startFailure(Process process, boolean ended, long startTimeoutMillis, Path jdkHome,
+                               Deque<String> tail, Path logFile) {
+        StringBuilder sb = new StringBuilder();
+        Integer exitCode = null;
+        if (ended) {
+            try {
+                if (process.waitFor(2, TimeUnit.SECONDS)) exitCode = process.exitValue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (ended) {
+            sb.append("the maddi daemon exited").append(exitCode == null ? "" : " with code " + exitCode)
+                    .append(" before it announced its port");
+        } else {
+            sb.append("the maddi daemon did not announce its port within ").append(startTimeoutMillis / 1000)
+                    .append(" s");
+        }
+        sb.append(" (JDK: ").append(jdkHome == null ? "JAVA_HOME / PATH" : jdkHome).append(')');
+        if (tail.isEmpty()) {
+            sb.append(". It printed nothing.");
+        } else {
+            sb.append(". Its last output:\n");
+            tail.forEach(l -> sb.append("    ").append(l).append('\n'));
+        }
+        if (logFile != null) sb.append("Full output: ").append(logFile);
+        return sb.toString().strip();
     }
 
     private static Path launcherScript(Path installDir) throws IOException {
@@ -136,13 +206,13 @@ public final class DaemonLauncher {
         return script;
     }
 
-    private static void drainInBackground(BufferedReader stdout, Writer log) {
+    private static void drainInBackground(BlockingQueue<String> lines, Writer log) {
         Thread t = new Thread(() -> {
             try {
                 String line;
-                while ((line = stdout.readLine()) != null) appendLog(log, line);
-            } catch (IOException ignored) {
-                // process ended
+                while ((line = lines.take()) != END) appendLog(log, line);
+            } catch (InterruptedException ignored) {
+                // stop draining
             } finally {
                 if (log != null) closeQuietly(log);
             }

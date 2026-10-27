@@ -20,6 +20,7 @@ package io.codelaser.maddi.ide.plugin.analysis;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.codeInsight.hints.declarative.impl.DeclarativeInlayHintsPassFactory;
+import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
@@ -28,10 +29,13 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
@@ -98,7 +102,9 @@ public final class MaddiAnalysisService implements Disposable {
                     // path, so a failed run was indistinguishable from a stale successful one (#29).
                     publishFailure(e.getClass().getSimpleName(),
                             e.getMessage() == null ? e.toString() : e.getMessage());
-                    notifyUser("Analysis failed: " + e.getMessage(), NotificationType.ERROR);
+                    String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                    notifyFailure("Analysis failed: " + message.lines().findFirst().orElse("")
+                                  + ". Details in the maddi tool window.");
                 } finally {
                     running.set(false);
                 }
@@ -120,7 +126,7 @@ public final class MaddiAnalysisService implements Disposable {
             return;
         }
         indicator.setText("maddi: starting daemon");
-        Path logFile = Path.of(PathManager.getLogPath(), "maddi-daemon.log");
+        Path logFile = daemonLogFile();
         Path installDir = resolveInstallDir(settings);
         // null: no Kotlin front end yet; the daemon then analyses the Java half and names the skipped Kotlin
         Path kotlinFrontEnd = MaddiKotlinFrontEnd.home(settings, installDir);
@@ -332,6 +338,23 @@ public final class MaddiAnalysisService implements Disposable {
         } catch (IllegalArgumentException e) {
             return uri;
         }
+    }
+
+    /** Where the daemon's own output goes: next to idea.log (Help → Show Log in Finder / Explorer). */
+    public static Path daemonLogFile() {
+        return Path.of(PathManager.getLogPath(), "maddi-daemon.log");
+    }
+
+    /** An error balloon that offers the daemon's output, where the reason a run failed usually is. */
+    private void notifyFailure(String content) {
+        NotificationGroupManager.getInstance()
+                .getNotificationGroup(NOTIFICATION_GROUP)
+                .createNotification("maddi", content, NotificationType.ERROR)
+                .addAction(NotificationAction.createSimple("Open daemon log", () -> {
+                    VirtualFile log = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(daemonLogFile());
+                    if (log != null) FileEditorManager.getInstance(project).openFile(log, true);
+                }))
+                .notify(project);
     }
 
     private void notifyUser(String content, NotificationType type) {

@@ -19,11 +19,18 @@ package io.codelaser.maddi.ide.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -54,5 +61,42 @@ public class DaemonLaunchTest {
 
             client.shutdown();
         }
+    }
+
+    /** A fake install whose launcher runs {@code body}; POSIX shell only. */
+    private static Path fakeInstall(Path dir, String body) throws Exception {
+        Path bin = Files.createDirectories(dir.resolve("bin"));
+        Path script = bin.resolve("maddi-ide-daemon");
+        Files.writeString(script, "#!/bin/sh\n" + body + "\n");
+        assertTrue(script.toFile().setExecutable(true));
+        return dir;
+    }
+
+    /** A daemon that dies at once: the error says so, with its exit code, its last words and the log. */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    public void exitBeforeAnnouncingIsExplained(@TempDir Path dir) throws Exception {
+        Path install = fakeInstall(dir.resolve("install"), "echo 'Error: LinkageError occurred while loading main class'; exit 1");
+        Path log = dir.resolve("maddi-daemon.log");
+        IOException e = assertThrows(IOException.class,
+                () -> new DaemonLauncher().launch(install, null, List.of(), 60_000, log));
+        assertTrue(e.getMessage().contains("exited with code 1"), e.getMessage());
+        assertTrue(e.getMessage().contains("LinkageError occurred"), e.getMessage());
+        assertTrue(e.getMessage().contains(log.toString()), e.getMessage());
+        assertTrue(Files.readString(log).contains("LinkageError occurred"));
+    }
+
+    /** A daemon that hangs without a word: the deadline holds; readLine used to block past it. */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    public void silentDaemonTimesOut(@TempDir Path dir) throws Exception {
+        Path install = fakeInstall(dir.resolve("install"), "sleep 30");
+        long start = System.nanoTime();
+        IOException e = assertThrows(IOException.class,
+                () -> new DaemonLauncher().launch(install, null, List.of(), 1_000, null));
+        long seconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start);
+        assertTrue(seconds < 10, "took " + seconds + " s");
+        assertTrue(e.getMessage().contains("did not announce its port within 1 s"), e.getMessage());
+        assertTrue(e.getMessage().contains("printed nothing"), e.getMessage());
     }
 }

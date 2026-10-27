@@ -212,7 +212,9 @@ public class MaddiFindingsPanel extends SimpleToolWindowPanel implements Disposa
     private void onRunFailed(String kind, String message) {
         running = false;
         clock.stop();
-        terminal = "FAILED (" + kind + "): " + message;
+        // the status line takes the first line; the log below gets all of it (a failed daemon start carries the
+        // daemon's last output lines)
+        terminal = "FAILED (" + kind + "): " + message.lines().findFirst().orElse("");
         append("ERROR [" + kind + "] " + message);
         renderState();
     }
@@ -257,7 +259,9 @@ public class MaddiFindingsPanel extends SimpleToolWindowPanel implements Disposa
     private void renderDaemon() {
         MaddiAnalysisService service = MaddiAnalysisService.getInstance(project);
         String install = service.daemonInstall();
-        daemonLabel.setText(install.isEmpty() ? "daemon: not started yet"
+        daemonLabel.setText(install.isEmpty()
+                ? "daemon: not started yet. It starts with the first analysis (Tools → Analyze with maddi); its output"
+                  + " goes to " + MaddiAnalysisService.daemonLogFile()
                 : "daemon: build " + service.daemonBuild() + " at " + install);
     }
 
