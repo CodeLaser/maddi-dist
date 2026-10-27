@@ -139,10 +139,16 @@ public class WarmAnalysisService implements AnalyzeHandler {
 
         emit(status, requestId, "analyze", "modification analysis", 0, order.size());
         ModificationOptions modOptions = new ModificationOptions(
-                10,     // max iterations
-                null,   // stop when a cycle shows no improvement: the analyzer's default
-                false,  // track object creations
-                null,   // modification via reachability: the analyzer's default
+                // as the CLI: a safety net, not a budget. MODREACH re-derives after each of its rounds and adds this
+                // many iterations each time; langchain4j-core's first fixpoint alone takes 15
+                30,
+                // NOT the CLI's plateau early exit: under MODREACH's re-derivations it stopped both demo projects at
+                // PLATEAU with the same verdicts the certified run reaches, and the IDE shows the outcome
+                null,
+                false,  // track object creations: switched on by MODREACH and by nullability, which need it
+                // the reachability pass (MODREACH), the CLI's default: the authority over the three modification
+                // properties, and what the eventual layer needs to see the honest post-cutover state
+                true,
                 true,   // fault tolerant: isolate a crash on one element into a finding; don't abort the run
                 // advisory "you are one member away from @Container/@Immutable/..." warnings; opt-in, as in
                 // RunAnalyzer, because they are noisy on a codebase that has not been curated for them
@@ -150,7 +156,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 false,  // environment gates: the CLI's, not the daemon's
                 false,  // store fingerprints
                 staticSideEffects,
-                null);  // eventual cluster: the analyzer's default
+                null)   // eventual cluster: the analyzer's default
+                // the nullability pass after the fixpoint, writing NULLABILITY_* for the @NotNull/@Nullable hints
+                .withNullability(true);
         // Stream what each pass established, so the IDE can annotate the file on screen long before the run
         // ends: the first pass decides most of the output, and the tail is long but decides little.
         StreamingValueFeed valueFeed = new StreamingValueFeed(status, requestId, collector);

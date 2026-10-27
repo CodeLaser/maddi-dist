@@ -127,7 +127,7 @@ public class AnnotationTagger {
                 if (!mi.isConstructor() && mi.hasReturnValue()) {
                     mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_METHOD, true, out);
                     if (isDependent(a, PropertyImpl.INDEPENDENT_METHOD)) out.add(neg("@Dependent", true));
-                    if (isNullable(a, PropertyImpl.NULLABILITY_METHOD)) out.add(neg("@Nullable", true));
+                    nullability(a, PropertyImpl.NULLABILITY_METHOD, mi.returnType(), out);
                 }
             }
             case FieldInfo fi -> {
@@ -137,7 +137,7 @@ public class AnnotationTagger {
                 }
                 mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_FIELD, true, out);
                 if (isDependent(a, PropertyImpl.INDEPENDENT_FIELD)) out.add(neg("@Dependent", true));
-                if (isNullable(a, PropertyImpl.NULLABILITY_FIELD)) out.add(neg("@Nullable", true));
+                nullability(a, PropertyImpl.NULLABILITY_FIELD, fi.type(), out);
             }
             case ParameterInfo pi -> {
                 if (!pi.parameterizedType().isPrimitiveStringClass() && !modifiedDecorated
@@ -147,7 +147,7 @@ public class AnnotationTagger {
                 }
                 if (isMutable(a, PropertyImpl.IMMUTABLE_PARAMETER)) out.add(neg("@Mutable", true));
                 if (isDependent(a, PropertyImpl.INDEPENDENT_PARAMETER)) out.add(neg("@Dependent", true));
-                if (isNullable(a, PropertyImpl.NULLABILITY_PARAMETER)) out.add(neg("@Nullable", true));
+                nullability(a, PropertyImpl.NULLABILITY_PARAMETER, pi.parameterizedType(), out);
             }
             case TypeInfo ti -> {
                 // a type's own @FinalFields is informative, as its @Immutable is; on a field or a method result it
@@ -266,9 +266,22 @@ public class AnnotationTagger {
         return v != null && v.isDependent();
     }
 
-    private static boolean isNullable(PropertyValueMap a, Property property) {
+    /**
+     * The nullability pass's verdict (the daemon runs it, in the analyzer's null-marked reading): {@code @Nullable}
+     * is the exception and shown, {@code @NotNull} the norm and hidden by default. The decorator prints neither
+     * outside its explicit mode, so both come from here. A primitive has no verdict to show; UNSPECIFIED shows nothing.
+     */
+    private static void nullability(PropertyValueMap a, Property property, ParameterizedType type,
+                                    List<DaemonProtocol.Annotation> out) {
+        if (type.isPrimitiveExcludingVoid() && type.arrays() == 0) return;
         Value.Nullability v = a.getOrNull(property, ValueImpl.NullabilityImpl.class);
-        return v != null && v.state() == io.codelaser.maddi.cst.api.type.NullableState.NULLABLE;
+        if (v == null) return;
+        switch (v.state()) {
+            case NULLABLE -> out.add(neg("@Nullable", false));
+            case NONNULL -> out.add(new DaemonProtocol.Annotation("@NotNull", POSITIVE, true));
+            default -> {
+            }
+        }
     }
 
     private static boolean containerType(TypeInfo type) {
