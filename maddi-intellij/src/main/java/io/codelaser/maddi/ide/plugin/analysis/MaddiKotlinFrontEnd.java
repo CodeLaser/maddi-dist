@@ -73,11 +73,39 @@ final class MaddiKotlinFrontEnd {
      */
     static @Nullable Path home(MaddiSettings.State settings, Path daemonInstallDir) {
         String override = settings.kotlinFrontEndDir == null ? "" : settings.kotlinFrontEndDir.trim();
-        if (!override.isEmpty()) return Path.of(override);
+        if (!override.isEmpty()) return expandHome(override);
         String dev = System.getProperty("maddi.k2.home", "").trim();
         if (!dev.isEmpty()) return Path.of(dev);
         String version = daemonVersion(daemonInstallDir);
         return version == null ? null : installer().installed(version);
+    }
+
+    /**
+     * A typed {@code ~/maddi-kit/k2-home}: nothing between the settings and the daemon is a shell, and the daemon
+     * then found no front end at a directory literally named {@code ~} (maddi-dist#6).
+     */
+    static Path expandHome(String path) {
+        if (path.equals("~") || path.startsWith("~/") || path.startsWith("~" + java.io.File.separator)) {
+            return Path.of(System.getProperty("user.home") + path.substring(1));
+        }
+        return Path.of(path);
+    }
+
+    /**
+     * Why a set Kotlin front end directory cannot work, or null when it looks right: it must hold the front end's
+     * own {@code maddi-kotlin-k2-*.jar}, as a maddi-kotlin distribution's {@code lib-k2} does.
+     */
+    static @Nullable String problemWith(Path home) {
+        if (!Files.isDirectory(home)) return home + " is not a directory";
+        try (Stream<Path> files = Files.list(home)) {
+            if (files.anyMatch(f -> f.getFileName().toString().startsWith(KotlinFrontEndInstaller.FRONT_END_JAR_PREFIX)
+                                    && f.getFileName().toString().endsWith(".jar"))) {
+                return null;
+            }
+        } catch (IOException e) {
+            return home + " cannot be read: " + e.getMessage();
+        }
+        return home + " holds no " + KotlinFrontEndInstaller.FRONT_END_JAR_PREFIX + "*.jar";
     }
 
     /**

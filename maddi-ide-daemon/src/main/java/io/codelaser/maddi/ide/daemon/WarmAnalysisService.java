@@ -297,13 +297,29 @@ public class WarmAnalysisService implements AnalyzeHandler {
      * Install the Kotlin front end in this JVM, once. @return null when it is (or already was) installed, else why
      * not — the reason reaches the editor as an init problem.
      */
+    /**
+     * Said to the IDE's user, who sets the front end in the IDE and not with the {@code -D} properties K2Realm's own
+     * message names: a directory the IDE passed that holds no front end, or none passed at all (maddi-dist#6).
+     */
+    static String kotlinFrontEndProblem(String homeFromIde, String detail) {
+        if (homeFromIde != null && !homeFromIde.isBlank()) {
+            return "the Kotlin front end directory set in the IDE, " + homeFromIde + ", holds no usable front end ("
+                   + detail + "). It must be a directory of the K2 jars, including maddi-kotlin-k2-<version>.jar"
+                   + " (a maddi-kotlin distribution's lib-k2): check the Kotlin front end setting (IntelliJ: Settings"
+                   + " → Tools → maddi → Kotlin front end override).";
+        }
+        return "the IDE started this daemon without a Kotlin front end. Accept the IDE's offer to download it, or set"
+               + " a directory of the K2 jars (IntelliJ: Settings → Tools → maddi → Kotlin front end override), then"
+               + " analyze again.";
+    }
+
     private static String installKotlinFrontEnd() {
         try {
             K2Realm.installIfAbsent();
             return null;
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("Kotlin front end not available: {}", e.toString());
-            return "the Kotlin front end is not installed (" + e.getMessage() + ").";
+            return kotlinFrontEndProblem(System.getenv(DaemonMain.ENV_K2_HOME), e.getMessage());
         }
     }
 

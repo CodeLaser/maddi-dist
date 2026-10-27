@@ -59,7 +59,7 @@ public final class KotlinFrontEndInstaller {
 
     private static final String LIB_K2 = "lib-k2/";
     /** The one jar every valid K2 directory must hold: the front end itself, which the realm finds by service. */
-    private static final String FRONT_END_JAR_PREFIX = "maddi-kotlin-k2";
+    public static final String FRONT_END_JAR_PREFIX = "maddi-kotlin-k2";
     private static final String COMPLETE_MARKER = ".complete";
 
     private final Path cacheRoot;

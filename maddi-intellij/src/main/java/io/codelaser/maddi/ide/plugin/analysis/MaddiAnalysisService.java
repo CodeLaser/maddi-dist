@@ -130,6 +130,14 @@ public final class MaddiAnalysisService implements Disposable {
         Path installDir = resolveInstallDir(settings);
         // null: no Kotlin front end yet; the daemon then analyses the Java half and names the skipped Kotlin
         Path kotlinFrontEnd = MaddiKotlinFrontEnd.home(settings, installDir);
+        String kotlinProblem = kotlinFrontEnd == null || settings.kotlinFrontEndDir == null
+                               || settings.kotlinFrontEndDir.isBlank() ? null : MaddiKotlinFrontEnd.problemWith(kotlinFrontEnd);
+        if (kotlinProblem != null) {
+            // said here, where the setting is, before the daemon's own account of the skipped Kotlin sources
+            notifyUser("The Kotlin front end override in Settings → Tools → maddi does not work: " + kotlinProblem
+                       + ". Kotlin sources are not analysed until it names a directory of the K2 jars.",
+                    NotificationType.WARNING);
+        }
         daemon.ensureStarted(installDir, Path.of(jdkHome), settings.daemonXmxMb, kotlinFrontEnd, logFile);
         // WHICH daemon answered, in idea.log: the bundled one is a build, not a version, and a stale bundle
         // presents as an analyzer regression (2026-08-24). The stamp is the source state; see DaemonMain.
