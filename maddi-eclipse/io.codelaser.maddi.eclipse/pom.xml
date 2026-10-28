@@ -13,7 +13,7 @@
     <parent>
         <groupId>io.codelaser.maddi.eclipse</groupId>
         <artifactId>maddi-eclipse-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.9.6-SNAPSHOT</version>
     </parent>
 
     <artifactId>io.codelaser.maddi.eclipse</artifactId>
@@ -27,7 +27,8 @@
     <build>
         <plugins>
             <!-- Embed the shared client + Jackson: copy them (stripped to stable names) into lib/ before
-                 Tycho compiles, so Bundle-ClassPath resolves them at compile and package time. -->
+                 Tycho compiles, so Bundle-ClassPath resolves them at compile and package time. Jackson comes from
+                 Maven Central; the client from the Gradle build next door (below), like the daemon. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -44,12 +45,6 @@
                             <overWriteReleases>true</overWriteReleases>
                             <overWriteSnapshots>true</overWriteSnapshots>
                             <artifactItems>
-                                <artifactItem>
-                                    <groupId>io.codelaser</groupId>
-                                    <artifactId>maddi-ide-client</artifactId>
-                                    <version>${maddi.client.version}</version>
-                                    <destFileName>maddi-ide-client.jar</destFileName>
-                                </artifactItem>
                                 <artifactItem>
                                     <groupId>com.fasterxml.jackson.core</groupId>
                                     <artifactId>jackson-databind</artifactId>
@@ -74,6 +69,32 @@
                 </executions>
             </plugin>
 
+            <!-- The client jar, from ../../maddi-ide-client/build/libs (./gradlew :maddi-ide-client:jar), not from
+                 ~/.m2: publishing it to the shared local repository as a release version could shadow the real
+                 release in every other build on the machine. maddi.client.version is the release version, checked
+                 by release-eclipse.sh. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>embed-client</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <copy file="${project.basedir}/../../maddi-ide-client/build/libs/maddi-ide-client-${maddi.client.version}.jar"
+                                      tofile="${project.basedir}/lib/maddi-ide-client.jar"
+                                      overwrite="true" failonerror="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Bundle the daemon distribution (Gradle installDist output) under daemon/ so the plugin is
                  self-contained. Run ./gradlew :maddi-ide-daemon:installDist first; the bundle declares
                  Eclipse-BundleShape: dir so it installs unpacked and the launcher runs from disk. -->
@@ -93,6 +114,28 @@
                             <resources>
                                 <resource>
                                     <directory>${project.basedir}/../../maddi-ide-daemon/build/install/maddi-ide-daemon</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <!-- the licence, the notice and the third-party list at the bundle's root: it ships the
+                         daemon and its third-party libraries -->
+                    <execution>
+                        <id>bundle-legal</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/legal</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../..</directory>
+                                    <includes>
+                                        <include>LICENSE</include>
+                                        <include>NOTICE</include>
+                                        <include>THIRD-PARTY.txt</include>
+                                    </includes>
                                 </resource>
                             </resources>
                         </configuration>

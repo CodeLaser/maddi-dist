@@ -2,11 +2,26 @@
     <id>io.codelaser.maddi</id>
     <name>maddi</name>
     <vendor url="https://codelaser.io">CodeLaser</vendor>
+    <!-- The first 40 characters become the Marketplace preview card: plain words, no jargon. The change notes are
+         filled in at build time from docs/ide-changelog.md (patchPluginXml). -->
     <description><![CDATA[
-        Displays <b>maddi</b> analysis hints — immutability, container, independence, modification and
-        nullability — inline on Java and Kotlin source, and marks + explains <b>guard-system</b> contract
-        violations with their why-chain. Analysis runs in a warm out-of-process maddi daemon (JDK 25+);
-        the plugin talks to it over a loopback socket.
+        <p>Immutability, modification and nullability analysis for Java and Kotlin, shown in the editor.</p>
+        <p><b>maddi</b> analyses a whole project and shows its conclusions beside each declaration, as the annotations
+        you would write by hand: whether a type is immutable or a container, whether a method modifies its object or
+        its arguments, whether a field or parameter can be null, whether an object exposes its internals.</p>
+        <ul>
+            <li>Inline hints and gutter icons with the computed annotations (<code>@ImmutableContainer</code>,
+                <code>@NotModified</code>, <code>@Independent</code>, <code>@Nullable</code>, …).</li>
+            <li>Contracts: annotations you write yourself are checked, and a violation is marked in the code with the
+                chain of reasons that led to it.</li>
+            <li>A tool window with the run's progress, the findings, and a run log.</li>
+        </ul>
+        <p><b>Requirements.</b> A JDK 25 or later, which the plugin picks from the IDE's JDKs (Settings → Tools →
+        maddi). The analysis runs in a separate process, the bundled maddi daemon, on that JDK; nothing leaves your
+        machine. Kotlin sources need the Kotlin front end, a separate download the plugin offers the first time a
+        project has Kotlin sources.</p>
+        <p>Start with <i>Tools → Analyze with maddi</i>. Documentation and source:
+        <a href="https://github.com/CodeLaser/maddi">github.com/CodeLaser/maddi</a>.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

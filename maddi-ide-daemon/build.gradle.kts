@@ -164,3 +164,31 @@ fun git(dir: File, vararg args: String): String? = try {
 } catch (e: Exception) {
     null
 }
+
+// The IDE plugins bundle this distribution, so THIRD-PARTY.txt (shipped inside both plugins) must name every
+// third-party library on its runtime class path. Fails the build when a new one arrives unlisted, rather than
+// shipping it without a notice. Coordinates only: a version bump needs no edit, a new library does.
+val checkThirdPartyNotices = tasks.register("checkThirdPartyNotices") {
+    description = "Checks that THIRD-PARTY.txt lists every third-party library the daemon distribution bundles."
+    group = "verification"
+    val notices = rootProject.layout.projectDirectory.file("THIRD-PARTY.txt")
+    val runtime = configurations.runtimeClasspath
+    inputs.file(notices)
+    inputs.files(runtime)
+    doLast {
+        val listed = notices.asFile.readLines().map { it.substringBefore(' ').trim() }.filter { ':' in it }.toSet()
+        // the jars, not the graph: a BOM is a component on the graph but ships nothing
+        val bundled = runtime.get().incoming.artifacts.artifacts
+            .map { it.id.componentIdentifier }
+            .filterIsInstance<org.gradle.api.artifacts.component.ModuleComponentIdentifier>()
+            .filter { it.group != "io.codelaser" }
+            .map { "${it.group}:${it.module}" }
+            .toSortedSet()
+        val missing = bundled - listed
+        if (missing.isNotEmpty()) {
+            throw GradleException("THIRD-PARTY.txt does not list " + missing.joinToString(", ")
+                    + ": add each with its license before the plugins ship it")
+        }
+    }
+}
+tasks.named("check") { dependsOn(checkThirdPartyNotices) }

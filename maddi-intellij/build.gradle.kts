@@ -72,7 +72,14 @@ dependencies {
 intellijPlatform {
     projectName = "maddi" // deterministic plugin directory name (bundled daemon lives under <plugin>/daemon)
     buildSearchableOptions = false // optional headless-IDE indexing step; not needed and fails in CI/sandbox
+    // Updates after the first, hand-made upload: publishPlugin -PintellijPlatformPublishingToken=<token>, a Marketplace
+    // personal access token. Never in a file. Unsigned: signing needs a certificate we do not have (PUBLISHING.md).
+    publishing {
+        token = providers.gradleProperty("intellijPlatformPublishingToken")
+    }
     pluginConfiguration {
+        // the section of docs/ide-changelog.md for the version being built; required content on Marketplace
+        changeNotes = provider { changeNotesFor(project.version.toString()) }
         ideaVersion {
             sinceBuild = "253" // 2025.3
             untilBuild = provider { null } // open-ended
@@ -109,6 +116,38 @@ intellijPlatform {
             FailureLevel.OVERRIDE_ONLY_API_USAGES,
             FailureLevel.NON_EXTENDABLE_API_USAGES,
         )
+    }
+}
+
+/**
+ * The change notes of one release, as HTML: its `## <version>` section of docs/ide-changelog.md, whose bullets are
+ * plain text with `**bold**` and `` `code` ``. Fails the build when the section is missing, so a release cannot go out
+ * with the previous release's notes, or none.
+ */
+fun changeNotesFor(version: String): String {
+    val lines = rootProject.file("docs/ide-changelog.md").readLines()
+    val start = lines.indexOfFirst { it.trim() == "## $version" }
+    if (start < 0) throw GradleException("docs/ide-changelog.md has no '## $version' section for the change notes")
+    val section = lines.drop(start + 1).takeWhile { !it.startsWith("## ") }
+    val items = mutableListOf<String>()
+    for (line in section) {
+        when {
+            line.startsWith("- ") -> items += line.removePrefix("- ").trim()
+            line.isNotBlank() && items.isNotEmpty() -> items[items.size - 1] = items.last() + " " + line.trim()
+        }
+    }
+    fun inline(text: String) = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        .replace(Regex("\\*\\*(.+?)\\*\\*"), "<b>$1</b>")
+        .replace(Regex("`(.+?)`"), "<code>$1</code>")
+    return items.joinToString("", "<ul>", "</ul>") { "<li>${inline(it)}</li>" }
+}
+
+// The licence, the notice and the third-party list go at the plugin's root, beside lib/ and daemon/: the zip bundles
+// the daemon and some 20 third-party libraries, and shipped no licence text at all until 0.9.6.
+tasks.withType<org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask> {
+    from(rootProject.layout.projectDirectory) {
+        include("LICENSE", "NOTICE", "THIRD-PARTY.txt")
+        into("maddi")
     }
 }
 

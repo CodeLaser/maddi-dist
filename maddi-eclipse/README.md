@@ -51,17 +51,22 @@ A Maven/Tycho reactor, deliberately separate from the Gradle multi-project: Ecli
 built PDE-style. Two prerequisites come from the Gradle side, so build them first:
 
 ```bash
-./gradlew :platform:publishToMavenLocal :maddi-ide-client:publishToMavenLocal :maddi-ide-daemon:installDist
+./gradlew :maddi-ide-client:jar :maddi-ide-daemon:installDist
 cd maddi-eclipse && mvn clean verify
 ```
 
+- `maddi-ide-client` is copied from `maddi-ide-client/build/libs` and embedded on the bundle classpath, with
+  Jackson from Maven Central. Its version is `maddi.client.version` in the bundle's pom, which moves with the root
+  `gradle.properties`; `release-eclipse.sh` refuses a mismatch. It is not taken from `~/.m2`: a locally published
+  release version there would shadow the real one in every other build on the machine.
+- the daemon `installDist` tree is copied into the bundle at `process-resources`, and the repository's `LICENSE`,
+  `NOTICE` and `THIRD-PARTY.txt` into its `legal/`.
+
+Releasing: `./release-eclipse.sh v<version>` builds all of this and publishes the update site (see the script's
+header, and `PUBLISHING.md` in maddi). `DRY_RUN=1` builds and prepares the site without publishing anything.
+
 Use **Maven 3.9**: Maven 3.10's resolver rejects the system-scoped bundle dependencies Tycho 5.0.3 hands it
 ("Invalid Collect Request: null -> [...]") before anything compiles.
-
-- `maddi-ide-client` is resolved from the local Maven repo and embedded on the bundle classpath. Its version
-  is pinned in the parent pom as `maddi.client.version` and must be kept in step with the root
-  `gradle.properties` by hand.
-- the daemon `installDist` tree is copied into the bundle at `process-resources`.
 
 Modules: the **bundle**, a headless **test** bundle (a real Equinox runtime with JDT, no workbench), the
 **feature** (what a user installs), and the **repository** (the p2 site).

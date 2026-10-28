@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: maddi
 Bundle-SymbolicName: io.codelaser.maddi.eclipse;singleton:=true
-Bundle-Version: 0.1.0.qualifier
+Bundle-Version: 0.9.6.qualifier
 Bundle-Vendor: CodeLaser
 Automatic-Module-Name: io.codelaser.maddi.eclipse
 Bundle-RequiredExecutionEnvironment: JavaSE-21
