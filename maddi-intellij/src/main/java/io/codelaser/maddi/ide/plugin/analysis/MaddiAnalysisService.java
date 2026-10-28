@@ -30,6 +30,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
+import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -38,11 +39,13 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.settings.MaddiConfigurable;
 import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.CodeSource;
 import java.util.ArrayList;
@@ -128,6 +131,14 @@ public final class MaddiAnalysisService implements Disposable {
         indicator.setText("maddi: starting daemon");
         Path logFile = daemonLogFile();
         Path installDir = resolveInstallDir(settings);
+        if (!installDir.equals(bundledDaemonDir()) && !Files.isDirectory(installDir.resolve("bin"))) {
+            // an override left over from a development setup: say which setting to clear, not "launcher not found"
+            publishFailure("configuration", "the daemon install override names " + installDir
+                                            + ", which holds no maddi daemon");
+            notifyFailure("The daemon install override in Settings → Tools → maddi names " + installDir
+                          + ", which holds no maddi daemon. Clear it to use the daemon bundled with the plugin.");
+            return;
+        }
         // null: no Kotlin front end yet; the daemon then analyses the Java half and names the skipped Kotlin
         Path kotlinFrontEnd = MaddiKotlinFrontEnd.home(settings, installDir);
         String kotlinProblem = kotlinFrontEnd == null || settings.kotlinFrontEndDir == null
@@ -358,10 +369,18 @@ public final class MaddiAnalysisService implements Disposable {
         NotificationGroupManager.getInstance()
                 .getNotificationGroup(NOTIFICATION_GROUP)
                 .createNotification("maddi", content, NotificationType.ERROR)
+                .addAction(NotificationAction.createSimple("Open settings", () ->
+                        ShowSettingsUtil.getInstance().showSettingsDialog(project, MaddiConfigurable.class)))
                 .addAction(NotificationAction.createSimple("Open daemon log", () -> {
                     VirtualFile log = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(daemonLogFile());
                     // not FileEditorManager.openFile(file, focus): deprecated from 2026.3
-                    if (log != null) new OpenFileDescriptor(project, log).navigate(true);
+                    if (log != null) {
+                        new OpenFileDescriptor(project, log).navigate(true);
+                    } else {
+                        // no daemon has started yet, so there is nothing to open: say so rather than do nothing
+                        notifyUser("There is no daemon log yet: no daemon has started. It will be at "
+                                   + daemonLogFile() + ".", NotificationType.INFORMATION);
+                    }
                 }))
                 .notify(project);
     }
