@@ -29,7 +29,7 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -360,7 +360,8 @@ public final class MaddiAnalysisService implements Disposable {
                 .createNotification("maddi", content, NotificationType.ERROR)
                 .addAction(NotificationAction.createSimple("Open daemon log", () -> {
                     VirtualFile log = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(daemonLogFile());
-                    if (log != null) FileEditorManager.getInstance(project).openFile(log, true);
+                    // not FileEditorManager.openFile(file, focus): deprecated from 2026.3
+                    if (log != null) new OpenFileDescriptor(project, log).navigate(true);
                 }))
                 .notify(project);
     }
