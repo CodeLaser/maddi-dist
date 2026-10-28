@@ -22,6 +22,8 @@ import org.eclipse.core.resources.IResourceChangeEvent;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
 
@@ -49,10 +51,26 @@ public class MaddiEclipsePlugin extends AbstractUIPlugin {
         ResourcesPlugin.getWorkspace().addResourceChangeListener(buildListener, IResourceChangeEvent.POST_BUILD);
         // an analysis changes no document, so nothing else would re-query the editors' code minings
         MaddiResults.get().addListener(miningRefresher);
+        // nor does a preference: redraw what it shapes
+        getPreferenceStore().addPropertyChangeListener(preferenceListener);
     }
+
+    private final IPropertyChangeListener preferenceListener = event -> {
+        String key = event.getProperty();
+        if (MaddiPreferences.SHOW_GUARD_FINDINGS.equals(key) || MaddiPreferences.SHOW_GUTTER_ICONS.equals(key)) {
+            Job.create("maddi: updating markers", monitor -> {
+                ResourcesPlugin.getWorkspace().run(m -> MaddiMarkers.apply(ResourcesPlugin.getWorkspace().getRoot(),
+                        MaddiResults.get().latest()), monitor);
+            }).schedule();
+        } else if (MaddiPreferences.HINT_FILTER.equals(key) || MaddiPreferences.INLINE_HINTS.equals(key)
+                   || MaddiPreferences.HINT_PLACEMENT.equals(key)) {
+            miningRefresher.run();
+        }
+    };
 
     @Override
     public void stop(BundleContext context) throws Exception {
+        getPreferenceStore().removePropertyChangeListener(preferenceListener);
         MaddiResults.get().removeListener(miningRefresher);
         ResourcesPlugin.getWorkspace().removeResourceChangeListener(buildListener);
         daemon.close();

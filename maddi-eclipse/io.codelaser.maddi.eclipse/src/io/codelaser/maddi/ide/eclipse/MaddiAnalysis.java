@@ -20,6 +20,9 @@ package io.codelaser.maddi.ide.eclipse;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IWorkspace;
+import org.eclipse.core.resources.IncrementalProjectBuilder;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
@@ -27,8 +30,11 @@ import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 
 import java.nio.file.Path;
@@ -39,6 +45,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * findings view). Shared by the manual {@link AnalyzeMaddiHandler} and the {@link MaddiBuildListener}
  * auto-trigger. Coalesces: while one run is in flight, further triggers are dropped (the daemon is
  * single-request, and re-running on every incremental build would only pile up).
+ * <p>
+ * Every way a run ends is recorded in {@link MaddiRun}, which the findings view shows. A manual run that fails
+ * also returns an error status, which Eclipse shows as a dialog, and opens the view: the Error Log alone is a place
+ * nobody looks.
  */
 public final class MaddiAnalysis {
 
@@ -47,57 +57,101 @@ public final class MaddiAnalysis {
     private MaddiAnalysis() {
     }
 
+    /** True while a run is in flight; the build listener ignores the builds a run itself starts. */
+    public static boolean isRunning() {
+        return RUNNING.get();
+    }
+
     /**
      * Schedule an analysis of {@code javaProject}. {@code reveal} opens the findings view and reports a
-     * summary — appropriate for a manual run, not for a background build trigger.
+     * failure as a dialog — appropriate for a manual run, not for a background build trigger.
      */
     public static void schedule(IJavaProject javaProject, boolean reveal) {
         Job job = Job.create("maddi: analyzing " + javaProject.getElementName(), monitor -> {
             if (!RUNNING.compareAndSet(false, true)) return Status.OK_STATUS; // one at a time
             try {
-                analyze(javaProject, reveal, monitor);
+                return analyze(javaProject, reveal, monitor);
             } catch (Exception e) {
-                MaddiEclipsePlugin.error("maddi analysis failed", e);
+                String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                return failed(javaProject, reveal, e.getClass().getSimpleName(), message, e);
             } finally {
                 RUNNING.set(false);
             }
-            return Status.OK_STATUS;
         });
         job.setUser(reveal); // manual runs show foreground progress; build triggers stay quiet
         job.schedule();
     }
 
-    private static void analyze(IJavaProject javaProject, boolean reveal, IProgressMonitor monitor)
+    /** The project of the last run, analysed again; false when there has been none. */
+    public static boolean rerun() {
+        String name = MaddiRun.get().lastProject();
+        if (name.isEmpty()) return false;
+        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(name);
+        if (!project.exists() || !project.isOpen()) return false;
+        schedule(JavaCore.create(project), true);
+        return true;
+    }
+
+    /** Stop the daemon; the next analysis launches a fresh one (after installDist on a daemon install override). */
+    public static void restartDaemon() {
+        MaddiEclipsePlugin.get().daemon().restart();
+        MaddiRun.get().daemonStopped();
+    }
+
+    /** Said when the command finds no Java project to analyse; on the UI thread. */
+    public static void reportNoProject() {
+        IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+        MessageDialog.openInformation(window == null ? null : window.getShell(), "maddi",
+                "Select a Java project, or open one of its files, then choose Analyze with maddi.");
+    }
+
+    /** Where the daemon's own output goes: the plugin's state directory, under the workspace's .metadata. */
+    public static Path daemonLogFile() {
+        return MaddiEclipsePlugin.get().getStateLocation().append("maddi-daemon.log").toPath();
+    }
+
+    private static IStatus analyze(IJavaProject javaProject, boolean reveal, IProgressMonitor monitor)
             throws Exception {
         // The total is not knowable up front — the analysis is a fixpoint iteration, not a fixed number of
         // steps — so the task is indeterminate and the phases arrive as subtasks.
         SubMonitor progress = SubMonitor.convert(monitor, "maddi", IProgressMonitor.UNKNOWN);
-        progress.subTask("starting the analysis daemon");
-        String jdkHome = MaddiPreferences.jdkHome();
+        String jdkHome = MaddiPreferences.jdkHome(); // the preference, else the default installed JDK 25+
+        if (jdkHome == null) {
+            return failed(javaProject, reveal, "configuration", "maddi needs a JDK 25 or later: add one under"
+                    + " Window → Preferences → Java → Installed JREs, or choose one in Window → Preferences → maddi.",
+                    null);
+        }
         Path install = MaddiDaemonInstall.resolve(); // configured dir, else the copy bundled in the plugin
-        if (jdkHome == null || install == null) {
-            MaddiEclipsePlugin.info("Set the maddi JDK (25+) in Window → Preferences → maddi (the daemon is "
-                    + "bundled; set a daemon install directory only to override it).");
-            return;
+        if (install == null) {
+            return failed(javaProject, reveal, "configuration", "this build of the plugin has no daemon bundled;"
+                    + " set a daemon install directory in Window → Preferences → maddi.", null);
         }
 
+        // fresh class files first, as IntelliJ compiles before it analyses: the parser resolves against them
+        progress.subTask("building " + javaProject.getElementName());
+        build(javaProject, progress);
+
+        progress.subTask("starting the analysis daemon");
         MaddiDaemonProcess daemon = MaddiEclipsePlugin.get().daemon();
-        daemon.ensureStarted(install, Path.of(jdkHome), MaddiPreferences.daemonXmxMb(), null);
+        daemon.ensureStarted(install, Path.of(jdkHome), MaddiPreferences.daemonXmxMb(), daemonLogFile());
         // WHICH daemon answered: the bundled one is a build, not a version, and a stale bundle presents as an
         // analyzer regression rather than as a stale bundle (2026-08-24). See DaemonMain's build stamp.
         MaddiEclipsePlugin.info("maddi daemon: install=" + install + ", build=" + daemon.buildStamp());
 
+        progress.subTask("building the project model");
         AnalysisModel.AnalyzeConfig config = new MaddiEclipseConfigBuilder()
                 .build(javaProject, jdkHome, MaddiPreferences.warnNearMisses());
+        MaddiRun.get().started(javaProject.getElementName(), install.toString(), daemon.buildStamp(),
+                !MaddiResults.get().findings().isEmpty());
+        if (reveal) revealFindingsView();
         // Streamed frames land here: values established by each analysis pass, so the editor is annotated
         // while the run continues rather than only when it ends, and the progress text says what is
         // happening. Everything that is not the terminal frame arrives through this consumer.
-        progress.subTask("building the project model");
         JsonNode node = daemon.analyze("req-" + System.nanoTime(), config,
                 frame -> onStreamedFrame(daemon, frame, progress));
         if ("error".equals(node.path("type").asText())) {
-            MaddiEclipsePlugin.error("daemon error: " + node.path("message").asText(), null);
-            return;
+            return failed(javaProject, reveal, node.path("kind").asText("error"),
+                    "daemon error: " + node.path("message").asText(""), null);
         }
         AnalysisModel.Result result = daemon.client().objectMapper().treeToValue(node, AnalysisModel.Result.class);
 
@@ -105,16 +159,57 @@ public final class MaddiAnalysis {
                 m -> MaddiMarkers.apply(ResourcesPlugin.getWorkspace().getRoot(), result),
                 null);
         MaddiResults.get().update(result);
-        if (reveal) {
-            revealFindingsView();
-            // say how the run ended: a run that stopped at the iteration cap produces annotations that look
-            // exactly like certified ones, and nothing else on screen would give that away
-            String certainty = AnalysisModel.certaintyLabel(AnalysisModel.certaintyOf(result));
-            MaddiEclipsePlugin.log(IStatus.INFO,
-                    "maddi: " + result.findings().size() + " finding(s), " + result.hintsLoaded() + " hints"
-                    + (certainty == null ? "" : " — " + certainty),
-                    null);
+        MaddiRun.get().finished(result);
+        // Silence on a certified run; a run that stopped at the iteration cap or on a plateau produces
+        // annotations indistinguishable from final ones, so that is worth a line. A partial parse takes
+        // precedence: "some files did not parse" says what to fix, "no fixpoint" would point at the analyzer.
+        if (AnalysisModel.isPartialParse(result)) {
+            warn(result.parseErrorCount() + " file(s) did not parse; the analysis covers the rest of the project."
+                 + " Properties may be weaker than the code allows, because references from the missing files"
+                 + " were not seen. The parse errors are in the maddi Findings view.");
+        } else if (AnalysisModel.certaintyOf(result) == AnalysisModel.Certainty.BEST_AVAILABLE) {
+            warn("Analysis finished without reaching a fixpoint: the results are the best available, not"
+                 + " certified. Some properties may be weaker than the code allows.");
         }
+        return Status.OK_STATUS;
+    }
+
+    /**
+     * Build the project and those it requires, so that their output folders hold current class files. Under
+     * auto-build Eclipse is already doing that, so wait for it instead of starting a second build.
+     */
+    private static void build(IJavaProject javaProject, SubMonitor progress) throws Exception {
+        IWorkspace workspace = ResourcesPlugin.getWorkspace();
+        if (workspace.isAutoBuilding()) {
+            Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_BUILD, progress);
+            return;
+        }
+        for (IJavaProject project : MaddiEclipseConfigBuilder.withRequiredProjects(javaProject)) {
+            project.getProject().build(IncrementalProjectBuilder.INCREMENTAL_BUILD, progress);
+        }
+    }
+
+    /**
+     * Record a run that ended without a result. A manual run gets an error status, which Eclipse shows as a
+     * dialog; a build-triggered one only the view and the Error Log, since nobody asked for it.
+     */
+    private static IStatus failed(IJavaProject javaProject, boolean reveal, String kind, String message,
+                                  Throwable t) {
+        MaddiRun.get().failed(javaProject.getElementName(), kind, message);
+        IStatus status = new Status(IStatus.ERROR, MaddiEclipsePlugin.PLUGIN_ID,
+                "maddi analysis failed: " + message.lines().findFirst().orElse("")
+                + "\nThe maddi Findings view has the details; the daemon's own output is in " + daemonLogFile(), t);
+        if (!reveal) {
+            MaddiEclipsePlugin.get().getLog().log(status);
+            return Status.OK_STATUS;
+        }
+        revealFindingsView();
+        return status; // the job manager shows it, and logs it
+    }
+
+    private static void warn(String message) {
+        MaddiRun.get().status("warning", message);
+        MaddiEclipsePlugin.log(IStatus.WARNING, "maddi: " + message, null);
     }
 
     /**
@@ -125,8 +220,8 @@ public final class MaddiAnalysis {
      * workspace's markers, far too heavy per pass, and findings are not partial anyway. Hints do update,
      * because they read {@link MaddiResults} through the code-mining provider.
      * <p>
-     * Both kinds also move the progress text. Without it an analysis of a large project is a spinner with
-     * nothing behind it for minutes, which is indistinguishable from a hang.
+     * Both kinds also move the progress text and the run log. Without it an analysis of a large project is a
+     * spinner with nothing behind it for minutes, which is indistinguishable from a hang.
      */
     private static void onStreamedFrame(MaddiDaemonProcess daemon, JsonNode frame, SubMonitor progress) {
         if (!AnalysisModel.PARTIAL_RESULT.equals(frame.path("type").asText())) {
@@ -136,6 +231,7 @@ public final class MaddiAnalysis {
             String message = frame.path("message").asText("");
             if (!phase.isEmpty() || !message.isEmpty()) {
                 progress.subTask(message.isEmpty() ? phase : phase + ": " + message);
+                MaddiRun.get().status(phase.isEmpty() ? "analyzing" : phase, message);
             }
             return;
         }
@@ -147,6 +243,7 @@ public final class MaddiAnalysis {
             // is not known in advance, so a fraction would be invented
             progress.subTask("analyzing — pass " + partial.iteration() + ", "
                              + merged.elementAnnotations().size() + " element(s) so far");
+            MaddiRun.get().pass(partial.iteration(), partial.fullPass(), merged.elementAnnotations().size());
         } catch (Exception e) {
             // a frame we could not read costs the user an early glimpse, never the run
             MaddiEclipsePlugin.log(IStatus.WARNING, "maddi: could not read a streamed result", e);
@@ -156,8 +253,9 @@ public final class MaddiAnalysis {
     private static void revealFindingsView() {
         Display.getDefault().asyncExec(() -> {
             try {
-                IWorkbenchPage page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
-                if (page != null) page.showView(MaddiFindingsView.ID);
+                IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+                IWorkbenchPage page = window == null ? null : window.getActivePage();
+                if (page != null) page.showView(MaddiFindingsView.ID, null, IWorkbenchPage.VIEW_VISIBLE);
             } catch (Exception e) {
                 MaddiEclipsePlugin.error("could not open the maddi findings view", e);
             }

@@ -20,7 +20,11 @@ package io.codelaser.maddi.ide.eclipse;
 import org.eclipse.core.runtime.preferences.AbstractPreferenceInitializer;
 import org.eclipse.jface.preference.IPreferenceStore;
 
-/** Seeds preference defaults; the JDK/install paths have none, being required input. */
+/**
+ * Seeds preference defaults. The JDK and the daemon install have none: an empty JDK means the default among the
+ * installed JREs, an empty install the daemon bundled in the plugin. Re-analysing after a build stays off, unlike in
+ * IntelliJ: Eclipse builds on every save, which would mean a whole-project analysis per save.
+ */
 public class MaddiPreferenceInitializer extends AbstractPreferenceInitializer {
 
     @Override
@@ -32,5 +36,7 @@ public class MaddiPreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(MaddiPreferences.WARN_NEAR_MISSES, false);
         store.setDefault(MaddiPreferences.INLINE_HINTS, true);
         store.setDefault(MaddiPreferences.HINT_PLACEMENT, MaddiPreferences.DEFAULT_HINT_PLACEMENT.name());
+        store.setDefault(MaddiPreferences.SHOW_GUARD_FINDINGS, true);
+        store.setDefault(MaddiPreferences.SHOW_GUTTER_ICONS, true);
     }
 }

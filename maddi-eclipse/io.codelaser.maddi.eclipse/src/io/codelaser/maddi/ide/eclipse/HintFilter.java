@@ -22,19 +22,19 @@ import io.codelaser.maddi.ide.client.AnalysisModel;
 import java.util.List;
 
 /**
- * Which computed annotations appear as gutter hints, mirroring the IntelliJ plugin's inline-hints filter.
- * maddi's decorator collapses "baseline" and "negative polarity" onto the same boundary, so the choices are
- * two axes: <b>context-default-ness</b> (is this annotation already implied by the enclosing declaration?)
+ * Which computed annotations appear as inline hints, mirroring the IntelliJ plugin's {@code InlineHintsMode}, labels
+ * included, so that one description of the plugins fits both. The gutter always shows the full set. The choices
+ * are two axes: <b>context-default-ness</b> (is this annotation already implied by the enclosing declaration?)
  * and <b>polarity</b> (proven-positive vs. baseline-negative).
  */
 public enum HintFilter {
 
     /** Default: hide annotations the enclosing declaration already implies; keep the surprises. */
-    HIDE_CONTEXT_DEFAULTS("Hide implied defaults"),
-    ALL("Everything"),
-    POSITIVE_ONLY("Only positive (immutable, not-modified, …)"),
-    NEGATIVE_ONLY("Only negative (mutable, modifying, …)"),
-    NONE("Nothing");
+    HIDE_CONTEXT_DEFAULTS("Hide context defaults"),
+    ALL("Show all"),
+    POSITIVE_ONLY("Positive only (safe: @NotModified, @Immutable, …)"),
+    NEGATIVE_ONLY("Negative only (@Modified, @Mutable, …)"),
+    NONE("Off (gutter only)");
 
     private final String label;
 
@@ -57,9 +57,10 @@ public enum HintFilter {
     }
 
     /**
-     * What this element should read as under this filter: the shown annotations joined, or empty for
-     * "show nothing here". Shared by every surface (gutter markers, inline code minings) so one filter
-     * setting means the same thing everywhere.
+     * What this element's inline hint reads under this filter: the shown annotations joined, or empty for "show
+     * nothing here". Abbreviated: an eventual verdict's {@code after=} roster is a union that runs to dozens of
+     * marks, which does not fit beside a declaration ({@link AnalysisModel#abbreviate}); the gutter tooltip
+     * carries the full text.
      */
     public String textFor(AnalysisModel.ElementAnnotation element) {
         List<AnalysisModel.Annotation> annotations = element.annotations();
@@ -72,7 +73,7 @@ public enum HintFilter {
         for (AnalysisModel.Annotation annotation : annotations) {
             if (!shows(annotation)) continue;
             if (!sb.isEmpty()) sb.append(' ');
-            sb.append(annotation.text());
+            sb.append(AnalysisModel.abbreviate(annotation.text()));
         }
         return sb.toString();
     }

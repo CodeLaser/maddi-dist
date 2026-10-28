@@ -17,6 +17,7 @@
 
 package io.codelaser.maddi.ide.eclipse;
 
+import org.eclipse.jdt.launching.IVMInstall;
 import org.eclipse.jface.preference.IPreferenceStore;
 
 /**
@@ -34,6 +35,8 @@ public final class MaddiPreferences {
     public static final String WARN_NEAR_MISSES = "maddi.warnNearMisses";
     public static final String INLINE_HINTS = "maddi.inlineHints";
     public static final String HINT_PLACEMENT = "maddi.hintPlacement";
+    public static final String SHOW_GUARD_FINDINGS = "maddi.showGuardFindings";
+    public static final String SHOW_GUTTER_ICONS = "maddi.showGutterIcons";
 
     public static final int DEFAULT_XMX_MB = 4096;
     public static final HintFilter DEFAULT_HINT_FILTER = HintFilter.HIDE_CONTEXT_DEFAULTS;
@@ -42,9 +45,16 @@ public final class MaddiPreferences {
     private MaddiPreferences() {
     }
 
-    /** Home of the maddi JDK (25+); the analysis SDK AND the daemon's run JDK. */
+    /**
+     * Home of the maddi JDK (25+); the analysis SDK AND the daemon's run JDK. The preference, else the dev launch's
+     * system property or environment variable, else the default JDK among the installed JREs
+     * ({@link MaddiJdks#defaultJdk}); null when there is none at all.
+     */
     public static String jdkHome() {
-        return resolve(JDK_HOME, "maddi.jdk.home", "MADDI_JDK_HOME");
+        String configured = resolve(JDK_HOME, "maddi.jdk.home", "MADDI_JDK_HOME");
+        if (configured != null) return configured;
+        IVMInstall fallback = MaddiJdks.defaultJdk();
+        return fallback == null ? null : MaddiJdks.home(fallback);
     }
 
     /** The daemon {@code installDist} directory (contains {@code bin/} and {@code lib/}). */
@@ -57,7 +67,7 @@ public final class MaddiPreferences {
         return v > 0 ? v : DEFAULT_XMX_MB;
     }
 
-    /** Which computed annotations show as gutter hints. */
+    /** Which computed annotations show as inline hints; the gutter always shows the full set. */
     public static HintFilter hintFilter() {
         String v = store().getString(HINT_FILTER);
         if (isBlank(v)) return DEFAULT_HINT_FILTER;
@@ -100,6 +110,16 @@ public final class MaddiPreferences {
         } catch (IllegalArgumentException e) {
             return DEFAULT_HINT_PLACEMENT;
         }
+    }
+
+    /** Mark guard contract violations (and near misses) as problems in the editor and the Problems view. */
+    public static boolean showGuardFindings() {
+        return store().getBoolean(SHOW_GUARD_FINDINGS);
+    }
+
+    /** An icon in the editor's ruler on each analysed type, method and field, its tooltip the full set. */
+    public static boolean showGutterIcons() {
+        return store().getBoolean(SHOW_GUTTER_ICONS);
     }
 
     private static String resolve(String prefKey, String systemProperty, String envVar) {

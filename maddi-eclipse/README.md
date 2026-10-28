@@ -18,20 +18,32 @@ Build the update site (see below), then in Eclipse:
 `target/io.codelaser.maddi.eclipse.repository-*.zip` is the same site archived — use *Add… → Archive…* for
 an offline install, or publish it as a release asset and point *Add…* at its URL.
 
-After installing, set the analysis JDK in **Preferences → maddi**. Nothing will run until you do.
+maddi runs on a JDK 25 or later from Eclipse's own list (*Preferences → Java → Installed JREs*): the workspace
+default when it is one, else the newest. Add one there if there is none, or pick another in **Preferences → maddi**.
 
 ## Using it
 
-Right-click a Java project → **Analyze with maddi**. Results appear as:
+Right-click a Java project, or use **Project → Analyze with maddi** (the project of the selection or of the active
+editor). The project is built first, and the workspace projects it requires are analysed along with it, each with
+its own class path, as an IntelliJ project's modules are. Results appear as:
 
-- **hints** — computed annotations, on their own line above each declaration (parameters inline). Needs
-  *Preferences → Java → Editor → Code Minings → Enable code minings*, which gates every provider in JDT's
-  editor, this one included.
-- **problems** — contract violations as errors, near misses as info, both with the why-chain.
-- **the maddi view** — Window → Show View → Other… → maddi, a navigable list of findings.
+- **hints** — computed annotations, on their own line above each declaration (parameters inline, where the
+  annotation would be written). Needs *Preferences → Java → Editor → Code Minings → Enable code minings*, which
+  gates every provider in JDT's editor, this one included. Defaults are hidden; *Inline hints: Show all* shows them.
+- **ruler icons** — on each analysed type, method and field, with the full set in the tooltip. A ring instead of a
+  dot marks a verdict that holds only after a mark (`@Immutable(after=...)`).
+- **problems** — contract violations as errors, near misses as info, the code underlined, with the why-chain.
+- **the maddi Findings view** — Window → Show View → Other… → maddi. What the run is doing (elapsed time, phase,
+  which daemon build answered), the findings grouped by file with their why-chains, sources that were not analysed
+  and why, and a log of the run. Its toolbar analyses the last project again, restarts the daemon (after an
+  `installDist` on a daemon install override) and clears the log. A run that fails says so here, and a manual run
+  also in a dialog; the daemon's own output is in the workspace's `.metadata/.plugins/io.codelaser.maddi.eclipse/
+  maddi-daemon.log`.
 
-Preferences → maddi also has: which annotations to show, where declaration hints go, whether to re-analyse
-after each build, and whether to warn about near misses (off by default; noisy on uncurated code).
+Preferences → maddi has the same settings as the IntelliJ plugin, Kotlin aside: which inline hints to show and
+where declaration hints go, the ruler icons and the problem markers, whether to re-analyse after each build (off by
+default: Eclipse builds on every save), and whether to warn about near misses (off by default; noisy on uncurated
+code).
 
 ## Building
 
@@ -42,6 +54,9 @@ built PDE-style. Two prerequisites come from the Gradle side, so build them firs
 ./gradlew :platform:publishToMavenLocal :maddi-ide-client:publishToMavenLocal :maddi-ide-daemon:installDist
 cd maddi-eclipse && mvn clean verify
 ```
+
+Use **Maven 3.9**: Maven 3.10's resolver rejects the system-scoped bundle dependencies Tycho 5.0.3 hands it
+("Invalid Collect Request: null -> [...]") before anything compiles.
 
 - `maddi-ide-client` is resolved from the local Maven repo and embedded on the bundle classpath. Its version
   is pinned in the parent pom as `maddi.client.version` and must be kept in step with the root

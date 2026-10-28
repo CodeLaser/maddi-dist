@@ -40,6 +40,8 @@ public class MaddiBuildListener implements IResourceChangeListener {
     public void resourceChanged(IResourceChangeEvent event) {
         if (event.getType() != IResourceChangeEvent.POST_BUILD) return;
         if (!MaddiPreferences.autoAnalyzeOnBuild()) return;
+        // a run builds before it analyses; that build must not queue another run
+        if (MaddiAnalysis.isRunning()) return;
         IResourceDelta delta = event.getDelta();
         if (delta == null) return;
 

@@ -19,28 +19,44 @@ package io.codelaser.maddi.ide.eclipse;
 
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 /**
- * Right-click a Java project → "Analyze with maddi": hands the selected project to {@link MaddiAnalysis},
- * which runs the whole-project analysis on the shared daemon off the UI thread and surfaces the result.
+ * "Analyze with maddi", from a project's context menu or the Project menu: hands the project of the selection,
+ * else that of the active editor, to {@link MaddiAnalysis}, which builds it, runs the analysis on the shared daemon
+ * off the UI thread and surfaces the result.
  */
 public class AnalyzeMaddiHandler extends AbstractHandler {
 
     @Override
     public Object execute(ExecutionEvent event) {
         IProject project = projectOf(HandlerUtil.getCurrentSelection(event));
-        if (project == null) return null;
+        if (project == null) project = projectOf(HandlerUtil.getActiveEditor(event));
+        if (project == null) {
+            MaddiAnalysis.reportNoProject();
+            return null;
+        }
         IJavaProject javaProject = JavaCore.create(project);
-        if (javaProject == null || !javaProject.exists()) return null;
+        if (javaProject == null || !javaProject.exists()) {
+            MaddiAnalysis.reportNoProject();
+            return null;
+        }
         MaddiAnalysis.schedule(javaProject, true);
         return null;
+    }
+
+    private static IProject projectOf(IEditorPart editor) {
+        if (editor == null) return null;
+        IFile file = editor.getEditorInput().getAdapter(IFile.class);
+        return file == null ? null : file.getProject();
     }
 
     private static IProject projectOf(ISelection selection) {

@@ -12,22 +12,32 @@
    </extension>
 
    <!-- Computed analysis hints (@Container, @NotModified, …): a plain text marker (NOT a problem marker,
-        so it stays out of the Problems view), shown as a gutter icon + hover on each declaration. -->
+        so it stays out of the Problems view), shown as a ruler icon + hover on each type, method and field.
+        An eventual verdict has a subtype with its own icon (a ring, where a settled verdict is a dot): "immutable"
+        and "immutable once marked" must not look alike, as in the IntelliJ gutter. -->
    <extension point="org.eclipse.core.resources.markers"
               id="analysisHint"
               name="maddi analysis hint">
       <super type="org.eclipse.core.resources.textmarker"/>
       <persistent value="true"/>
    </extension>
+   <extension point="org.eclipse.core.resources.markers"
+              id="analysisHintEventual"
+              name="maddi eventual analysis hint">
+      <super type="io.codelaser.maddi.eclipse.analysisHint"/>
+      <persistent value="true"/>
+   </extension>
    <extension point="org.eclipse.ui.editors.annotationTypes">
       <type name="io.codelaser.maddi.eclipse.analysisHintAnnotation"
             markerType="io.codelaser.maddi.eclipse.analysisHint"/>
+      <type name="io.codelaser.maddi.eclipse.analysisHintEventualAnnotation"
+            markerType="io.codelaser.maddi.eclipse.analysisHintEventual"/>
    </extension>
    <extension point="org.eclipse.ui.editors.markerAnnotationSpecification">
       <specification
             annotationType="io.codelaser.maddi.eclipse.analysisHintAnnotation"
             label="maddi analysis hint"
-            symbolicIcon="info"
+            icon="icons/hint.png"
             textPreferenceKey="maddi.hint.text"
             textPreferenceValue="false"
             highlightPreferenceKey="maddi.hint.highlight"
@@ -37,6 +47,22 @@
             verticalRulerPreferenceKey="maddi.hint.vertical"
             verticalRulerPreferenceValue="true"
             colorPreferenceKey="maddi.hint.color"
+            colorPreferenceValue="115,135,225"
+            presentationLayer="4"
+            contributesToHeader="false"/>
+      <specification
+            annotationType="io.codelaser.maddi.eclipse.analysisHintEventualAnnotation"
+            label="maddi eventual analysis hint"
+            icon="icons/hint_eventual.png"
+            textPreferenceKey="maddi.hintEventual.text"
+            textPreferenceValue="false"
+            highlightPreferenceKey="maddi.hintEventual.highlight"
+            highlightPreferenceValue="false"
+            overviewRulerPreferenceKey="maddi.hintEventual.overview"
+            overviewRulerPreferenceValue="true"
+            verticalRulerPreferenceKey="maddi.hintEventual.vertical"
+            verticalRulerPreferenceValue="true"
+            colorPreferenceKey="maddi.hintEventual.color"
             colorPreferenceValue="115,135,225"
             presentationLayer="4"
             contributesToHeader="false"/>
@@ -65,6 +91,16 @@
             name="maddi Findings"
             category="io.codelaser.maddi.eclipse"
             class="io.codelaser.maddi.ide.eclipse.MaddiFindingsView"/>
+   </extension>
+
+   <!-- Project → Analyze with maddi: the project of the selection or of the active editor, like IntelliJ's
+        Tools menu entry. -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution locationURI="menu:project?after=additions">
+         <command commandId="io.codelaser.maddi.eclipse.analyze"
+                  label="Analyze with maddi"
+                  style="push"/>
+      </menuContribution>
    </extension>
 
    <!-- Right-click a Java project → Analyze with maddi. -->
