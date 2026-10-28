@@ -31,7 +31,11 @@ import java.util.function.Consumer;
  * requests, and re-launches if it dies. Thread-safe; a single request runs at a time.
  */
 public final class MaddiDaemonProcess implements Closeable {
-    private static final int PROTOCOL_VERSION = 1;
+    /**
+     * The daemon protocol this client speaks; the daemon's {@code DaemonProtocol.PROTOCOL_VERSION} documents the
+     * versions. Both sides check it at the handshake.
+     */
+    public static final int PROTOCOL_VERSION = 2;
 
     /** What a running daemon was launched WITH; a request that differs needs a new process, not this one. */
     private record Launch(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome) {
@@ -81,12 +85,38 @@ public final class MaddiDaemonProcess implements Closeable {
         handle = launcher.launch(installDir, jdkHome, jvmArgs, environment, 60_000, logFile);
         client = new DaemonClient(handle.port(), 600_000); // heartbeats keep long analyses alive
         JsonNode ack = client.handshake(PROTOCOL_VERSION);
-        if (!"handshakeAck".equals(ack.path("type").asText())) {
-            throw new IOException("daemon handshake failed: " + ack);
+        try {
+            checkHandshake(ack, installDir);
+        } catch (IOException e) {
+            closeQuietly(); // a daemon this client cannot talk to is of no use warm
+            throw e;
         }
         buildStamp = ack.path("buildStamp").asText("unknown");
         maddiVersion = ack.path("maddiVersion").asText("unknown");
         launched = wanted;
+    }
+
+    /**
+     * Whether the daemon's answer to the handshake lets this client go on. A daemon from 0.9.6 on refuses a client
+     * of another protocol version with an error; an older one acknowledges anything with its own version 1. Either
+     * way the message names the daemon's install and what to do, since the usual cause is a daemon install override
+     * left pointing at another release.
+     */
+    static void checkHandshake(JsonNode ack, Path installDir) throws IOException {
+        String type = ack.path("type").asText("");
+        if ("error".equals(type)) {
+            throw new IOException("the maddi daemon at " + installDir + " refused this plugin: "
+                                  + ack.path("message").asText(ack.toString()));
+        }
+        if (!"handshakeAck".equals(type)) throw new IOException("daemon handshake failed: " + ack);
+        int spoken = ack.path("protocolVersion").asInt(-1);
+        if (spoken != PROTOCOL_VERSION) {
+            throw new IOException("the maddi daemon at " + installDir + " (maddi "
+                                  + ack.path("maddiVersion").asText("unknown") + ") speaks protocol " + spoken
+                                  + ", this plugin speaks " + PROTOCOL_VERSION
+                                  + ": use the daemon of the plugin's own release (clear the daemon install override)"
+                                  + " or a plugin of the daemon's");
+        }
     }
 
     /**

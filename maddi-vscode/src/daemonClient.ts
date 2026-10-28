@@ -12,7 +12,8 @@ import { AnalyzeConfig } from './analysisModel';
  * `type`. The Java front-ends share `maddi-ide-client`; VS Code cannot, so this reimplements the same
  * protocol — deliberately small, which is the point of the protocol being plain JSON.
  */
-export const PROTOCOL_VERSION = 1;
+/** The daemon protocol this client speaks; `DaemonProtocol.PROTOCOL_VERSION` (Java) documents the versions. */
+export const PROTOCOL_VERSION = 2;
 
 export type Frame = Record<string, any>;
 

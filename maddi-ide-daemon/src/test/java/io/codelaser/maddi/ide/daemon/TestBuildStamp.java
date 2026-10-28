@@ -96,7 +96,7 @@ public class TestBuildStamp {
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
 
-            out.write("{\"type\":\"handshake\",\"protocolVersion\":1}\n");
+            out.write("{\"type\":\"handshake\",\"protocolVersion\":" + DaemonProtocol.PROTOCOL_VERSION + "}\n");
             out.flush();
             String ack = in.readLine();
             assertNotNull(ack);

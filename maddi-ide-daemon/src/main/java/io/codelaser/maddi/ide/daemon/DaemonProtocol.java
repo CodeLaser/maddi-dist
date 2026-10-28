@@ -34,7 +34,21 @@ public final class DaemonProtocol {
     private DaemonProtocol() {
     }
 
-    public static final int PROTOCOL_VERSION = 1;
+    /**
+     * The version of this protocol, which a client names in its handshake and the daemon checks. A plugin and a
+     * daemon of different releases may meet (a daemon install override, and later a daemon downloaded apart from
+     * the plugin), and a mismatch must be refused at the handshake with a message saying so, rather than surface
+     * later as a mis-read result.
+     * <ul>
+     *   <li>1 — 0.9.1 to 0.9.5. Never checked: it stayed 1 through per-module source sets, streamed partial
+     *       results and the tagged annotations.</li>
+     *   <li>2 — from 0.9.6. The daemon refuses a client of another version with an {@code error} of kind
+     *       {@code protocol}; the client refuses an acknowledgement of another version.</li>
+     * </ul>
+     * Bump it with any change a client of the previous version would misread; a field added for clients to ignore
+     * does not need one (both sides ignore unknown fields).
+     */
+    public static final int PROTOCOL_VERSION = 2;
 
     // ---- message type discriminators ----
     public static final String T_HANDSHAKE = "handshake";

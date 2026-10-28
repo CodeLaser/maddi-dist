@@ -32,7 +32,10 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** M0 smoke test: the transport answers handshake/ping and stops on shutdown, over a real socket. */
+/**
+ * M0 smoke test: the transport answers handshake/ping and stops on shutdown, over a real socket; and the handshake
+ * refuses a client of another protocol version.
+ */
 public class DaemonHandshakeTest {
 
     @Test
@@ -53,9 +56,17 @@ public class DaemonHandshakeTest {
             Writer out = new OutputStreamWriter(client.getOutputStream(), StandardCharsets.UTF_8);
             BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
 
-            String ack = exchange(out, in, "{\"type\":\"handshake\",\"protocolVersion\":1}");
+            // a client of another protocol version (a 0.9.5 plugin), or of none, is refused, and the daemon stays up
+            String old = exchange(out, in, "{\"type\":\"handshake\",\"protocolVersion\":1}");
+            assertTrue(old.contains("\"type\":\"error\"") && old.contains("\"kind\":\"protocol\""), old);
+            assertTrue(old.contains("speaks protocol 2, the IDE plugin speaks protocol 1"), old);
+            String none = exchange(out, in, "{\"type\":\"handshake\"}");
+            assertTrue(none.contains("names no protocol version"), none);
+
+            String ack = exchange(out, in, "{\"type\":\"handshake\",\"protocolVersion\":"
+                                           + DaemonProtocol.PROTOCOL_VERSION + "}");
             assertTrue(ack.contains("\"type\":\"handshakeAck\""), ack);
-            assertTrue(ack.contains("\"protocolVersion\":1"), ack);
+            assertTrue(ack.contains("\"protocolVersion\":" + DaemonProtocol.PROTOCOL_VERSION), ack);
             assertTrue(ack.contains("\"daemonVersion\""), ack);
 
             String pong = exchange(out, in, "{\"type\":\"ping\"}");

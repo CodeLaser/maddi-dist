@@ -52,9 +52,9 @@ public class DaemonLaunchTest {
         try (DaemonLauncher.Handle handle = launcher.launch(installDir, null, List.of(), 30_000, null);
              DaemonClient client = new DaemonClient(handle.port(), 5_000)) {
 
-            JsonNode ack = client.handshake(1);
+            JsonNode ack = client.handshake(MaddiDaemonProcess.PROTOCOL_VERSION);
             assertEquals("handshakeAck", ack.path("type").asText());
-            assertEquals(1, ack.path("protocolVersion").asInt());
+            assertEquals(MaddiDaemonProcess.PROTOCOL_VERSION, ack.path("protocolVersion").asInt());
 
             JsonNode pong = client.ping();
             assertEquals("pong", pong.path("type").asText());

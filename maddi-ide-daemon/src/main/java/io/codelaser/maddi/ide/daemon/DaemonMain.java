@@ -149,9 +149,7 @@ public final class DaemonMain {
             }
             String type = msg.path("type").asText("");
             switch (type) {
-                case DaemonProtocol.T_HANDSHAKE -> send(out, DaemonProtocol.T_HANDSHAKE_ACK,
-                        new DaemonProtocol.HandshakeAck(DaemonProtocol.PROTOCOL_VERSION, DAEMON_VERSION,
-                                maddiVersion(), BUILD_STAMP));
+                case DaemonProtocol.T_HANDSHAKE -> handshake(out, msg.path("protocolVersion").asInt(-1));
                 case DaemonProtocol.T_PING -> send(out, DaemonProtocol.T_PONG,
                         new DaemonProtocol.Pong(System.nanoTime()));
                 case DaemonProtocol.T_ANALYZE_PROJECT -> handleAnalyze(out, msg);
@@ -165,6 +163,19 @@ public final class DaemonMain {
             }
         }
         return true; // client disconnected; keep the daemon warm for a reconnect
+    }
+
+    /** Acknowledge a client of this protocol version; refuse any other, saying which versions met. */
+    private void handshake(Writer out, int clientVersion) throws IOException {
+        if (clientVersion == DaemonProtocol.PROTOCOL_VERSION) {
+            send(out, DaemonProtocol.T_HANDSHAKE_ACK, new DaemonProtocol.HandshakeAck(DaemonProtocol.PROTOCOL_VERSION,
+                    DAEMON_VERSION, maddiVersion(), BUILD_STAMP));
+            return;
+        }
+        String client = clientVersion < 0 ? "names no protocol version" : "speaks protocol " + clientVersion;
+        send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(null, "protocol",
+                "this maddi daemon (maddi " + maddiVersion() + ") speaks protocol " + DaemonProtocol.PROTOCOL_VERSION
+                + ", the IDE plugin " + client + ": use a plugin and a daemon of the same maddi release"));
     }
 
     private void handleAnalyze(Writer out, JsonNode msg) throws IOException {

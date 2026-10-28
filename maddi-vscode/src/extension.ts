@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { PARTIAL_RESULT, PartialResult, Result, merge } from './analysisModel';
 import { buildConfig } from './configBuilder';
-import { DaemonClient, Frame } from './daemonClient';
+import { DaemonClient, Frame, PROTOCOL_VERSION } from './daemonClient';
 import { DaemonHandle, launchDaemon } from './daemonLauncher';
 import { toDiagnostics } from './diagnostics';
 import { MaddiInlayHintsProvider } from './hints';
@@ -134,6 +134,15 @@ async function analyze(
     try {
         await client.connect();
         const ack = await client.handshake();
+        // both sides check the protocol version: a daemon from 0.9.6 refuses another with an error, an older one
+        // acknowledges anything with its own version 1
+        if (ack.type === 'error') {
+            throw new Error(`the maddi daemon refused this extension: ${ack.message ?? JSON.stringify(ack)}`);
+        }
+        if (ack.protocolVersion !== PROTOCOL_VERSION) {
+            throw new Error(`the maddi daemon (maddi ${ack.maddiVersion ?? 'unknown'}) speaks protocol `
+                + `${ack.protocolVersion}, this extension speaks ${PROTOCOL_VERSION}: use a daemon of the same release`);
+        }
         // WHICH daemon answered: the bundled one is a build, not a version, and a stale bundle presents as an
         // analyzer regression rather than as a stale bundle (2026-08-24). See DaemonMain's build stamp.
         output.appendLine(`daemon build ${ack.buildStamp ?? 'unknown'}`);

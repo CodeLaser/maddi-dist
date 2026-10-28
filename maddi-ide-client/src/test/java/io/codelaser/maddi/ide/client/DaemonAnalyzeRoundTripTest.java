@@ -100,7 +100,7 @@ public class DaemonAnalyzeRoundTripTest {
         try (DaemonLauncher.Handle handle = launcher.launch(installDir, Path.of(jdkHome), List.of(), 30_000, logFile);
              DaemonClient client = new DaemonClient(handle.port(), 120_000)) {
 
-            assertEquals("handshakeAck", client.handshake(1).path("type").asText());
+            assertEquals("handshakeAck", client.handshake(MaddiDaemonProcess.PROTOCOL_VERSION).path("type").asText());
 
             // partialResult frames are non-terminal, so they reach the client through this consumer, exactly
             // as an IDE sees them
