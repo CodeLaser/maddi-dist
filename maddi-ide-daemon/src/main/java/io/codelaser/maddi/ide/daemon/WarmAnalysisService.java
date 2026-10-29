@@ -158,7 +158,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 staticSideEffects,
                 null)   // eventual cluster: the analyzer's default
                 // the nullability pass after the fixpoint, writing NULLABILITY_* for the @NotNull/@Nullable hints
-                .withNullability(true);
+                .withNullability(true)
+                // beside a verdict, the first statement responsible for it, for the "why?" in the gutter tooltip
+                .withCulprits(true);
         // Stream what each pass established, so the IDE can annotate the file on screen long before the run
         // ends: the first pass decides most of the output, and the tail is long but decides little.
         StreamingValueFeed valueFeed = new StreamingValueFeed(status, requestId, collector);

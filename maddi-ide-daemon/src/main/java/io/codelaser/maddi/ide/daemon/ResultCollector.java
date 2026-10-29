@@ -28,6 +28,8 @@ import io.codelaser.maddi.cst.api.info.MethodInfo;
 import io.codelaser.maddi.cst.api.info.ParameterInfo;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
+import io.codelaser.maddi.cst.impl.analysis.PropertyImpl;
+import io.codelaser.maddi.cst.impl.analysis.ValueImpl;
 import io.codelaser.maddi.inspection.api.parser.Summary;
 
 import java.net.URI;
@@ -164,15 +166,35 @@ public class ResultCollector {
         info.analysis().propertyValueStream()
                 // the engine's bookkeeping properties (prep's PREPPED) are per-run state, not a result: showing it would put a property on
                 // every prepped type and defeat the "nothing to show → skip" test just below
-                .filter(pv -> !bookkeeping.contains(pv.property()))
+                .filter(pv -> !bookkeeping.contains(pv.property()) && !CULPRITS.containsKey(pv.property()))
                 .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
+        List<DaemonProtocol.Why> whys = whys(info);
 
         // nothing computed and nothing to show → skip, to keep the payload lean
         if (displayAnnotations.isEmpty() && properties.isEmpty()) return;
 
         out.add(new DaemonProtocol.ElementAnnotation(
                 uri, source.beginLine(), source.beginPos(), source.endLine(), source.endPos(),
-                kindOf(info), info.fullyQualifiedName(), displayAnnotations, annotations, properties));
+                kindOf(info), info.fullyQualifiedName(), displayAnnotations, annotations, properties, whys));
+    }
+
+    /*
+     The culprit properties, and the annotation each explains. The analysis writes them only when the run asks for
+     culprits, as the daemon's does (WarmAnalysisService); more will join as other analyses record theirs.
+     */
+    private static final Map<Property, String> CULPRITS = Map.of(
+            PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects");
+
+    private static List<DaemonProtocol.Why> whys(Info info) {
+        List<DaemonProtocol.Why> whys = new java.util.ArrayList<>();
+        CULPRITS.forEach((property, annotation) -> {
+            ValueImpl.CulpritImpl culprit = info.analysis().getOrNull(property, ValueImpl.CulpritImpl.class);
+            if (culprit != null && !culprit.steps().isEmpty()) {
+                whys.add(new DaemonProtocol.Why(annotation, culprit.steps().stream()
+                        .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList()));
+            }
+        });
+        return whys;
     }
 
     private static String kindOf(Info info) {

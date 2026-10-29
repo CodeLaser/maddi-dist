@@ -183,13 +183,35 @@ public final class DaemonProtocol {
     }
 
     /** Computed analysis for one declaration. kind ∈ TYPE|METHOD|FIELD|PARAMETER. */
+    /**
+     * Why an annotation holds: its culprit, the first statement responsible, followed into the callees. Only where
+     * the analysis records one (so far {@code @StaticSideEffects}).
+     *
+     * @param annotation the annotation's simple name, e.g. {@code StaticSideEffects}
+     * @param steps      the element's own statement first
+     */
+    public record Why(String annotation, List<WhyStep> steps) {
+    }
+
+    /** One statement of a {@link Why}: where it is, and what it does. Line and column are 1-based. */
+    public record WhyStep(String uri, int line, int column, String text) {
+    }
+
     public record ElementAnnotation(String uri,
                                     Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                     String kind,
                                     String fqn,
                                     List<String> displayAnnotations,
                                     List<Annotation> annotations,
-                                    Map<String, String> properties) {
+                                    Map<String, String> properties,
+                                    List<Why> whys) {
+        /** Without whys. */
+        public ElementAnnotation(String uri, Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
+                                 String kind, String fqn, List<String> displayAnnotations, List<Annotation> annotations,
+                                 Map<String, String> properties) {
+            this(uri, beginLine, beginCol, endLine, endCol, kind, fqn, displayAnnotations, annotations, properties,
+                    List.of());
+        }
     }
 
     /**

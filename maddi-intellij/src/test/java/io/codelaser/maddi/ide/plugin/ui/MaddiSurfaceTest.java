@@ -140,6 +140,31 @@ public class MaddiSurfaceTest extends LightJavaCodeInsightFixtureTestCase {
                 tooltip.contains("b: @Modified(downcast=true,downcastTo={&quot;java.util.HashSet&quot;})"));
     }
 
+    /** The why of an annotation: its culprit chain, the method's own statement first, then into the callee. */
+    public void testMethodGutterShowsTheWhy() {
+        myFixture.configureByText("Big.java", """
+                public class Big {
+                    void bi<caret>g() { Registry.register(); }
+                }
+                """);
+        String path = filePath();
+        AnalysisModel.Annotation sse = new AnalysisModel.Annotation("@StaticSideEffects", "NEGATIVE", false);
+        AnalysisModel.Why why = new AnalysisModel.Why("StaticSideEffects", List.of(
+                new AnalysisModel.WhyStep(path, 2, 17, "calls Registry.register(..)"),
+                new AnalysisModel.WhyStep("file:///src/a/Registry.java", 13, 9, "assigns Registry.count")));
+        AnalysisModel.ElementAnnotation method = new AnalysisModel.ElementAnnotation(path, 2, 5, 2, 46, "METHOD",
+                "Big.big()", List.of(sse.text()), List.of(sse), Map.of(), List.of(why));
+        service().applyResult(result(List.of(), List.of(method)));
+
+        List<String> tooltips = myFixture.findGuttersAtCaret().stream().map(GutterMark::getTooltipText)
+                .filter(Objects::nonNull).toList();
+        assertEquals(1, tooltips.size());
+        String tooltip = tooltips.getFirst();
+        assertTrue(tooltip, tooltip.contains("@StaticSideEffects:<br>"));
+        assertTrue(tooltip, tooltip.contains("\u21d0 line 2: calls Registry.register(..)"));
+        assertTrue(tooltip, tooltip.contains("\u21d0 Registry.java:13: assigns Registry.count"));
+    }
+
     /** CONTROL: a proven (non-eventual) verdict keeps the plain icon, so the two are distinguishable. */
     public void testProvenVerdictKeepsThePlainGutterIcon() {
         myFixture.configureByText("Proven.java", """
