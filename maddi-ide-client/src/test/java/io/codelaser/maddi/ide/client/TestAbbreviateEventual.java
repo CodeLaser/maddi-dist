@@ -67,6 +67,22 @@ public class TestAbbreviateEventual {
         assertEquals("@Immutable(hc=true)", AnalysisModel.abbreviate("@Immutable(hc=true)"));
     }
 
+    /**
+     * {@code downcastTo} names the runtime types a parameter is modified through. In full it ran past the platform's
+     * 30 characters, which showed {@code @Modified(downcast=true,downca…}, a duplicate key at first sight.
+     */
+    @DisplayName("the downcast targets collapse to the one simple name, or a count")
+    @Test
+    public void downcastTargets() {
+        assertEquals("@Modified(downcast=Set)",
+                AnalysisModel.abbreviate("@Modified(downcast=true,downcastTo={\"java.util.Set\"})"));
+        assertEquals("@Modified(downcast=2)", AnalysisModel.abbreviate(
+                "@Modified(downcast = true, downcastTo = { \"java.util.Set\", \"java.util.List\" })"));
+        assertEquals("@Modified(hc=true,downcast=Set)",
+                AnalysisModel.abbreviate("@Modified(hc=true,downcast=true,downcastTo={\"java.util.Set\"})"));
+        assertEquals("@Modified(downcast=true)", AnalysisModel.abbreviate("@Modified(downcast=true)"));
+    }
+
     /** Malformed input must come back exactly as it arrived, never half-rewritten. */
     @DisplayName("an unterminated roster is not rewritten")
     @Test

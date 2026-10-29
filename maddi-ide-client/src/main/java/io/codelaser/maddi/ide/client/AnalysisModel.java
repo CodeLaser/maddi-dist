@@ -140,6 +140,10 @@ public final class AnalysisModel {
      * 30 characters carry the count instead.
      */
     public static String abbreviate(String annotationText) {
+        return abbreviateDowncast(abbreviateAfter(annotationText));
+    }
+
+    private static String abbreviateAfter(String annotationText) {
         if (annotationText == null) return null;
         int at = annotationText.indexOf("after=\"");
         if (at < 0) return annotationText;
@@ -152,6 +156,28 @@ public final class AnalysisModel {
         for (int i = 0; i < roster.length(); i++) if (roster.charAt(i) == ',') marks++;
         if (marks <= AFTER_MARKS_INLINE) return annotationText;
         return annotationText.substring(0, at) + "after=" + marks + annotationText.substring(to + 1);
+    }
+
+    private static final java.util.regex.Pattern DOWNCAST_TO = java.util.regex.Pattern.compile(
+            "downcast\\s*=\\s*true\\s*,\\s*downcastTo\\s*=\\s*\\{([^}]*)}");
+
+    /**
+     * {@code @Modified(downcast=true,downcastTo={"a.b.C",...})}, the runtime types through which a parameter is
+     * modified, inline as {@code downcast=C} for one type and {@code downcast=n} for more. In full it is past the
+     * platform's 30 characters, which cut it to {@code @Modified(downcast=true,downca…}: a second "downcast" key,
+     * seemingly. The gutter tooltip keeps the full text.
+     */
+    private static String abbreviateDowncast(String annotationText) {
+        if (annotationText == null) return null;
+        java.util.regex.Matcher m = DOWNCAST_TO.matcher(annotationText);
+        if (!m.find()) return annotationText;
+        List<String> targets = java.util.Arrays.stream(m.group(1).split(","))
+                .map(t -> t.strip().replace("\"", "")).filter(t -> !t.isEmpty()).toList();
+        if (targets.isEmpty()) return annotationText;
+        String to = targets.size() == 1
+                ? targets.getFirst().substring(targets.getFirst().lastIndexOf('.') + 1)
+                : String.valueOf(targets.size());
+        return annotationText.substring(0, m.start()) + "downcast=" + to + annotationText.substring(m.end());
     }
 
     public record ElementAnnotation(String uri,

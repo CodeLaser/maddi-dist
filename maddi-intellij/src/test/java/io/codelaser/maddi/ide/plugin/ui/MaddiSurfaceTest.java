@@ -108,6 +108,38 @@ public class MaddiSurfaceTest extends LightJavaCodeInsightFixtureTestCase {
                 tooltips.stream().anyMatch(t -> t.contains("a,b,c,d,e,f")));
     }
 
+    /**
+     * A parameter has no gutter mark of its own, and its inline hint is abbreviated, or gone when an edit moves it
+     * to a line of its own: the method's tooltip lists it, in full, in declaration order.
+     */
+    public void testMethodGutterListsItsParameters() {
+        myFixture.configureByText("Params.java", """
+                public class Params {
+                    void ru<caret>n(Object a, java.util.Set<String> b) { }
+                }
+                """);
+        String path = filePath();
+        AnalysisModel.Annotation notModified = new AnalysisModel.Annotation("@NotModified", "POSITIVE", false);
+        AnalysisModel.Annotation downcast = new AnalysisModel.Annotation(
+                "@Modified(downcast=true,downcastTo={\"java.util.HashSet\"})", "NEGATIVE", false);
+        AnalysisModel.ElementAnnotation method = new AnalysisModel.ElementAnnotation(path, 2, 5, 2, 56, "METHOD",
+                "Params.run(Object,java.util.Set)", List.of(notModified.text()), List.of(notModified), Map.of());
+        AnalysisModel.ElementAnnotation b = new AnalysisModel.ElementAnnotation(path, 2, 25, 2, 51, "PARAMETER",
+                "Params.run(Object,java.util.Set):1:b", List.of(downcast.text()), List.of(downcast), Map.of());
+        AnalysisModel.ElementAnnotation a = new AnalysisModel.ElementAnnotation(path, 2, 14, 2, 22, "PARAMETER",
+                "Params.run(Object,java.util.Set):0:a", List.of(notModified.text()), List.of(notModified), Map.of());
+        service().applyResult(result(List.of(), List.of(method, b, a)));
+
+        List<String> tooltips = myFixture.findGuttersAtCaret().stream().map(GutterMark::getTooltipText)
+                .filter(Objects::nonNull).toList();
+        assertEquals(1, tooltips.size());
+        String tooltip = tooltips.getFirst();
+        assertTrue(tooltip, tooltip.contains("maddi: @NotModified<br>"));
+        assertTrue(tooltip, tooltip.indexOf("a: @NotModified") < tooltip.indexOf("b: @Modified("));
+        assertTrue("the full text, escaped: " + tooltip,
+                tooltip.contains("b: @Modified(downcast=true,downcastTo={&quot;java.util.HashSet&quot;})"));
+    }
+
     /** CONTROL: a proven (non-eventual) verdict keeps the plain icon, so the two are distinguishable. */
     public void testProvenVerdictKeepsThePlainGutterIcon() {
         myFixture.configureByText("Proven.java", """

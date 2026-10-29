@@ -27,6 +27,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiMethod;
@@ -60,27 +61,72 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         Document doc = file.getViewProvider().getDocument();
         if (doc == null) return null;
 
+        // a method shows its parameters' annotations too: a parameter has no gutter mark of its own, and its inline
+        // hint is abbreviated, or gone when the parameter is on a line of its own after an edit
         AnalysisModel.ElementAnnotation match = MaddiElementMatch.find(annotations, doc, kinds,
-                element.getTextRange().getStartOffset(), a -> !a.displayAnnotations().isEmpty());
+                element.getTextRange().getStartOffset(), a -> !a.displayAnnotations().isEmpty()
+                                                              || !parameters(annotations, a).isEmpty());
         if (match == null) return null;
+        List<AnalysisModel.ElementAnnotation> parameters = parameters(annotations, match);
 
         // The gutter keeps the FULL text, roster and all: it is the surface with room for it, and the inline
         // hint deliberately abbreviates (AnalysisModel#abbreviate).
         String text = String.join(" ", match.displayAnnotations());
+        String tooltip = "maddi: " + text;
+        String accessible = "maddi analysis: " + text;
+        if (!parameters.isEmpty()) {
+            StringBuilder html = new StringBuilder("<html>maddi: ").append(StringUtil.escapeXmlEntities(text));
+            StringBuilder plain = new StringBuilder(accessible);
+            for (AnalysisModel.ElementAnnotation p : parameters) {
+                String name = p.fqn().substring(p.fqn().lastIndexOf(':') + 1);
+                String ofParameter = String.join(" ", p.displayAnnotations());
+                html.append("<br>&nbsp;&nbsp;").append(StringUtil.escapeXmlEntities(name)).append(": ")
+                        .append(StringUtil.escapeXmlEntities(ofParameter));
+                plain.append("; ").append(name).append(": ").append(ofParameter);
+            }
+            tooltip = html.append("</html>").toString();
+            accessible = plain.toString();
+        }
         // ⛔ AN EVENTUAL VERDICT AND A PLAIN ONE LOOKED IDENTICAL. Polarity drove filtering only, so
         // "@Immutable" and "@Immutable(hc=true,after=…)" -- a proven property and one that holds only after a
         // mark -- reached the gutter under the same icon, and the difference was legible only by reading the
         // tooltip to its end. It is the distinction the whole eventual family exists to make.
-        javax.swing.Icon icon = AnalysisModel.isEventual(match)
+        javax.swing.Icon icon = AnalysisModel.isEventual(match) || parameters.stream().anyMatch(AnalysisModel::isEventual)
                 ? AllIcons.Nodes.Static : AllIcons.Nodes.Annotationtype;
+        String tooltipText = tooltip;
+        String accessibleName = accessible;
         return new LineMarkerInfo<>(
                 element,
                 element.getTextRange(),
                 icon,
-                e -> "maddi: " + text,
+                e -> tooltipText,
                 null,
                 GutterIconRenderer.Alignment.LEFT,
-                () -> "maddi analysis: " + text);
+                () -> accessibleName);
+    }
+
+    /**
+     * The parameters of a method element that have annotations to show, in declaration order. Language-neutral: a
+     * parameter's fqn is its method's, then {@code :index:name}.
+     */
+    static List<AnalysisModel.ElementAnnotation> parameters(List<AnalysisModel.ElementAnnotation> annotations,
+                                                           AnalysisModel.ElementAnnotation method) {
+        if (!"METHOD".equals(method.kind()) || method.fqn() == null) return List.of();
+        String prefix = method.fqn() + ":";
+        return annotations.stream()
+                .filter(a -> "PARAMETER".equals(a.kind()) && a.fqn() != null && a.fqn().startsWith(prefix)
+                             && a.fqn().indexOf(':', prefix.length()) > prefix.length()
+                             && !a.displayAnnotations().isEmpty())
+                .sorted(java.util.Comparator.comparingInt(a -> index(a.fqn(), prefix.length())))
+                .toList();
+    }
+
+    private static int index(String parameterFqn, int from) {
+        try {
+            return Integer.parseInt(parameterFqn.substring(from, parameterFqn.indexOf(':', from)));
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
     }
 
     /**
