@@ -108,6 +108,31 @@ public class WhyTest {
         assertTrue(size.whys().isEmpty(), size::toString);
     }
 
+    private static final String HOLDER = """
+            package x;
+            import java.util.ArrayList;
+            import java.util.List;
+            public class Holder {
+                private final List<String> items = new ArrayList<>();
+                List<String> items() {
+                    return items;
+                }
+            }
+            """;
+
+    @DisplayName("@Dependent comes with its why: the return, then the mutable field")
+    @Test
+    public void dependentWhy(@TempDir Path projectDir) throws Exception {
+        DaemonProtocol.Result result = DaemonAnalysisFixture.analyze(projectDir, "x/Holder.java", HOLDER, false, null);
+
+        DaemonProtocol.ElementAnnotation items = method(result, "x.Holder.items(");
+        assertTrue(items.displayAnnotations().contains("@Dependent"), items.displayAnnotations()::toString);
+        DaemonProtocol.Why why = items.whys().stream().filter(w -> "Dependent".equals(w.annotation()))
+                .findFirst().orElseThrow(() -> new AssertionError(items.toString()));
+        assertEquals(List.of("7 returns this.items", "5 field items is mutable (List<String>)"),
+                why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
+    }
+
     private static DaemonProtocol.ElementAnnotation method(DaemonProtocol.Result result, String fqnPrefix) {
         return result.elementAnnotations().stream()
                 .filter(e -> "METHOD".equals(e.kind()) && e.fqn().startsWith(fqnPrefix))
