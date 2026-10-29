@@ -100,8 +100,7 @@ public class WhyTest {
         assertTrue(add.displayAnnotations().contains("@Modified"), add.displayAnnotations()::toString);
         DaemonProtocol.Why why = add.whys().stream().filter(w -> "Modified".equals(w.annotation()))
                 .findFirst().orElseThrow(() -> new AssertionError(add.toString()));
-        assertEquals(List.of("9 calls store(..)", "12 calls items.add(..), a modifying method outside the analysis"
-                                                       + " (no annotation: the default)"),
+        assertEquals(List.of("9 calls store(..)", "12 calls items.add(..), a modifying method outside the analysis"),
                 why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
         assertEquals(List.of("14 assigns this.count"), method(result, "x.Bag.bump(").whys().getFirst().steps()
                 .stream().map(st -> st.line() + " " + st.text()).toList());
