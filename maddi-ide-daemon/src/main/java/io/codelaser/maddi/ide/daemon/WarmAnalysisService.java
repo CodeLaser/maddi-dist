@@ -167,7 +167,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
         // analyze() is one long blocking step with no sub-progress; run it on a worker and heartbeat so the
         // client's socket read never times out on a large project. A throw propagates: DaemonMain turns it into
         // an error{}, the daemon survives.
-        List<Message> messages = runWithHeartbeat(status, requestId, order.size(), () -> {
+        List<Message> messages = runWithHeartbeat(status, valueFeed, () -> {
             try {
                 return engine.modification(modRequest).messages();
             } catch (IOException e) {
@@ -328,13 +328,14 @@ public class WarmAnalysisService implements AnalyzeHandler {
      * thread-safe, so all pipeline work must stay on one thread. A separate heartbeat thread only sends status
      * frames (socket I/O, never touches maddi state) so the client's read doesn't time out on a large project.
      */
-    private static <T> T runWithHeartbeat(StatusSink status, String requestId, int total,
+    private static <T> T runWithHeartbeat(StatusSink status, StreamingValueFeed progress,
                                           java.util.function.Supplier<T> analysis) {
         Thread heartbeat = new Thread(() -> {
+            HeapSampler heap = new HeapSampler();
             try {
                 while (!Thread.currentThread().isInterrupted()) {
                     Thread.sleep(2_000);
-                    emit(status, requestId, "analyze", "modification analysis (running)", null, total);
+                    status.status(progress.heartbeat(heap.sample()));
                 }
             } catch (InterruptedException ignored) {
                 // stopped

@@ -14,6 +14,7 @@ module io.codelaser.maddi.ide.daemon {
     requires io.codelaser.maddi.support;
 
     requires com.fasterxml.jackson.databind;
+    requires java.management; // the heap and GC share on the progress line (HeapSampler)
     requires org.slf4j;
 
     exports io.codelaser.maddi.ide.daemon;

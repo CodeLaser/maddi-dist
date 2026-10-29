@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Turns the analyzer's {@link AnalysisValueFeed} into {@code partialResult} frames, so the IDE can show
@@ -61,6 +62,15 @@ class StreamingValueFeed implements AnalysisValueFeed {
      */
     private volatile Phase terminalPhase;
 
+    /*
+     Progress, for the heartbeat: the pass running and how many of its elements are done, or the stage between
+     passes. Written on the coordinator thread (the counter on the workers), read on the heartbeat thread.
+     */
+    private final AtomicInteger elementsDone = new AtomicInteger();
+    private volatile String pass;
+    private volatile int passElements;
+    private volatile String stage;
+
     StreamingValueFeed(StatusSink status, String requestId, ResultCollector collector) {
         this.status = status;
         this.requestId = requestId;
@@ -79,6 +89,52 @@ class StreamingValueFeed implements AnalysisValueFeed {
         // field stays because a future engine that certified mid-run would have somewhere to say so.
         status.partialResult(new DaemonProtocol.PartialResult(
                 requestId, iteration, fullPass, terminalPhase == Phase.TERMINAL_CERTIFIED, elements));
+    }
+
+    @Override
+    public void passStarted(int iteration, int maxIterations, String kind, int elements, int totalElements) {
+        elementsDone.set(0);
+        passElements = elements;
+        // the cap, not an estimate: most runs certify well below it, and a re-derivation raises it
+        pass = "pass " + iteration + " of at most " + maxIterations + " (" + kind + ")";
+        stage = null;
+        status.status(new DaemonProtocol.Status(requestId, "analyze", progress(null), 0, elements));
+    }
+
+    @Override
+    public void elementCompleted() {
+        elementsDone.incrementAndGet();
+    }
+
+    @Override
+    public void stage(String description) {
+        stage = description;
+        status.status(new DaemonProtocol.Status(requestId, "analyze", progress(null), null, null));
+    }
+
+    /**
+     * The heartbeat's frame: the pass and its element count, or the stage that runs after it, then the heap.
+     * Before the first pass, the analysis is still setting up.
+     */
+    DaemonProtocol.Status heartbeat(String heap) {
+        String stageNow = stage;
+        boolean inPass = pass != null && stageNow == null;
+        return new DaemonProtocol.Status(requestId, "analyze", progress(heap),
+                inPass ? elementsDone.get() : null, inPass ? passElements : null);
+    }
+
+    private String progress(String heap) {
+        String passNow = pass;
+        String stageNow = stage;
+        String what;
+        if (passNow == null) {
+            what = stageNow != null ? stageNow : "modification analysis (setting up)";
+        } else if (stageNow != null) {
+            what = stageNow + ", after " + passNow;
+        } else {
+            what = passNow + ": " + Math.min(elementsDone.get(), passElements) + " / " + passElements + " elements";
+        }
+        return heap == null ? what : what + " · " + heap;
     }
 
     @Override

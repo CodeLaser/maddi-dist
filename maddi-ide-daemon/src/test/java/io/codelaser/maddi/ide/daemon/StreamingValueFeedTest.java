@@ -54,9 +54,11 @@ public class StreamingValueFeedTest {
     private static final class Capture implements AnalyzeHandler.StatusSink {
         final List<DaemonProtocol.PartialResult> partials = new CopyOnWriteArrayList<>();
         final List<String> phaseMessages = new CopyOnWriteArrayList<>();
+        final List<DaemonProtocol.Status> statuses = new CopyOnWriteArrayList<>();
 
         @Override
         public void status(DaemonProtocol.Status status) {
+            statuses.add(status);
             if (status.message() != null && status.message().contains("TERMINAL")) {
                 phaseMessages.add(status.message());
             }
@@ -133,6 +135,34 @@ public class StreamingValueFeedTest {
         // stopped at the iteration cap yields annotations indistinguishable from certified ones, so this
         // field is the only thing that can tell them apart
         assertEquals(DaemonProtocol.OUTCOME_CERTIFIED, result.outcome());
+    }
+
+    @DisplayName("each pass is announced with its number, cap, kind and size; the stages between passes too")
+    @Test
+    public void passesAndStagesAreReported(@TempDir Path projectDir) throws Exception {
+        Capture capture = new Capture();
+        DaemonAnalysisFixture.analyze(projectDir, "x/Box.java", SOURCE, false, capture);
+
+        List<DaemonProtocol.Status> passes = capture.statuses.stream()
+                .filter(s -> s.message() != null && s.message().startsWith("pass ") && s.typesTotal() != null)
+                .toList();
+        assertFalse(passes.isEmpty(), () -> "no pass announced: " + capture.statuses);
+        DaemonProtocol.Status first = passes.getFirst();
+        assertTrue(first.message().matches("pass 1 of at most \\d+ \\(first\\): 0 / \\d+ elements"),
+                first::message);
+        assertEquals(0, first.typesDone());
+        assertTrue(first.typesTotal() > 0, "the first pass analyzes the whole order");
+        // the daemon runs MODREACH and nullability, and both are announced
+        assertTrue(capture.statuses.stream().anyMatch(s -> s.message().startsWith("MODREACH round 1, after pass ")),
+                () -> "no MODREACH stage: " + capture.statuses);
+        assertTrue(capture.statuses.stream().anyMatch(s -> s.message().startsWith("nullability, after pass ")),
+                () -> "no nullability stage: " + capture.statuses);
+    }
+
+    @DisplayName("the heap sample says how much is in use, of what maximum, and the GC share")
+    @Test
+    public void heapSample() {
+        assertTrue(new HeapSampler().sample().matches("heap \\d+[.]\\d of \\d+[.]\\d GB, GC \\d+%"));
     }
 
     @DisplayName("a streamed frame never claims certainty: the terminal phase arrives after the last pass")
