@@ -185,7 +185,8 @@ public class ResultCollector {
     private static final Map<Property, String> CULPRITS = Map.of(
             PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects",
             PropertyImpl.MODIFIED_CULPRIT, "Modified",
-            PropertyImpl.DEPENDENT_CULPRIT, "Dependent");
+            PropertyImpl.DEPENDENT_CULPRIT, "Dependent",
+            PropertyImpl.NULLABLE_CULPRIT, "Nullable");
 
     /*
      Only beside its annotation, as shown: a culprit can outlive its verdict (a later MODREACH round leaves an element

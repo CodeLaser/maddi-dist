@@ -133,6 +133,29 @@ public class WhyTest {
                 why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
     }
 
+    private static final String MAYBE = """
+            package x;
+            public class Maybe {
+                String find(int k) {
+                    if (k > 0) return null;
+                    return "x";
+                }
+            }
+            """;
+
+    @DisplayName("@Nullable comes with its why: the null and where it is")
+    @Test
+    public void nullableWhy(@TempDir Path projectDir) throws Exception {
+        DaemonProtocol.Result result = DaemonAnalysisFixture.analyze(projectDir, "x/Maybe.java", MAYBE, false, null);
+
+        DaemonProtocol.ElementAnnotation find = method(result, "x.Maybe.find(");
+        assertTrue(find.displayAnnotations().contains("@Nullable"), find.displayAnnotations()::toString);
+        DaemonProtocol.Why why = find.whys().stream().filter(w -> "Nullable".equals(w.annotation()))
+                .findFirst().orElseThrow(() -> new AssertionError(find.toString()));
+        assertEquals(List.of("4 return null; (null in x.Maybe.find(int))"),
+                why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
+    }
+
     private static DaemonProtocol.ElementAnnotation method(DaemonProtocol.Result result, String fqnPrefix) {
         return result.elementAnnotations().stream()
                 .filter(e -> "METHOD".equals(e.kind()) && e.fqn().startsWith(fqnPrefix))

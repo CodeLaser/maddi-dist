@@ -119,11 +119,12 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
                     .append(':');
             plain.append("; @").append(why.annotation()).append(':');
             for (AnalysisModel.WhyStep step : why.steps()) {
-                String where = location(element.uri(), step);
+                // a step without a place (a contract, an annotation) is its text alone
+                String where = step.line() <= 0 ? "" : location(element.uri(), step) + ": ";
                 html.append("<br>").append(indent).append("&nbsp;&nbsp;\u21d0 ")
                         .append(StringUtil.escapeXmlEntities(where))
-                        .append(": ").append(StringUtil.escapeXmlEntities(step.text()));
-                plain.append(" <= ").append(where).append(": ").append(step.text());
+                        .append(StringUtil.escapeXmlEntities(step.text()));
+                plain.append(" <= ").append(where).append(step.text());
             }
         }
     }
