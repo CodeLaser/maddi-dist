@@ -77,13 +77,14 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         if (!parameters.isEmpty() || !match.whys().isEmpty()) {
             StringBuilder html = new StringBuilder("<html>maddi: ").append(StringUtil.escapeXmlEntities(text));
             StringBuilder plain = new StringBuilder(accessible);
-            appendWhys(match, html, plain);
+            appendWhys(match, html, plain, "&nbsp;&nbsp;");
             for (AnalysisModel.ElementAnnotation p : parameters) {
                 String name = p.fqn().substring(p.fqn().lastIndexOf(':') + 1);
                 String ofParameter = String.join(" ", p.displayAnnotations());
                 html.append("<br>&nbsp;&nbsp;").append(StringUtil.escapeXmlEntities(name)).append(": ")
                         .append(StringUtil.escapeXmlEntities(ofParameter));
                 plain.append("; ").append(name).append(": ").append(ofParameter);
+                appendWhys(p, html, plain, "&nbsp;&nbsp;&nbsp;&nbsp;");
             }
             tooltip = html.append("</html>").toString();
             accessible = plain.toString();
@@ -110,14 +111,17 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
      * Each annotation's why, a chain of statements: the element's own first, then into the callees. A step in the
      * element's own file is "line n", one elsewhere "File.java:n".
      */
-    private static void appendWhys(AnalysisModel.ElementAnnotation element, StringBuilder html, StringBuilder plain) {
+    private static void appendWhys(AnalysisModel.ElementAnnotation element, StringBuilder html, StringBuilder plain,
+                                   String indent) {
         for (AnalysisModel.Why why : element.whys()) {
             if (why.steps() == null || why.steps().isEmpty()) continue;
-            html.append("<br>&nbsp;&nbsp;@").append(StringUtil.escapeXmlEntities(why.annotation())).append(':');
+            html.append("<br>").append(indent).append('@').append(StringUtil.escapeXmlEntities(why.annotation()))
+                    .append(':');
             plain.append("; @").append(why.annotation()).append(':');
             for (AnalysisModel.WhyStep step : why.steps()) {
                 String where = location(element.uri(), step);
-                html.append("<br>&nbsp;&nbsp;&nbsp;&nbsp;\u21d0 ").append(StringUtil.escapeXmlEntities(where))
+                html.append("<br>").append(indent).append("&nbsp;&nbsp;\u21d0 ")
+                        .append(StringUtil.escapeXmlEntities(where))
                         .append(": ").append(StringUtil.escapeXmlEntities(step.text()));
                 plain.append(" <= ").append(where).append(": ").append(step.text());
             }

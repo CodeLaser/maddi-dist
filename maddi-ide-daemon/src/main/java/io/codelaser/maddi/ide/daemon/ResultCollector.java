@@ -168,7 +168,7 @@ public class ResultCollector {
                 // every prepped type and defeat the "nothing to show → skip" test just below
                 .filter(pv -> !bookkeeping.contains(pv.property()) && !CULPRITS.containsKey(pv.property()))
                 .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
-        List<DaemonProtocol.Why> whys = whys(info);
+        List<DaemonProtocol.Why> whys = whys(info, displayAnnotations);
 
         // nothing computed and nothing to show → skip, to keep the payload lean
         if (displayAnnotations.isEmpty() && properties.isEmpty()) return;
@@ -183,13 +183,20 @@ public class ResultCollector {
      culprits, as the daemon's does (WarmAnalysisService); more will join as other analyses record theirs.
      */
     private static final Map<Property, String> CULPRITS = Map.of(
-            PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects");
+            PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects",
+            PropertyImpl.MODIFIED_CULPRIT, "Modified");
 
-    private static List<DaemonProtocol.Why> whys(Info info) {
+    /*
+     Only beside its annotation, as shown: a culprit can outlive its verdict (a later MODREACH round leaves an element
+     unmodified that an earlier one reached), and an annotation can be hidden by the tagger.
+     */
+    private static List<DaemonProtocol.Why> whys(Info info, List<String> displayAnnotations) {
         List<DaemonProtocol.Why> whys = new java.util.ArrayList<>();
         CULPRITS.forEach((property, annotation) -> {
             ValueImpl.CulpritImpl culprit = info.analysis().getOrNull(property, ValueImpl.CulpritImpl.class);
-            if (culprit != null && !culprit.steps().isEmpty()) {
+            boolean shown = displayAnnotations.stream()
+                    .anyMatch(a -> a.equals("@" + annotation) || a.startsWith("@" + annotation + "("));
+            if (shown && culprit != null && !culprit.steps().isEmpty()) {
                 whys.add(new DaemonProtocol.Why(annotation, culprit.steps().stream()
                         .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList()));
             }
