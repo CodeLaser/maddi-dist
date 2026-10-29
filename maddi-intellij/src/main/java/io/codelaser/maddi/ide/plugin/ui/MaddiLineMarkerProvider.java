@@ -120,7 +120,8 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
             plain.append("; @").append(why.annotation()).append(':');
             for (AnalysisModel.WhyStep step : why.steps()) {
                 // a step without a place (a contract, an annotation) is its text alone
-                String where = step.line() <= 0 ? "" : location(element.uri(), step) + ": ";
+                String place = AnalysisModel.whereOf(element.uri(), step);
+                String where = place.isEmpty() ? "" : place + ": ";
                 html.append("<br>").append(indent).append("&nbsp;&nbsp;\u21d0 ")
                         .append(StringUtil.escapeXmlEntities(where))
                         .append(StringUtil.escapeXmlEntities(step.text()));
@@ -129,34 +130,9 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         }
     }
 
-    static String location(String elementUri, AnalysisModel.WhyStep step) {
-        if (step.uri() == null || step.uri().equals(elementUri)) return "line " + step.line();
-        String file = step.uri().substring(step.uri().lastIndexOf('/') + 1);
-        return file + ":" + step.line();
-    }
-
-    /**
-     * The parameters of a method element that have annotations to show, in declaration order. Language-neutral: a
-     * parameter's fqn is its method's, then {@code :index:name}.
-     */
     static List<AnalysisModel.ElementAnnotation> parameters(List<AnalysisModel.ElementAnnotation> annotations,
                                                            AnalysisModel.ElementAnnotation method) {
-        if (!"METHOD".equals(method.kind()) || method.fqn() == null) return List.of();
-        String prefix = method.fqn() + ":";
-        return annotations.stream()
-                .filter(a -> "PARAMETER".equals(a.kind()) && a.fqn() != null && a.fqn().startsWith(prefix)
-                             && a.fqn().indexOf(':', prefix.length()) > prefix.length()
-                             && !a.displayAnnotations().isEmpty())
-                .sorted(java.util.Comparator.comparingInt(a -> index(a.fqn(), prefix.length())))
-                .toList();
-    }
-
-    private static int index(String parameterFqn, int from) {
-        try {
-            return Integer.parseInt(parameterFqn.substring(from, parameterFqn.indexOf(':', from)));
-        } catch (NumberFormatException e) {
-            return Integer.MAX_VALUE;
-        }
+        return AnalysisModel.parametersOf(annotations, method);
     }
 
     /**

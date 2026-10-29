@@ -82,7 +82,7 @@ public final class MaddiMarkers {
         }
         if (gutter && result.elementAnnotations() != null) {
             for (AnalysisModel.ElementAnnotation element : result.elementAnnotations()) {
-                String text = gutterText(element);
+                String text = gutterText(element, result.elementAnnotations());
                 if (text == null) continue;
                 IFile file = locate(root, element.uri());
                 if (file != null) createHint(file, element, text);
@@ -92,9 +92,40 @@ public final class MaddiMarkers {
 
     /** What an element's ruler icon says, or null when it gets none. */
     public static String gutterText(AnalysisModel.ElementAnnotation element) {
+        return gutterText(element, List.of());
+    }
+
+    /**
+     * What an element's ruler icon says, or null when it gets none: its annotations, each annotation's why under it
+     * (the chain of statements, the element's own first), and for a method its parameters with theirs, the way
+     * IntelliJ's gutter tooltip has it. {@code all} is the result's elements, where the parameters are found.
+     */
+    public static String gutterText(AnalysisModel.ElementAnnotation element, List<AnalysisModel.ElementAnnotation> all) {
         if (!GUTTER_KINDS.contains(element.kind())) return null;
-        if (element.displayAnnotations() == null || element.displayAnnotations().isEmpty()) return null;
-        return "maddi: " + String.join(" ", element.displayAnnotations());
+        List<AnalysisModel.ElementAnnotation> parameters = AnalysisModel.parametersOf(all, element);
+        boolean own = element.displayAnnotations() != null && !element.displayAnnotations().isEmpty();
+        if (!own && parameters.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("maddi: ")
+                .append(own ? String.join(" ", element.displayAnnotations()) : "");
+        appendWhys(sb, element, "  ");
+        for (AnalysisModel.ElementAnnotation p : parameters) {
+            sb.append('\n').append("  ").append(p.fqn().substring(p.fqn().lastIndexOf(':') + 1)).append(": ")
+                    .append(String.join(" ", p.displayAnnotations()));
+            appendWhys(sb, p, "    ");
+        }
+        return sb.toString();
+    }
+
+    private static void appendWhys(StringBuilder sb, AnalysisModel.ElementAnnotation element, String indent) {
+        for (AnalysisModel.Why why : element.whys()) {
+            if (why.steps() == null || why.steps().isEmpty()) continue;
+            sb.append('\n').append(indent).append('@').append(why.annotation()).append(':');
+            for (AnalysisModel.WhyStep step : why.steps()) {
+                String place = AnalysisModel.whereOf(element.uri(), step);
+                sb.append('\n').append(indent).append("  ⇐ ").append(place.isEmpty() ? "" : place + ": ")
+                        .append(step.text());
+            }
+        }
     }
 
     private static void createViolation(IFile file, AnalysisModel.Finding finding, int[] lineStarts)

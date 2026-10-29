@@ -21,6 +21,7 @@ import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.eclipse.HintFilter;
 import io.codelaser.maddi.ide.eclipse.MaddiFindingsView;
 import io.codelaser.maddi.ide.eclipse.MaddiJdks;
+import io.codelaser.maddi.ide.eclipse.MaddiMarkers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -87,5 +88,28 @@ public class MaddiDisplayTest {
         assertEquals(8, MaddiJdks.feature("1.8.0_402"));
         assertEquals(0, MaddiJdks.feature(null));
         assertEquals(0, MaddiJdks.feature("unknown"));
+    }
+
+    @Test
+    @DisplayName("the ruler hint shows each annotation's why, and a method's parameters with theirs, as IntelliJ does")
+    public void gutterWhys() {
+        String uri = "file:///p/src/x/Bag.java";
+        AnalysisModel.Annotation modified = new AnalysisModel.Annotation("@Modified", "NEGATIVE", false);
+        AnalysisModel.ElementAnnotation add = new AnalysisModel.ElementAnnotation(uri, 7, 5, 10, 5, "METHOD",
+                "x.Bag.add(String)", List.of("@Modified"), List.of(modified), Map.of(),
+                List.of(new AnalysisModel.Why("Modified", List.of(
+                        new AnalysisModel.WhyStep(uri, 9, 9, "calls store(..)"),
+                        new AnalysisModel.WhyStep("file:///p/src/x/Store.java", 12, 9, "calls items.add(..)"),
+                        new AnalysisModel.WhyStep(null, 0, 0, "a contract")))));
+        AnalysisModel.ElementAnnotation s = new AnalysisModel.ElementAnnotation(uri, 7, 14, 7, 21, "PARAMETER",
+                "x.Bag.add(String):0:s", List.of("@NotModified"), List.of(), Map.of());
+        assertEquals("""
+                        maddi: @Modified
+                          @Modified:
+                            ⇐ line 9: calls store(..)
+                            ⇐ Store.java:12: calls items.add(..)
+                            ⇐ a contract
+                          s: @NotModified""",
+                MaddiMarkers.gutterText(add, List.of(add, s)));
     }
 }

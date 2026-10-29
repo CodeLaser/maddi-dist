@@ -194,6 +194,39 @@ public final class AnalysisModel {
     public record WhyStep(String uri, int line, int column, String text) {
     }
 
+    /**
+     * Where a why's step is, as an IDE says it beside the element: "line n" in the element's own file, "File.java:n"
+     * in another, and "" for a step without a place (a contract, an annotation).
+     */
+    public static String whereOf(String elementUri, WhyStep step) {
+        if (step.line() <= 0) return "";
+        if (step.uri() == null || step.uri().equals(elementUri)) return "line " + step.line();
+        return step.uri().substring(step.uri().lastIndexOf('/') + 1) + ":" + step.line();
+    }
+
+    /**
+     * The parameters of a method element that have annotations to show, in declaration order, from the same result.
+     * Language-neutral: a parameter's fqn is its method's, then {@code :index:name}.
+     */
+    public static List<ElementAnnotation> parametersOf(List<ElementAnnotation> elements, ElementAnnotation method) {
+        if (!"METHOD".equals(method.kind()) || method.fqn() == null || elements == null) return List.of();
+        String prefix = method.fqn() + ":";
+        return elements.stream()
+                .filter(a -> "PARAMETER".equals(a.kind()) && a.fqn() != null && a.fqn().startsWith(prefix)
+                             && a.fqn().indexOf(':', prefix.length()) > prefix.length()
+                             && a.displayAnnotations() != null && !a.displayAnnotations().isEmpty())
+                .sorted(java.util.Comparator.comparingInt(a -> parameterIndex(a.fqn(), prefix.length())))
+                .toList();
+    }
+
+    private static int parameterIndex(String parameterFqn, int from) {
+        try {
+            return Integer.parseInt(parameterFqn.substring(from, parameterFqn.indexOf(':', from)));
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
+    }
+
     public record ElementAnnotation(String uri,
                                     Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                     String kind,
