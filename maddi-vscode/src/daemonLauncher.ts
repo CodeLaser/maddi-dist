@@ -57,6 +57,8 @@ export async function launchDaemon(options: LaunchOptions): Promise<DaemonHandle
             ...process.env,
             JAVA_HOME: options.jdkHome,
             JAVA_OPTS: `-Xmx${options.maxHeapMb}m -XX:+UseG1GC`,
+            // the daemon exits when this process (the extension host) does, also when it never gets to stop it
+            MADDI_PARENT_PID: String(process.pid),
         },
         cwd: options.installDir,
     });
