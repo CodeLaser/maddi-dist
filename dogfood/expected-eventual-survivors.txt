@@ -63,12 +63,17 @@
 # on the Mac: 318 -> 348, 30 new and none lost, no keystone below hc. The new ones are the modifier and type-nature
 # enums with their interfaces, the output elements (Keyword, Symbol, QualifiedName, ...), Property and PropertyImpl,
 # Value.EventuallyImmutable, the PropertyValue records and AndOrSorter.Key. Not bisected.
+# 2026-10-30, the maddi slowTest gate 41058945355 on laser1 (0.9.6-alpha.7: maddi 14cfe0495, maddi-mod 7e8805c8,
+# maddi-dist e9b6cba), then two runs (identical sets) on the Mac: 348 -> 351, 3 new and none lost, no keystone
+# below hc. All three are types added since: Value.Culprit and ValueImpl.CulpritImpl (maddi 52ccd46a8, the culprit
+# value) and AnalysisAccessRecorder.Slot (maddi b86740e70). ImportDetails survived in both runs and stays in the wobble.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
 io.codelaser.maddi.cst.api.analysis.Property
 io.codelaser.maddi.cst.api.analysis.PropertyValueMap.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Value.AssignedToField
+io.codelaser.maddi.cst.api.analysis.Value.Culprit
 io.codelaser.maddi.cst.api.analysis.Value.Eventual
 io.codelaser.maddi.cst.api.analysis.Value.EventuallyImmutable
 io.codelaser.maddi.cst.api.analysis.Value.FieldBooleanMap
@@ -226,9 +231,11 @@ io.codelaser.maddi.cst.api.variable.FieldReference
 io.codelaser.maddi.cst.api.variable.LocalVariable
 io.codelaser.maddi.cst.api.variable.This
 io.codelaser.maddi.cst.api.variable.Variable
+io.codelaser.maddi.cst.impl.analysis.AnalysisAccessRecorder.Slot
 io.codelaser.maddi.cst.impl.analysis.MessageImpl
 io.codelaser.maddi.cst.impl.analysis.PropertyImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.AssignedToFieldImpl
+io.codelaser.maddi.cst.impl.analysis.ValueImpl.CulpritImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.EventualImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.EventuallyImmutableImpl
 io.codelaser.maddi.cst.impl.analysis.ValueImpl.FieldBooleanMapImpl
