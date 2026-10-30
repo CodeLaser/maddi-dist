@@ -26,6 +26,19 @@ own short section.
 | IntelliJ IDEA | 2025.3 or later | *Settings → Plugins → Marketplace*, search for **maddi** |
 | Eclipse | 2025-09 or later | *Help → Install New Software… → Add…*, location `https://codelaser.github.io/maddi-dist/eclipse/` |
 
+## Try it on a demo project
+
+Two small public projects show every kind of hint, one class or two per annotation, each class's documentation
+saying what to look for:
+
+- [**maddi-java-demo**](https://github.com/CodeLaser/maddi-java-demo): a Maven project in Java;
+- [**maddi-kotlin-demo**](https://github.com/CodeLaser/maddi-kotlin-demo): the same classes in Kotlin, as a Gradle project (IntelliJ).
+
+Each has an `EXPECTED-HINTS.md` listing, per declaration, what the analysis computes, so you can tell a missing
+hint from a broken setup, and a package `demo.guard` whose contracts are wrong on purpose, to see a violation and
+its reasoning. Clone one and open it: IntelliJ, *File → Open* on the directory; Eclipse (Java demo), *File →
+Import… → Maven → Existing Maven Projects*. Then run the analysis as below.
+
 ## Your first analysis
 
 - IntelliJ: *Tools → Analyze with maddi*. The **maddi** tool window (bottom) shows the run.
@@ -137,7 +150,8 @@ code minings on, as the project's do (see *Turning the hints on*); its ruler ico
 
 Annotate your code with maddi's annotations (`io.codelaser:maddi-annotation`) to state what a type or method
 must be: `@Container` on an interface, `@NotModified` on a method, `@Immutable` on a type. maddi then checks every
-implementation against it and reports a violation as a problem, with the reasoning.
+implementation against it and reports a violation as a problem, with the reasoning. The demos' `demo.guard` package
+has two such violations, and `demo.immutable.Shape` a contract on an interface that its implementation keeps.
 
 *Warn about near misses* (off by default) also reports types and methods that narrowly miss a property, e.g. a
 type that would be `@Container` but for one method. Useful on code you are cleaning up; noisy elsewhere.
@@ -157,6 +171,10 @@ view or the editor, or use the *Refactor* menu:
   code base, into `build/maddi-kotlin/` of the module, with `translation-report.txt` beside them. The notification
   then offers **Replace the Java sources…**: each Java file becomes its Kotlin file, in place. The module must be set
   up to build Kotlin; Local History keeps the Java files (label *Before maddi Translate to Kotlin*).
+
+The [Java demo](https://github.com/CodeLaser/maddi-java-demo) is a good first module to translate: its classes are small and each shows one verdict, so
+the effect of the analysis on the Kotlin is easy to see; the [Kotlin demo](https://github.com/CodeLaser/maddi-kotlin-demo) holds the same classes written by
+hand, to compare with.
 
 The translation reads the last analysis. When the files changed since then, or there has been none, the project
 is built and analysed first, and the translation follows when the analysis ends (stopping the analysis cancels it).
@@ -187,7 +205,8 @@ IntelliJ also has the Kotlin settings below.
 
 ## Kotlin (IntelliJ)
 
-For a project with Kotlin sources, maddi needs its Kotlin front end, a separate download. The first analysis
+For a project with Kotlin sources, maddi needs its Kotlin front end, a separate download (the
+[Kotlin demo](https://github.com/CodeLaser/maddi-kotlin-demo) is a quick way to see it at work). The first analysis
 of such a project offers it in a notification (*Download Kotlin support*); until then the Java sources are
 analysed and the result says the Kotlin ones were not. *Settings → Tools → maddi → Kotlin front end override*
 points at a front end you downloaded by hand.
