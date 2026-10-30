@@ -227,6 +227,10 @@ public final class AnalysisModel {
         }
     }
 
+    /**
+     * {@code owner} and {@code signature}: the element named as a {@link LibraryElement} is, so that it can be placed
+     * on its declaration after edits moved it; {@code null} from a daemon before 0.9.6 (see {@code DaemonProtocol}).
+     */
     public record ElementAnnotation(String uri,
                                     Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                     String kind,
@@ -234,13 +238,29 @@ public final class AnalysisModel {
                                     List<String> displayAnnotations,
                                     List<Annotation> annotations,
                                     Map<String, String> properties,
-                                    List<Why> whys) {
+                                    List<Why> whys,
+                                    String owner,
+                                    String signature) {
+        /** Without the name-based key. */
+        public ElementAnnotation(String uri, Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
+                                 String kind, String fqn, List<String> displayAnnotations, List<Annotation> annotations,
+                                 Map<String, String> properties, List<Why> whys) {
+            this(uri, beginLine, beginCol, endLine, endCol, kind, fqn, displayAnnotations, annotations, properties,
+                    whys, null, null);
+        }
+
         /** Without whys. */
         public ElementAnnotation(String uri, Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                  String kind, String fqn, List<String> displayAnnotations, List<Annotation> annotations,
                                  Map<String, String> properties) {
             this(uri, beginLine, beginCol, endLine, endCol, kind, fqn, displayAnnotations, annotations, properties,
                     List.of());
+        }
+
+        /** The same element at another position: where its declaration is now. */
+        public ElementAnnotation at(int beginLine, int beginCol, int endLine, int endCol) {
+            return new ElementAnnotation(uri, beginLine, beginCol, endLine, endCol, kind, fqn, displayAnnotations,
+                    annotations, properties, whys, owner, signature);
         }
 
         /** Never null: an older daemon's frame has no whys. */

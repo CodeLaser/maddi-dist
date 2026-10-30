@@ -174,9 +174,26 @@ public class ResultCollector {
         // nothing computed and nothing to show → skip, to keep the payload lean
         if (displayAnnotations.isEmpty() && properties.isEmpty()) return;
 
+        String[] key = key(info);
         out.add(new DaemonProtocol.ElementAnnotation(
                 uri, source.beginLine(), source.beginPos(), source.endLine(), source.endPos(),
-                kindOf(info), info.fullyQualifiedName(), displayAnnotations, annotations, properties, whys));
+                kindOf(info), info.fullyQualifiedName(), displayAnnotations, annotations, properties, whys,
+                key == null ? null : key[0], key == null ? null : key[1]));
+    }
+
+    /*
+     The element's declaring type and its signature there, as collectLibrary names a library's: how an editor finds the
+     declaration again once an edit has moved the lines the positions point at. Null for what has no such name.
+     */
+    private static String[] key(Info info) {
+        return switch (info) {
+            case TypeInfo type -> new String[]{type.fullyQualifiedName(), type.fullyQualifiedName()};
+            case FieldInfo field -> new String[]{field.owner().fullyQualifiedName(), field.name()};
+            case MethodInfo method -> new String[]{method.typeInfo().fullyQualifiedName(), signature(method)};
+            case ParameterInfo parameter -> new String[]{parameter.methodInfo().typeInfo().fullyQualifiedName(),
+                    signature(parameter.methodInfo()) + "#" + parameter.index()};
+            default -> null;
+        };
     }
 
     // ---- library elements ----

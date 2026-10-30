@@ -211,6 +211,12 @@ public final class DaemonProtocol {
     public record WhyStep(String uri, int line, int column, String text) {
     }
 
+    /**
+     * A project element's values, where its source is. {@code owner} and {@code signature} name it as a
+     * {@link LibraryElement} is named (declaring type; the type's own name, a field's name, a method's erased
+     * signature, {@code signature#index} for a parameter), so an editor can find the declaration again after the
+     * lines moved. Absent from an older daemon's frames; an editor then has the position only.
+     */
     public record ElementAnnotation(String uri,
                                     Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                     String kind,
@@ -218,7 +224,17 @@ public final class DaemonProtocol {
                                     List<String> displayAnnotations,
                                     List<Annotation> annotations,
                                     Map<String, String> properties,
-                                    List<Why> whys) {
+                                    List<Why> whys,
+                                    String owner,
+                                    String signature) {
+        /** Without the name-based key. */
+        public ElementAnnotation(String uri, Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
+                                 String kind, String fqn, List<String> displayAnnotations, List<Annotation> annotations,
+                                 Map<String, String> properties, List<Why> whys) {
+            this(uri, beginLine, beginCol, endLine, endCol, kind, fqn, displayAnnotations, annotations, properties,
+                    whys, null, null);
+        }
+
         /** Without whys. */
         public ElementAnnotation(String uri, Integer beginLine, Integer beginCol, Integer endLine, Integer endCol,
                                  String kind, String fqn, List<String> displayAnnotations, List<Annotation> annotations,

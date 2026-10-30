@@ -346,15 +346,19 @@ public final class MaddiAnalysisService implements Disposable {
     }
 
     /**
-     * The annotations to show in a file: a project file's, by path; a library file's (Set.java from the JDK's
-     * sources), matched to its declarations by signature, asked of the daemon the first time the file is shown
-     * after an analysis.
+     * The annotations to show in a file: a project file's, by path, placed on its declarations as they are now; a
+     * library file's (Set.java from the JDK's sources), matched to its declarations by signature, asked of the daemon
+     * the first time the file is shown after an analysis.
      */
     public List<AnalysisModel.ElementAnnotation> annotationsFor(PsiFile file, Document doc) {
         VirtualFile vf = file.getVirtualFile();
         if (vf == null) return List.of();
         List<AnalysisModel.ElementAnnotation> own = annotationsForPath(vf.getPath());
-        if (!own.isEmpty() || latest == null || !(file instanceof PsiJavaFile javaFile)
+        if (!own.isEmpty()) {
+            // on the declarations as they are now, not where the analysed source had them
+            return file instanceof PsiJavaFile javaFile ? MaddiLibraryPlacement.follow(javaFile, doc, own) : own;
+        }
+        if (latest == null || !(file instanceof PsiJavaFile javaFile)
             || !ProjectFileIndex.getInstance(project).isInLibrary(vf)) {
             return own;
         }

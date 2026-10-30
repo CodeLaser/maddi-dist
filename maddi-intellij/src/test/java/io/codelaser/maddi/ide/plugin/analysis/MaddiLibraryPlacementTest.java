@@ -93,4 +93,59 @@ public class MaddiLibraryPlacementTest extends LightJavaCodeInsightFixtureTestCa
         assertEquals("Not in maddi's annotated API: the analysis's defaults for a library",
                 setValue.properties().get(AnalysisModel.LIBRARY_NOTE));
     }
+
+    /*
+     A project file's annotations follow their declarations when an edit moves them. Recorded against BAG (the field on
+     line 3), shown on BAG_SPLIT, where the class's brace has its own line: the field's name is on line 4 now, and its
+     hints must go with it, as the methods' must.
+     */
+    private static final String BAG_SPLIT = """
+            package p;
+            public class Bag
+            {
+                private final Object items = null;
+                public void add(Bag item) { }
+                public void gone() { }
+            }
+            """;
+
+    private static AnalysisModel.ElementAnnotation recorded(String kind, String owner, String signature, int line,
+                                                            int col, int length, String annotation) {
+        return new AnalysisModel.ElementAnnotation("/p/Bag.java", line, col, line, col + length - 1, kind,
+                owner + "." + signature, List.of(annotation), List.of(), Map.of(), List.of(), owner, signature);
+    }
+
+    public void testProjectAnnotationsFollowTheirDeclarations() {
+        PsiJavaFile file = (PsiJavaFile) myFixture.configureByText("Bag.java", BAG_SPLIT);
+        Document doc = myFixture.getEditor().getDocument();
+        // where the analysed source (the brace still on line 2) had them
+        AnalysisModel.ElementAnnotation type = recorded("TYPE", "p.Bag", "p.Bag", 2, 14, 3, "@Container");
+        AnalysisModel.ElementAnnotation field = recorded("FIELD", "p.Bag", "items", 3, 26, 5, "@Modified");
+        AnalysisModel.ElementAnnotation method = recorded("METHOD", "p.Bag", "add(p.Bag)", 4, 17, 3,
+                "@Modified");
+        AnalysisModel.ElementAnnotation removed = recorded("METHOD", "p.Bag", "clear()", 5, 17, 5, "@Modified");
+        // an older daemon's: no name, so it keeps its position
+        AnalysisModel.ElementAnnotation unnamed = new AnalysisModel.ElementAnnotation("/p/Bag.java", 6, 17, 6, 20,
+                "METHOD", "p.Bag.gone()", List.of("@NotModified"), List.of(), Map.of());
+
+        List<AnalysisModel.ElementAnnotation> shown = MaddiLibraryPlacement.follow(file, doc,
+                List.of(type, field, method, removed, unnamed));
+
+        assertEquals(4, shown.size());
+        assertFalse("a declaration that is gone takes its hints with it", shown.stream()
+                .anyMatch(a -> a.fqn().endsWith("clear()")));
+        assertEquals(Integer.valueOf(6), find(shown, "gone()").beginLine());
+        assertEquals(Integer.valueOf(2), find(shown, "p.Bag.p.Bag").beginLine());
+        AnalysisModel.ElementAnnotation items = find(shown, "items");
+        assertEquals(Integer.valueOf(4), items.beginLine());
+        assertEquals(Integer.valueOf(26), items.beginCol());
+        assertEquals(Integer.valueOf(30), items.endCol());
+        assertEquals(List.of("@Modified"), items.displayAnnotations());
+        assertEquals(Integer.valueOf(5), find(shown, "add(p.Bag)").beginLine());
+    }
+
+    private static AnalysisModel.ElementAnnotation find(List<AnalysisModel.ElementAnnotation> annotations,
+                                                        String fqnSuffix) {
+        return annotations.stream().filter(a -> a.fqn().endsWith(fqnSuffix)).findFirst().orElseThrow();
+    }
 }
