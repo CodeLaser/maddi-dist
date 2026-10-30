@@ -111,6 +111,7 @@ with the agent, for example `claude mcp add maddi -- <that path>`.
 |---|---|
 | `configure_project`, `list_projects` | from an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`), or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
+| `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
 | `element_at` | the element at a file and line, explained |
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
@@ -122,6 +123,10 @@ computed again before the run: with the plugin's task or goal, or with the comma
 CLI-written file needs one). Computing it for a large build takes minutes; this way it happens only when the build
 changed. A project configured from directories has no such command: a change to its Gradle or Maven files fails
 the run, unless `analyze` is told `allowStale`.
+
+A run that finished, or was stopped with values, is stored too, the last 8 per project: after a restart its
+verdicts can still be asked and compared with `diff_runs`. A stored run says when it was analysed and how many source
+files changed since.
 
 Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
 stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.

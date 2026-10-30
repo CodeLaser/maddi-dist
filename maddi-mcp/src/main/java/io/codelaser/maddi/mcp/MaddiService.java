@@ -67,7 +67,15 @@ public final class MaddiService implements Closeable {
         this.store = new ProjectStore(storeDirectory, mapper);
         List<String> problems = new ArrayList<>();
         for (ProjectStore.StoredProject p : store.loadAll(problems)) projects.put(p.name(), p);
-        for (String problem : problems) System.err.println("maddi-mcp: cannot read stored project " + problem);
+        long highest = 0;
+        for (AnalysisRun.Snapshot snapshot : store.loadRuns(problems)) {
+            AnalysisRun run = AnalysisRun.restore(snapshot);
+            runs.put(run.id(), run);
+            lastRuns.put(run.project(), run); // oldest first: the last one put is the latest
+            highest = Math.max(highest, ProjectStore.runNumber(run.id()));
+        }
+        runCounter.set((int) highest); // a new run never takes a stored run's id
+        for (String problem : problems) System.err.println("maddi-mcp: cannot read stored " + problem);
     }
 
     public ObjectMapper mapper() {
@@ -82,7 +90,6 @@ public final class MaddiService implements Closeable {
         ProjectConfigs.check(complete.config());
         store.save(complete);
         projects.put(complete.name(), complete);
-        lastRuns.remove(complete.name()); // its verdicts were of another configuration
         return describeProject(complete, BuildFileCheck.check(complete.buildFiles(), complete.config()));
     }
 
@@ -101,7 +108,10 @@ public final class MaddiService implements Closeable {
             Map<String, Object> m = describeProject(project,
                     BuildFileCheck.check(project.buildFiles(), project.config()));
             AnalysisRun run = lastRuns.get(project.name());
-            if (run != null) m.put("lastRun", run.id() + " " + run.state() + " " + run.certainty());
+            if (run != null) {
+                m.put("lastRun", run.id() + " " + run.state() + " " + run.certainty()
+                                 + (run.finishedAt() == null ? "" : " at " + run.finishedAt()));
+            }
             out.add(m);
         }
         return out;
@@ -203,6 +213,67 @@ public final class MaddiService implements Closeable {
         } catch (IOException | RuntimeException e) {
             run.fail(e.getMessage() == null ? e.toString() : e.getMessage()); // after a stop: already STOPPED
         }
+        persist(run);
+    }
+
+    /* a run with values outlives the server: finished, or stopped after some passes; a failed one has nothing */
+    private void persist(AnalysisRun run) {
+        AnalysisRun.Snapshot snapshot = run.snapshot();
+        if (snapshot.result() == null || snapshot.state() == AnalysisRun.State.RUNNING
+            || snapshot.state() == AnalysisRun.State.FAILED) {
+            return;
+        }
+        try {
+            store.saveRun(snapshot, KEPT_RUNS);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("maddi-mcp: cannot store " + run.id() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * A run as the tools describe it, with, once it has ended, how many of the project's source files changed since:
+     * a stored result survives a restart, and a week-old result must not pass for one of the code as it is now.
+     */
+    public Map<String, Object> describe(AnalysisRun run) {
+        Map<String, Object> out = run.describe();
+        ProjectStore.StoredProject project;
+        synchronized (this) {
+            project = projects.get(run.project());
+        }
+        if (run.finishedAt() != null && project != null) {
+            int changed = sourcesChangedSince(project.config(), java.time.Instant.parse(run.finishedAt()));
+            out.put("sourcesChangedSince", changed);
+            if (changed > 0) {
+                out.put("sourcesNote", changed + " source file(s) changed since this run: analyze again for verdicts"
+                                       + " of the code as it is now");
+            }
+        }
+        return out;
+    }
+
+    private static int sourcesChangedSince(AnalysisModel.AnalyzeConfig config, java.time.Instant since) {
+        int[] count = {0};
+        for (AnalysisModel.ModuleSourceSet set : config.moduleSourceSets()) {
+            for (String dir : set.sourceDirectories()) {
+                Path root = Path.of(dir);
+                if (!java.nio.file.Files.isDirectory(root)) continue;
+                try (var files = java.nio.file.Files.walk(root)) {
+                    files.filter(f -> {
+                        String name = f.getFileName().toString();
+                        return name.endsWith(".java") || name.endsWith(".kt");
+                    }).forEach(f -> {
+                        try {
+                            if (java.nio.file.Files.getLastModifiedTime(f).toInstant().isAfter(since)) count[0]++;
+                        } catch (IOException e) {
+                            // a file that went while counting: not one to count
+                        }
+                    });
+                } catch (IOException | java.io.UncheckedIOException e) {
+                    // an unreadable directory changes no count worth failing for
+                }
+            }
+        }
+        return count[0];
     }
 
     /**
@@ -286,8 +357,11 @@ public final class MaddiService implements Closeable {
 
     public synchronized AnalysisRun run(String runId) {
         if (runId == null) {
-            if (current == null) throw new IllegalArgumentException("no run yet");
-            return current;
+            if (current != null) return current;
+            AnalysisRun latest = null;
+            for (AnalysisRun run : runs.values()) latest = run;
+            if (latest == null) throw new IllegalArgumentException("no run yet");
+            return latest;
         }
         AnalysisRun run = runs.get(runId);
         if (run == null) throw new IllegalArgumentException("no run '" + runId + "'");
@@ -308,7 +382,11 @@ public final class MaddiService implements Closeable {
         if (project == null) {
             if (lastRuns.size() == 1) return lastRuns.values().iterator().next();
             if (current != null) return current;
-            throw new IllegalArgumentException("no analysis yet");
+            // after a restart: the latest stored run, whichever project
+            AnalysisRun latest = null;
+            for (AnalysisRun run : runs.values()) latest = run;
+            if (latest == null) throw new IllegalArgumentException("no analysis yet");
+            return latest;
         }
         AnalysisRun run = lastRuns.get(project);
         if (run == null) throw new IllegalArgumentException("project '" + project + "' has not been analysed");

@@ -47,6 +47,48 @@ public final class AnalysisRun {
     private long endNanos;
     private String configuration;
     private Process process;
+    private String finishedAt;
+    private long restoredElapsedSeconds = -1;
+
+    /**
+     * A run as it is stored once it has ended, to be queried and compared after a restart. Only the result counts:
+     * the daemon's model of the run is gone with the daemon.
+     */
+    public record Snapshot(String id, String project, Map<String, Object> scope, State state, String configuration,
+                           long elapsedSeconds, int passesStreamed, String finishedAt, AnalysisModel.Result result) {
+    }
+
+    public synchronized Snapshot snapshot() {
+        return new Snapshot(id, project, scope, state, configuration, elapsedSeconds(), lastIteration + 1,
+                finishedAt, result);
+    }
+
+    public static AnalysisRun restore(Snapshot snapshot) {
+        AnalysisRun run = new AnalysisRun(snapshot.id(), snapshot.project(),
+                snapshot.scope() == null ? Map.of() : snapshot.scope());
+        run.state = snapshot.state();
+        run.result = snapshot.result();
+        run.configuration = snapshot.configuration();
+        run.lastIteration = snapshot.passesStreamed() - 1;
+        run.finishedAt = snapshot.finishedAt();
+        run.restoredElapsedSeconds = snapshot.elapsedSeconds();
+        return run;
+    }
+
+    /** When the run ended, as an ISO instant; null while it runs. */
+    public synchronized String finishedAt() {
+        return finishedAt;
+    }
+
+    private long elapsedSeconds() {
+        if (restoredElapsedSeconds >= 0) return restoredElapsedSeconds;
+        return ((state == State.RUNNING ? System.nanoTime() : endNanos) - startNanos) / 1_000_000_000L;
+    }
+
+    private void ended() {
+        endNanos = System.nanoTime();
+        finishedAt = java.time.Instant.now().toString();
+    }
 
     public AnalysisRun(String id, String project) {
         this(id, project, Map.of());
@@ -126,7 +168,7 @@ public final class AnalysisRun {
             error = frame.path("kind").asText("error") + ": " + frame.path("message").asText(frame.toString());
             state = State.FAILED;
         }
-        endNanos = System.nanoTime();
+        ended();
         notifyAll();
     }
 
@@ -134,7 +176,7 @@ public final class AnalysisRun {
         if (state != State.RUNNING) return;
         error = message;
         state = State.FAILED;
-        endNanos = System.nanoTime();
+        ended();
         notifyAll();
     }
 
@@ -146,7 +188,7 @@ public final class AnalysisRun {
             process.destroyForcibly();
         }
         state = State.STOPPED;
-        endNanos = System.nanoTime();
+        ended();
         notifyAll();
     }
 
@@ -181,7 +223,8 @@ public final class AnalysisRun {
         out.put("project", project);
         out.put("state", state.name());
         if (!scope.isEmpty()) out.put("scope", scope);
-        out.put("elapsedSeconds", ((state == State.RUNNING ? System.nanoTime() : endNanos) - startNanos) / 1_000_000_000L);
+        out.put("elapsedSeconds", elapsedSeconds());
+        if (finishedAt != null) out.put("finishedAt", finishedAt);
         if (state == State.RUNNING && lastStatus != null) {
             Map<String, Object> progress = new LinkedHashMap<>();
             for (String field : List.of("phase", "message", "typesDone", "typesTotal")) {

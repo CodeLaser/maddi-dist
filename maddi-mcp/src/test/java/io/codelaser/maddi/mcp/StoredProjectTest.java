@@ -87,11 +87,20 @@ public class StoredProjectTest {
             assertEquals("stored, build files unchanged", run.describe().get("configuration"));
         }
 
-        // a restart: the project is still there, and still fresh
+        // a restart: the project is still there, and still fresh, and so is its run
         try (MaddiService service = new MaddiService(settings(dir), store)) {
             Map<String, Object> p = service.projects().getFirst();
             assertEquals("p", p.get("project"));
             assertEquals("FRESH", p.get("buildFiles"), p::toString);
+            AnalysisRun restored = service.resultsOf("p");
+            assertEquals("run-1", restored.id());
+            assertEquals(AnalysisRun.State.FINISHED, restored.state());
+            assertEquals(AnalysisModel.Certainty.FINAL, restored.certainty());
+            assertTrue(restored.result().elementAnnotations().stream().anyMatch(e -> "x.A.inc()".equals(e.fqn())));
+            assertEquals(0, service.describe(restored).get("sourcesChangedSince"));
+            Files.writeString(project.resolve("src/x/A.java"),
+                    "package x; public class A { int i; void inc() { i++; } int get() { return i; } }\n");
+            assertEquals(1, service.describe(restored).get("sourcesChangedSince"), "a stored result ages");
 
             // the build changed: the stored configuration is stale, and the command makes it again
             Files.writeString(project.resolve("build.gradle.kts"), "plugins { java; `java-library` }\n");
@@ -103,6 +112,9 @@ public class StoredProjectTest {
                                                                                  + " (changed) changed"),
                     () -> run.describe().toString());
             assertEquals("FRESH", service.projects().getFirst().get("buildFiles"), "and stored as such");
+            assertEquals("run-2", run.id(), "ids go on from the stored runs");
+            assertSame(restored, service.previous(run), "a stored run to compare with");
+            assertTrue(RunDiff.diff(restored.result(), run.result(), null).toString().contains("x.A.get()"));
             assertTrue(run.result().elementAnnotations().stream().anyMatch(e -> "x.A.inc()".equals(e.fqn())));
         }
     }

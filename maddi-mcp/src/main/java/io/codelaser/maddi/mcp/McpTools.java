@@ -54,8 +54,10 @@ public final class McpTools {
     public static final String INSTRUCTIONS = """
             maddi analyses Java (and Kotlin) code for modification and immutability: which methods modify their \
             object or parameters, which fields are modified, which types are immutable, and contract violations. \
-            Workflow: configure_project once, analyze (returns a run id at once; a large project takes minutes), \
-            run_status with waitSeconds until FINISHED, then verdicts / explain / findings. Every answer carries a \
+            Workflow: configure_project once (projects and finished runs are stored, and survive a restart), \
+            analyze (returns a run id at once; a large project takes minutes), run_status with waitSeconds until \
+            FINISHED, then overview, verdicts / explain / element_at / findings, and after an edit and a new run, \
+            diff_runs. A stored run says when it was analysed and how many sources changed since. Every answer carries a \
             certainty: only FINAL values are certified; PROVISIONAL and BEST_AVAILABLE values hold but may be \
             weaker than the code allows, so never present them as final. Analyse compiled projects: sources \
             resolve against class files.""";
@@ -122,7 +124,18 @@ public final class McpTools {
         out.add(tool("stop_run", "Stop a run. The values it streamed so far stay queryable, as PROVISIONAL.",
                 """
                         {"type":"object","properties":{"runId":{"type":"string","description":"default: the latest run"}}}""",
-                (a, x, t) -> service.stop(a.string("runId")).describe()));
+                (a, x, t) -> service.describe(service.stop(a.string("runId")))));
+        out.add(tool("overview", """
+                        The state of a project, a package ('a.b.') or a type in one answer: types grouped by \
+                        immutability level (strongest first), methods that modify (and those that modify only the \
+                        hidden content: the objects they hold, not their own structure), modified fields and \
+                        parameters, findings by category, and per package when there are several. Start here.""",
+                """
+                        {"type":"object","properties":{
+                          "project":{"type":"string"},
+                          "element":{"type":"string","description":"a package ('a.b.'), a type, or none for all"},
+                          "limit":{"type":"integer","description":"names listed per group; default 30"}
+                        }}""", this::overview));
         out.add(tool("verdicts", """
                         The analyzer's annotations on elements: @Modified/@NotModified methods, fields and parameters, \
                         @Immutable/@FinalFields/@Container types, @Independent, @NotNull, ... Select by element (a \
@@ -267,12 +280,12 @@ public final class McpTools {
                 a.strings("packages"), a.bool("allowStale"));
         int wait = a.integer("waitSeconds", 0);
         if (wait > 0) service.await(run.id(), Math.min(wait, 600), r -> progress(x, token, r));
-        return run.describe();
+        return service.describe(run);
     }
 
     private Object status(Args a, McpSyncServerExchange x, Object token) throws Exception {
         int wait = Math.min(a.integer("waitSeconds", 0), 600);
-        return service.await(a.string("runId"), wait, r -> progress(x, token, r)).describe();
+        return service.describe(service.await(a.string("runId"), wait, r -> progress(x, token, r)));
     }
 
     private static void progress(McpSyncServerExchange exchange, Object token, AnalysisRun run) {
@@ -293,6 +306,14 @@ public final class McpTools {
                 a.string("kind"), a.string("file"), a.string("annotation"));
         Map<String, Object> out = header(run);
         page(out, "elements", selected.stream().map(Verdicts::brief).toList(), a);
+        return out;
+    }
+
+    private Object overview(Args a, McpSyncServerExchange x, Object token) {
+        AnalysisRun run = service.resultsOf(a.string("project"));
+        Map<String, Object> out = header(run);
+        if (a.string("element") != null) out.put("element", a.string("element"));
+        out.putAll(Overview.of(requireResult(run), a.string("element"), Math.max(1, a.integer("limit", 30))));
         return out;
     }
 
@@ -394,6 +415,7 @@ public final class McpTools {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("runId", run.id());
         out.put("state", run.state().name());
+        if (run.finishedAt() != null) out.put("analysedAt", run.finishedAt());
         out.putAll(Verdicts.certaintyOf(run.certainty(), run.state() == AnalysisRun.State.STOPPED));
         return out;
     }

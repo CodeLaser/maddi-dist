@@ -97,6 +97,65 @@ public final class ProjectStore {
         return out;
     }
 
+    /** Store an ended run, and drop the project's oldest beyond {@code keep}. */
+    public void saveRun(AnalysisRun.Snapshot run, int keep) throws IOException {
+        Path dir = runsOf(run.project());
+        Files.createDirectories(dir);
+        Path file = dir.resolve(safe(run.id()) + ".json");
+        Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+        mapper.writeValue(tmp.toFile(), run);
+        Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        List<Path> stored = runFiles(dir);
+        for (int i = 0; i < stored.size() - keep; i++) Files.deleteIfExists(stored.get(i));
+    }
+
+    /** Every stored run, oldest first; one that cannot be read is skipped, and named in {@code problems}. */
+    public List<AnalysisRun.Snapshot> loadRuns(List<String> problems) {
+        List<AnalysisRun.Snapshot> out = new ArrayList<>();
+        Path runs = directory.resolve("runs");
+        if (!Files.isDirectory(runs)) return out;
+        try (var projects = Files.list(runs)) {
+            for (Path dir : projects.filter(Files::isDirectory).toList()) {
+                for (Path file : runFiles(dir)) {
+                    try {
+                        out.add(mapper.readValue(file.toFile(), AnalysisRun.Snapshot.class));
+                    } catch (IOException e) {
+                        problems.add(file + ": " + e.getMessage());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            problems.add(runs + ": " + e.getMessage());
+        }
+        out.sort(java.util.Comparator.comparing(r -> r.finishedAt() == null ? "" : r.finishedAt()));
+        return out;
+    }
+
+    /* oldest first, by the run's number: run-9 before run-10 */
+    private static List<Path> runFiles(Path dir) throws IOException {
+        try (var files = Files.list(dir)) {
+            return files.filter(f -> f.getFileName().toString().matches("run-\\d+\\.json"))
+                    .sorted(java.util.Comparator.comparingLong(ProjectStore::runNumber)).toList();
+        }
+    }
+
+    /** The number of a run id ({@code run-12}: 12), or 0. */
+    public static long runNumber(Path file) {
+        return runNumber(file.getFileName().toString().replace(".json", ""));
+    }
+
+    public static long runNumber(String runId) {
+        try {
+            return Long.parseLong(runId.substring(runId.lastIndexOf('-') + 1));
+        } catch (RuntimeException e) {
+            return 0;
+        }
+    }
+
+    private Path runsOf(String project) {
+        return directory.resolve("runs").resolve(safe(project));
+    }
+
     /** Where the output of a project's regeneration goes. */
     public Path logOf(String name) {
         return directory.resolve(safe(name) + ".regenerate.log");
