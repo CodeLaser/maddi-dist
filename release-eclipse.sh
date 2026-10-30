@@ -8,6 +8,8 @@
 #      names; it never changes, and a new release only adds a child.
 #   2. the same repository as a zip, maddi-eclipse-<version>.zip, on maddi's GitHub release beside the CLI zips, for
 #      offline installs (Install New Software > Add > Archive).
+#   3. the IDE user guide (docs/ide-user-guide.md) of this release, as the site's front page <site>/index.html: the
+#      link the marketplace listings and the plugins name. Rendered by GitHub's Markdown API.
 #
 # Usage:     ./release-eclipse.sh <tag>          e.g.  ./release-eclipse.sh v0.9.6
 # Requires:  an authenticated `gh`, git push rights on the site repository, a JDK on PATH, and Maven 3.9 (Maven
@@ -124,11 +126,57 @@ composite "$SITE/compositeArtifacts.xml" compositeArtifactRepository \
 printf 'version=1\nmetadata.repository.factory.order=compositeContent.xml,\\!\nartifact.repository.factory.order=compositeArtifacts.xml,\\!\n' \
     > "$SITE/p2.index"
 
-git -C "$WORK/site" add -A
-git -C "$WORK/site" commit --quiet -m "Eclipse update site: maddi $VERSION"
 OWNER=${SITE_REPO%%/*}
 NAME=${SITE_REPO#*/}
-SITE_URL="https://$(echo "$OWNER" | tr '[:upper:]' '[:lower:]').github.io/$NAME/eclipse/"
+PAGES_URL="https://$(echo "$OWNER" | tr '[:upper:]' '[:lower:]').github.io/$NAME/"
+SITE_URL="${PAGES_URL}eclipse/"
+
+# The site's front page is the IDE user guide, of this release: the stable link the marketplace listings and the
+# plugins' settings name. GitHub renders the Markdown (its API, as on github.com: the same tables and code), since
+# .nojekyll switches off the rendering Pages would otherwise do.
+echo "==> Rendering docs/ide-user-guide.md as the site's front page"
+GUIDE=$(gh api -X POST markdown -f mode=gfm -F text=@docs/ide-user-guide.md)
+cat > "$WORK/site/index.html" <<EOF
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>maddi in the IDE</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1f2328; --bg: #fff; --muted: #59636e; --line: #d1d9e0; --code: #f6f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6edf3; --bg: #0d1117; --muted: #9198a1; --line: #3d444d; --code: #151b23; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1, h2, h3 { line-height: 1.25; margin: 1.6em 0 0.6em; }
+  h1 { font-size: 2em; margin-top: 0; padding-bottom: 0.3em; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--line); }
+  a { color: #0969da; }
+  @media (prefers-color-scheme: dark) { a { color: #4493f8; } }
+  code { font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code);
+         padding: 0.2em 0.4em; border-radius: 6px; }
+  table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1em 0; }
+  th, td { border: 1px solid var(--line); padding: 6px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--code); }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.9em; border-top: 1px solid var(--line);
+           padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+$GUIDE
+<footer>maddi $VERSION · Eclipse update site: <a href="eclipse/">${SITE_URL}</a> ·
+<a href="https://github.com/$RELEASE_REPO">source</a></footer>
+</main>
+</body>
+</html>
+EOF
+
+git -C "$WORK/site" add -A
+git -C "$WORK/site" commit --quiet -m "Eclipse update site and user guide: maddi $VERSION"
 
 if [[ "${DRY_RUN:-0}" == 1 ]]; then
     echo "==> DRY_RUN: not pushing gh-pages, not uploading $SITE_ZIP. The prepared site:"
