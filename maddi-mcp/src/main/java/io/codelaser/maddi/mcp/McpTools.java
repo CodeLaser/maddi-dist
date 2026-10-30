@@ -19,6 +19,7 @@ package io.codelaser.maddi.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
@@ -62,15 +63,23 @@ public final class McpTools {
     public List<McpServerFeatures.SyncToolSpecification> specifications() {
         List<McpServerFeatures.SyncToolSpecification> out = new ArrayList<>();
         out.add(tool("configure_project", """
-                        Configure a project to analyse. Either give inputConfiguration, the file written by the maddi \
-                        Gradle plugin's writeInputConfiguration task (build/inputConfiguration.json) or the Maven \
-                        plugin's write-input-configuration goal: it carries every source set with its own class path. \
-                        Or name the directories yourself (any build): workingDirectory, sourceDirectories, classPath \
-                        (jars and class directories), optional test directories. Compile the project first.""",
+                        Configure a project to analyse; it is stored, and survives a restart of this server. Either \
+                        give inputConfiguration, the file written by the maddi Gradle plugin's \
+                        maddi-write-input-configuration task (build/inputConfiguration.json), the Maven plugin's \
+                        maddi:write-input-configuration goal (target/inputConfiguration.json) or the CLI's \
+                        --write-input-configuration: it carries every source set with its own class path, and the \
+                        hashes of the build files that shaped it. Each analyze checks those hashes, and when one \
+                        changed computes the configuration again: with the plugin's task or goal, or with the \
+                        'regenerate' command given here (needed for a CLI-written file). Or name the directories \
+                        yourself (any build): workingDirectory, sourceDirectories, classPath (jars and class \
+                        directories), optional test directories; a change to its Gradle or Maven files is then noticed \
+                        but cannot be redone. Compile the project first.""",
                 """
                         {"type":"object","properties":{
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
                           "inputConfiguration":{"type":"string","description":"path of an inputConfiguration.json"},
+                          "regenerate":{"type":"array","items":{"type":"string"},"description":"a command that writes the inputConfiguration file again; default: the plugin's task or goal"},
+                          "regenerateDirectory":{"type":"string","description":"where to run it; default: the build's root"},
                           "workingDirectory":{"type":"string","description":"project root; relative paths resolve against it"},
                           "sourceDirectories":{"type":"array","items":{"type":"string"}},
                           "testSourceDirectories":{"type":"array","items":{"type":"string"}},
@@ -82,7 +91,10 @@ public final class McpTools {
                           "jdkModules":{"type":"array","items":{"type":"string"},"description":"default: every java.* module of the JDK"},
                           "sourceEncoding":{"type":"string","description":"default UTF-8"}
                         }}""", this::configure));
-        out.add(tool("list_projects", "The configured projects, their source sets and their last run.",
+        out.add(tool("list_projects", """
+                        The configured projects (stored: they survive a restart), their source sets, whether their \
+                        build files still match the configuration (FRESH, STALE, UNCHECKED), how they would be \
+                        computed again, and their last run.""",
                 "{\"type\":\"object\",\"properties\":{}}", (a, x, t) -> Map.of("projects", service.projects())));
         out.add(tool("analyze", """
                         Start an analysis of a configured project, or of part of it, and return its run id at once: \
@@ -95,7 +107,8 @@ public final class McpTools {
                           "project":{"type":"string","description":"default: the only project configured, else 'default'"},
                           "sourceSets":{"type":"array","items":{"type":"string"}},
                           "packages":{"type":"array","items":{"type":"string"}},
-                          "waitSeconds":{"type":"integer","description":"wait this long for the run to finish before answering; default 0"}
+                          "waitSeconds":{"type":"integer","description":"wait this long for the run to finish before answering; default 0"},
+                          "allowStale":{"type":"boolean","description":"analyse with a stale configuration that cannot be computed again, rather than fail"}
                         }}""", this::analyze));
         out.add(tool("run_status", """
                         The state of a run (RUNNING, FINISHED, FAILED, STOPPED), its progress, certainty and a summary \
@@ -216,10 +229,26 @@ public final class McpTools {
     private Object configure(Args a, McpSyncServerExchange x, Object token) throws Exception {
         String project = a.string("project", "default");
         String inputConfiguration = a.string("inputConfiguration");
-        AnalysisModel.AnalyzeConfig config;
+        String now = java.time.Instant.now().toString();
         if (inputConfiguration != null) {
-            config = ProjectConfigs.fromInputConfiguration(Path.of(inputConfiguration), service.mapper());
-        } else {
+            Path file = Path.of(inputConfiguration).toAbsolutePath().normalize();
+            AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromInputConfiguration(file, service.mapper());
+            BuildFiles buildFiles = ProjectConfigs.buildFilesOf(file, service.mapper());
+            ProjectStore.Regenerate regenerate;
+            List<String> command = a.strings("regenerate");
+            if (!command.isEmpty()) {
+                String dir = a.string("regenerateDirectory");
+                regenerate = new ProjectStore.Regenerate(command, dir != null ? dir
+                        : buildFiles != null && buildFiles.root() != null ? buildFiles.root() : config.workingDirectory());
+            } else {
+                regenerate = ProjectConfigs.defaultRegenerate(buildFiles, file);
+            }
+            return service.configure(new ProjectStore.StoredProject(project,
+                    ProjectStore.StoredProject.INPUT_CONFIGURATION, file.toString(), regenerate, buildFiles, now,
+                    config));
+        }
+        AnalysisModel.AnalyzeConfig config;
+        {
             String workingDirectory = a.string("workingDirectory");
             if (workingDirectory == null) {
                 throw new IllegalArgumentException("give inputConfiguration, or workingDirectory and sourceDirectories");
@@ -229,12 +258,13 @@ public final class McpTools {
                     a.strings("testClassPath"), a.string("outputDirectory"), a.integer("sourceRelease", 0),
                     a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
         }
-        return service.configure(project, config);
+        return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.DIRECTORIES,
+                null, null, BuildFileCheck.capture(config), now, config));
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
         AnalysisRun run = service.analyze(a.string("project"), a.strings("sourceSets"),
-                a.strings("packages"));
+                a.strings("packages"), a.bool("allowStale"));
         int wait = a.integer("waitSeconds", 0);
         if (wait > 0) service.await(run.id(), Math.min(wait, 600), r -> progress(x, token, r));
         return run.describe();
@@ -398,6 +428,11 @@ public final class McpTools {
             if (value instanceof Number n) return n.intValue();
             if (value instanceof String s && !s.isBlank()) return Integer.parseInt(s.strip());
             return orElse;
+        }
+
+        boolean bool(String key) {
+            Object value = map.get(key);
+            return value instanceof Boolean b ? b : value != null && Boolean.parseBoolean(value.toString());
         }
 
         List<String> strings(String key) {

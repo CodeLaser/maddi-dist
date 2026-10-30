@@ -45,6 +45,8 @@ public final class AnalysisRun {
     private int lastIteration = -1;
     private String error;
     private long endNanos;
+    private String configuration;
+    private Process process;
 
     public AnalysisRun(String id, String project) {
         this(id, project, Map.of());
@@ -93,6 +95,23 @@ public final class AnalysisRun {
         notifyAll();
     }
 
+    /** A step before the analysis proper (checking or regenerating the configuration), as a status frame would say. */
+    synchronized void phase(String phase, String message) {
+        lastStatus = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+                .put("phase", phase).put("message", message);
+        notifyAll();
+    }
+
+    /** What became of the stored configuration: used as it was, regenerated, or used although stale. */
+    synchronized void configuration(String note) {
+        configuration = note;
+    }
+
+    /** The process this run waits for before the analysis, which {@link #stop()} must end too; null when done. */
+    synchronized void attach(Process process) {
+        this.process = process;
+    }
+
     /** The terminal frame: {@code result} or {@code error}. */
     synchronized void onEnd(JsonNode frame, ObjectMapper mapper) {
         if ("result".equals(frame.path("type").asText())) {
@@ -122,6 +141,10 @@ public final class AnalysisRun {
     /** Called before the daemon is killed, so the failure the kill causes reads as the stop it is. */
     synchronized void stop() {
         if (state != State.RUNNING) return;
+        if (process != null) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
         state = State.STOPPED;
         endNanos = System.nanoTime();
         notifyAll();
@@ -167,6 +190,7 @@ public final class AnalysisRun {
             }
             out.put("progress", progress);
         }
+        if (configuration != null) out.put("configuration", configuration);
         if (lastIteration >= 0 && state != State.FINISHED) out.put("passesStreamed", lastIteration + 1);
         if (error != null) out.put("error", error);
         out.putAll(Verdicts.certaintyOf(certainty(), state == State.STOPPED));

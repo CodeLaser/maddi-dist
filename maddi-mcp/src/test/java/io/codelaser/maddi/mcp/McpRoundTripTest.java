@@ -81,7 +81,7 @@ public class McpRoundTripTest {
         toServer = clientOut;
         fromServer = new BufferedReader(new InputStreamReader(clientIn, StandardCharsets.UTF_8));
 
-        try (MaddiService service = new MaddiService(settings(dir))) {
+        try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
             McpSyncServer server = McpMain.start(service, serverIn, serverOut);
             try {
                 JsonNode init = request("initialize", Map.of("protocolVersion", "2025-06-18",

@@ -102,18 +102,26 @@ that maddi's Kotlin translation can be compared with it.
 
 `maddi-mcp` is an [MCP](https://modelcontextprotocol.io) server on stdin/stdout, for a coding agent to configure a
 project, analyse all or part of it, and ask for the verdicts. It drives the same daemon as the IDE plugins, bundled
-in its `daemon/` directory, and needs a JDK 25 or later for it: the one it runs on, or `--jdk`. Not released yet;
+in its `daemon/` directory. It runs on a JDK 25 or later, as the daemon does: by default the daemon uses the same one,
+or the one `--jdk` names. Not released yet;
 build it with `./gradlew :maddi-mcp:installDist` and register `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`
 with the agent, for example `claude mcp add maddi -- <that path>`.
 
 | Tool | Does |
 |---|---|
-| `configure_project` | from the Gradle plugin's `build/inputConfiguration.json` (task `writeInputConfiguration`), the Maven plugin's equivalent, or directories and a class path |
+| `configure_project`, `list_projects` | from an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`), or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
 | `element_at` | the element at a file and line, explained |
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
 | `library_annotations` | what the last run knows of JDK and library types |
+
+A configured project is stored (in `~/.maddi/mcp`, or `--store`), with the hashes of the build files that shaped
+it, and survives a restart. Every run first hashes those files again. When one changed, the configuration is
+computed again before the run: with the plugin's task or goal, or with the command given at configuration (a
+CLI-written file needs one). Computing it for a large build takes minutes; this way it happens only when the build
+changed. A project configured from directories has no such command: a change to its Gradle or Maven files fails
+the run, unless `analyze` is told `allowStale`.
 
 Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
 stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.

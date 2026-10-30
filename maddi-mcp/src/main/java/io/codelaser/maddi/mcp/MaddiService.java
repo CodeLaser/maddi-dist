@@ -55,13 +55,19 @@ public final class MaddiService implements Closeable {
         return t;
     });
     private final AtomicInteger runCounter = new AtomicInteger();
-    private final Map<String, AnalysisModel.AnalyzeConfig> projects = new LinkedHashMap<>();
+    private final ProjectStore store;
+    private final Map<String, ProjectStore.StoredProject> projects = new LinkedHashMap<>();
     private final Map<String, AnalysisRun> lastRuns = new LinkedHashMap<>();
     private final Map<String, AnalysisRun> runs = new LinkedHashMap<>();
     private AnalysisRun current;
 
-    public MaddiService(DaemonSettings settings) {
+    /** @param storeDirectory where the configured projects are kept; those already there are loaded */
+    public MaddiService(DaemonSettings settings, Path storeDirectory) {
         this.settings = settings;
+        this.store = new ProjectStore(storeDirectory, mapper);
+        List<String> problems = new ArrayList<>();
+        for (ProjectStore.StoredProject p : store.loadAll(problems)) projects.put(p.name(), p);
+        for (String problem : problems) System.err.println("maddi-mcp: cannot read stored project " + problem);
     }
 
     public ObjectMapper mapper() {
@@ -70,35 +76,51 @@ public final class MaddiService implements Closeable {
 
     // ---- projects ----
 
-    public synchronized Map<String, Object> configure(String name, AnalysisModel.AnalyzeConfig config)
-            throws IOException {
-        ProjectConfigs.check(config);
-        if (config.jmods() == null || config.jmods().isEmpty()) {
-            Path jdk = config.sdkHome() != null ? Path.of(config.sdkHome()) : settings.jdkHome();
-            config = new AnalysisModel.AnalyzeConfig(config.workingDirectory(), config.sdkHome(),
-                    config.sourceEncoding(), ProjectConfigs.jdkModules(jdk), config.sources(), config.classpath(),
-                    config.restrictToPackages(), config.parallel(), config.warnNearMisses(),
-                    config.moduleSourceSets());
-        }
-        projects.put(name, config);
-        lastRuns.remove(name); // its verdicts were of another configuration
-        return describeProject(name, config);
+    /** Configure (or configure again) a project, and store it. */
+    public synchronized Map<String, Object> configure(ProjectStore.StoredProject project) throws IOException {
+        ProjectStore.StoredProject complete = project.with(withJdkModules(project.config()), project.buildFiles());
+        ProjectConfigs.check(complete.config());
+        store.save(complete);
+        projects.put(complete.name(), complete);
+        lastRuns.remove(complete.name()); // its verdicts were of another configuration
+        return describeProject(complete, BuildFileCheck.check(complete.buildFiles(), complete.config()));
     }
 
+    private AnalysisModel.AnalyzeConfig withJdkModules(AnalysisModel.AnalyzeConfig config) throws IOException {
+        if (config.jmods() != null && !config.jmods().isEmpty()) return config;
+        Path jdk = config.sdkHome() != null ? Path.of(config.sdkHome()) : settings.jdkHome();
+        return new AnalysisModel.AnalyzeConfig(config.workingDirectory(), config.sdkHome(), config.sourceEncoding(),
+                ProjectConfigs.jdkModules(jdk), config.sources(), config.classpath(), config.restrictToPackages(),
+                config.parallel(), config.warnNearMisses(), config.moduleSourceSets());
+    }
+
+    /** The configured projects, each with whether its build files still match its configuration. */
     public synchronized List<Map<String, Object>> projects() {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (var entry : projects.entrySet()) {
-            Map<String, Object> m = describeProject(entry.getKey(), entry.getValue());
-            AnalysisRun run = lastRuns.get(entry.getKey());
+        for (ProjectStore.StoredProject project : projects.values()) {
+            Map<String, Object> m = describeProject(project,
+                    BuildFileCheck.check(project.buildFiles(), project.config()));
+            AnalysisRun run = lastRuns.get(project.name());
             if (run != null) m.put("lastRun", run.id() + " " + run.state() + " " + run.certainty());
             out.add(m);
         }
         return out;
     }
 
-    private static Map<String, Object> describeProject(String name, AnalysisModel.AnalyzeConfig config) {
+    public Path storeDirectory() {
+        return store.directory();
+    }
+
+    private static Map<String, Object> describeProject(ProjectStore.StoredProject project,
+                                                       BuildFileCheck.Freshness freshness) {
+        AnalysisModel.AnalyzeConfig config = project.config();
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("project", name);
+        out.put("project", project.name());
+        out.put("from", project.sourceFile() != null ? project.sourceFile() : project.kind());
+        out.put("configuredAt", project.configuredAt());
+        out.putAll(freshness.describe());
+        out.put("regenerate", project.regenerate() == null ? "none: configure again when the build changes"
+                : String.join(" ", project.regenerate().command()));
         out.put("workingDirectory", config.workingDirectory());
         if (config.sdkHome() != null) out.put("sdkHome", config.sdkHome());
         List<Map<String, Object>> sets = new ArrayList<>();
@@ -122,15 +144,16 @@ public final class MaddiService implements Closeable {
      * Start an analysis of (part of) a project; returns at once with the run, which goes on in the background.
      * {@code project} null: the only project configured, or else the one named {@code default}.
      */
-    public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages) {
+    public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages,
+                                            boolean allowStale) {
         if (project == null) project = projects.size() == 1 ? projects.keySet().iterator().next() : "default";
-        AnalysisModel.AnalyzeConfig config = projects.get(project);
-        if (config == null) throw new IllegalArgumentException("no project '" + project + "'; configure it first");
+        ProjectStore.StoredProject stored = projects.get(project);
+        if (stored == null) throw new IllegalArgumentException("no project '" + project + "'; configure it first");
         if (current != null && current.state() == AnalysisRun.State.RUNNING) {
             throw new IllegalStateException("run " + current.id() + " of project " + current.project()
                                             + " is still going on: wait for it, or stop it");
         }
-        AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(config, sourceSets, packages);
+        ProjectConfigs.part(stored.config(), sourceSets, packages); // refuses unknown source sets now, not later
         Map<String, Object> scope = new LinkedHashMap<>();
         if (!sourceSets.isEmpty()) scope.put("sourceSets", List.copyOf(sourceSets));
         if (!packages.isEmpty()) scope.put("packages", List.copyOf(packages));
@@ -139,7 +162,7 @@ public final class MaddiService implements Closeable {
         runs.put(run.id(), run);
         forgetOldRuns();
         lastRuns.put(project, run);
-        runner.execute(() -> execute(run, request));
+        runner.execute(() -> execute(run, stored, sourceSets, packages, allowStale));
         return run;
     }
 
@@ -167,14 +190,84 @@ public final class MaddiService implements Closeable {
         return null;
     }
 
-    private void execute(AnalysisRun run, AnalysisModel.AnalyzeConfig request) {
+    private void execute(AnalysisRun run, ProjectStore.StoredProject stored, List<String> sourceSets,
+                         List<String> packages, boolean allowStale) {
         try {
+            ProjectStore.StoredProject project = upToDate(run, stored, allowStale);
+            if (project == null) return; // the run has failed, saying why
+            AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages);
+            run.phase("analyze", "starting the daemon");
             daemon.ensureStarted(settings.installDir(), settings.jdkHome(), settings.xmxMb(), settings.logFile());
             JsonNode end = daemon.analyze(run.id(), request, frame -> run.onFrame(frame, mapper));
             run.onEnd(end, mapper);
         } catch (IOException | RuntimeException e) {
             run.fail(e.getMessage() == null ? e.toString() : e.getMessage()); // after a stop: already STOPPED
         }
+    }
+
+    /**
+     * The project's configuration, computed again first when its build files changed and it knows how; null when the
+     * run cannot go on, having failed it.
+     */
+    private ProjectStore.StoredProject upToDate(AnalysisRun run, ProjectStore.StoredProject project,
+                                                boolean allowStale) throws IOException {
+        run.phase("configure", "checking the build files");
+        BuildFileCheck.Freshness freshness = BuildFileCheck.check(project.buildFiles(), project.config());
+        if (freshness.state() != BuildFileCheck.State.STALE) {
+            run.configuration(freshness.state() == BuildFileCheck.State.FRESH ? "stored, build files unchanged"
+                    : "stored; no build files recorded, so not checked");
+            return project;
+        }
+        String changed = String.join(", ", freshness.changed().subList(0, Math.min(5, freshness.changed().size())))
+                         + (freshness.changed().size() > 5 ? ", ..." : "");
+        if (project.regenerate() == null) {
+            if (allowStale) {
+                run.configuration("STALE, analysed anyway: " + changed);
+                return project;
+            }
+            run.fail("the build files changed since the project was configured (" + changed + ") and this project"
+                     + " has no command to compute its configuration again: configure it again, or pass allowStale");
+            return null;
+        }
+        run.phase("configure", "regenerating the configuration: " + changed + " changed");
+        Path log = store.logOf(project.name());
+        ProjectStore.Regenerate regenerate = project.regenerate();
+        Process process = new ProcessBuilder(regenerate.command())
+                .directory(regenerate.directory() == null ? null : Path.of(regenerate.directory()).toFile())
+                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        run.attach(process);
+        int exit;
+        try {
+            exit = process.waitFor();
+        } catch (InterruptedException e) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+            run.fail("interrupted while regenerating the configuration");
+            return null;
+        } finally {
+            run.attach(null);
+        }
+        if (run.state() != AnalysisRun.State.RUNNING) return null; // stopped
+        if (exit != 0) {
+            run.fail("regenerating the configuration failed (exit " + exit + ", " + String.join(" ", regenerate.command())
+                     + "); its output is in " + log);
+            return null;
+        }
+        Path file = Path.of(project.sourceFile());
+        ProjectStore.StoredProject fresh = project.with(
+                withJdkModules(ProjectConfigs.fromInputConfiguration(file, mapper)),
+                ProjectConfigs.buildFilesOf(file, mapper));
+        ProjectConfigs.check(fresh.config());
+        synchronized (this) {
+            store.save(fresh);
+            projects.put(fresh.name(), fresh);
+        }
+        BuildFileCheck.Freshness after = BuildFileCheck.check(fresh.buildFiles(), fresh.config());
+        run.configuration("regenerated, as " + changed + " changed"
+                          + (after.state() == BuildFileCheck.State.STALE
+                ? "; its build files still differ from the recorded ones (" + after.changed().size()
+                  + "), so it will be regenerated on every run until the producer records them" : ""));
+        return fresh;
     }
 
     /**
@@ -205,7 +298,7 @@ public final class MaddiService implements Closeable {
     public AnalysisRun stop(String runId) {
         AnalysisRun run = run(runId);
         if (run.state() != AnalysisRun.State.RUNNING) return run;
-        run.stop();
+        run.stop(); // kills the regeneration, if that is what is going on
         daemon.kill();
         return run;
     }

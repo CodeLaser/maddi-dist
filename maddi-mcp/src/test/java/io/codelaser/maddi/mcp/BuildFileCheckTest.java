@@ -1,0 +1,94 @@
+/*
+ * maddi: a modification analyzer for duplication detection and immutability.
+ * Copyright 2020-2026, CodeLaser BV, https://github.com/CodeLaser/maddi
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.codelaser.maddi.mcp;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class BuildFileCheckTest {
+
+    private static AnalysisModel.AnalyzeConfig config(Path root) {
+        return ProjectConfigs.fromDirectories(root, List.of("a/src/main/java"), List.of(), List.of(), List.of(),
+                null, 0, null, List.of("java.base"), null);
+    }
+
+    @Test
+    public void whatChangedSinceTheCapture(@TempDir Path root) throws Exception {
+        Files.writeString(root.resolve("settings.gradle.kts"), "include(\"a\")\n");
+        Path a = Files.createDirectories(root.resolve("a"));
+        Files.writeString(a.resolve("build.gradle.kts"), "plugins { java }\n");
+        Path sources = Files.createDirectories(a.resolve("src/main/java"));
+        Files.createDirectories(a.resolve("build"));
+        Files.writeString(a.resolve("build/build.gradle.kts"), "output, never a build file\n");
+        BuildFiles recorded = BuildFilesCapture.capture(BuildFiles.GRADLE_PLUGIN, root, BuildFiles.GRADLE_GLOBS,
+                List.of());
+        assertEquals(List.of("a/build.gradle.kts", "settings.gradle.kts"), List.copyOf(recorded.sha256().keySet()));
+
+        assertEquals(BuildFileCheck.State.FRESH, BuildFileCheck.check(recorded, config(root)).state());
+
+        Files.writeString(a.resolve("build.gradle.kts"), "plugins { java; `java-library` }\n");
+        Files.writeString(a.resolve("build/build.gradle.kts"), "still output\n");
+        assertEquals(List.of("a/build.gradle.kts (changed)"), BuildFileCheck.check(recorded, config(root)).changed());
+
+        Files.createDirectories(root.resolve("b"));
+        Files.writeString(root.resolve("b/build.gradle.kts"), "plugins { java }\n");
+        Files.delete(root.resolve("settings.gradle.kts"));
+        Files.writeString(sources.resolve("module-info.java"), "module a {}\n");
+        BuildFileCheck.Freshness freshness = BuildFileCheck.check(recorded, config(root));
+        assertEquals(BuildFileCheck.State.STALE, freshness.state());
+        assertEquals(List.of("a/build.gradle.kts (changed)", "settings.gradle.kts (gone)", "b/build.gradle.kts (new)",
+                "a/src/main/java/module-info.java (new)"), freshness.changed());
+    }
+
+    @Test
+    public void nothingRecordedNothingChecked(@TempDir Path root) {
+        assertEquals(BuildFileCheck.State.UNCHECKED, BuildFileCheck.check(null, config(root)).state());
+    }
+
+    @Test
+    public void regenerationFollowsTheProducer(@TempDir Path root) throws Exception {
+        Path project = Files.createDirectories(root.resolve("a"));
+        Files.writeString(root.resolve("gradlew"), "#!/bin/sh\n");
+        assertTrue(root.resolve("gradlew").toFile().setExecutable(true));
+        BuildFiles gradle = new BuildFiles(BuildFiles.GRADLE_PLUGIN, root.toString(), List.of(), java.util.Map.of(),
+                "now");
+        ProjectStore.Regenerate regenerate = ProjectConfigs.defaultRegenerate(gradle,
+                project.resolve("build/inputConfiguration.json"));
+        assertNotNull(regenerate);
+        assertEquals(List.of(root.resolve("gradlew").toString(), "-q", "-p", project.toString(),
+                ProjectConfigs.GRADLE_TASK), regenerate.command(), "the build's wrapper, in the project");
+
+        BuildFiles maven = new BuildFiles(BuildFiles.MAVEN_PLUGIN, root.toString(), List.of(), java.util.Map.of(),
+                "now");
+        assertEquals(List.of("mvn", "-q", "-f", project.resolve("pom.xml").toString(), ProjectConfigs.MAVEN_GOAL),
+                ProjectConfigs.defaultRegenerate(maven, project.resolve("target/inputConfiguration.json")).command(),
+                "no wrapper: the tool on the PATH");
+
+        BuildFiles cli = new BuildFiles(BuildFiles.COMPILE_LOG, root.toString(), List.of(), java.util.Map.of(), "now");
+        assertNull(ProjectConfigs.defaultRegenerate(cli, root.resolve("x.json")), "only a given command can");
+    }
+}

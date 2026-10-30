@@ -41,6 +41,7 @@ import java.util.concurrent.CountDownLatch;
  *   --jdk DIR              MADDI_JDK_HOME         a JDK 25+ to run the daemon on; default: this JVM's, if 25+
  *   --xmx-mb N             MADDI_DAEMON_XMX_MB    the daemon's heap; default: the JVM's default
  *   --log FILE             MADDI_DAEMON_LOG       the daemon's log; default: in the temporary directory
+ *   --store DIR            MADDI_MCP_STORE        where configured projects are kept; default: ~/.maddi/mcp
  * </pre>
  * stdout carries the protocol and nothing else: everything else goes to stderr or the log.
  */
@@ -77,7 +78,11 @@ public final class McpMain {
                 return n;
             }
         };
-        MaddiService service = new MaddiService(settings);
+        String storeOption = option(args, "--store", "MADDI_MCP_STORE");
+        Path store = storeOption != null ? Path.of(storeOption)
+                : Path.of(System.getProperty("user.home"), ".maddi", "mcp");
+        MaddiService service = new MaddiService(settings, store);
+        System.err.println("maddi-mcp: projects stored in " + store);
         McpSyncServer server = start(service, in, System.out);
         Runtime.getRuntime().addShutdownHook(new Thread(service::close));
         closed.await();

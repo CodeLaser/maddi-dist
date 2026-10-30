@@ -16,8 +16,10 @@
  */
 
 // An MCP server (Model Context Protocol, over stdio) for coding agents: configure a project, analyse it, query the
-// verdicts. It drives the IDE daemon through maddi-ide-client, as the IntelliJ and Eclipse plugins do, so it
-// compiles against neither maddi nor maddi-mod. The distribution carries the daemon in daemon/.
+// verdicts. It drives the IDE daemon through maddi-ide-client, as the IntelliJ and Eclipse plugins do; of maddi it
+// compiles against the build-file capture alone (maddi-inspection-resource), to tell when a stored configuration
+// has gone stale. The distribution carries the daemon in daemon/. Java 25, as the daemon: by default it runs on
+// this process's JVM.
 
 plugins {
     id("java-library-conventions")
@@ -25,14 +27,17 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
+
+val maddiVersion: String by project
 
 val mcpSdkVersion = "2.1.0"
 
 dependencies {
     implementation(project(":maddi-ide-client"))
+    implementation("io.codelaser:maddi-inspection-resource:$maddiVersion") // BuildFilesCapture
     implementation("io.modelcontextprotocol.sdk:mcp-core:$mcpSdkVersion")
     implementation("io.modelcontextprotocol.sdk:mcp-json-jackson2:$mcpSdkVersion")
     // stdout is the MCP channel: the SDK's logging goes to stderr, which slf4j-simple writes to by default

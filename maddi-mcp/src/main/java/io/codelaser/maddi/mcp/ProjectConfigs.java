@@ -20,6 +20,7 @@ package io.codelaser.maddi.mcp;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 
 import java.io.IOException;
 import java.net.URI;
@@ -35,8 +36,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The daemon's per-module {@link AnalysisModel.AnalyzeConfig}, built without an IDE: from the
- * {@code inputConfiguration.json} that the Gradle plugin's {@code writeInputConfiguration} task and the Maven
- * plugin's {@code write-input-configuration} goal write, or from directories an agent names (a build with neither
+ * {@code inputConfiguration.json} that the Gradle plugin's {@code maddi-write-input-configuration} task and the
+ * Maven plugin's {@code write-input-configuration} goal write, or from directories an agent names (a build with neither
  * plugin: Ant, a hand-rolled one).
  */
 public final class ProjectConfigs {
@@ -96,6 +97,49 @@ public final class ProjectConfigs {
         return new AnalysisModel.AnalyzeConfig(base.toString(), text(root, "alternativeJREDirectory"),
                 encoding == null ? "UTF-8" : encoding, List.copyOf(jdkModules), List.of(), List.of(), List.of(),
                 false, false, sets);
+    }
+
+    /** The {@code buildFiles} a build tool recorded with the configuration; null when it recorded none. */
+    public static BuildFiles buildFilesOf(Path file, ObjectMapper mapper) throws IOException {
+        JsonNode node = mapper.readTree(file.toFile()).get("buildFiles");
+        return node == null || node.isNull() ? null : mapper.treeToValue(node, BuildFiles.class);
+    }
+
+    /** The Gradle plugin's task that writes {@code build/inputConfiguration.json}. */
+    public static final String GRADLE_TASK = "maddi-write-input-configuration";
+    /** The Maven plugin's goal that writes {@code target/inputConfiguration.json}. */
+    public static final String MAVEN_GOAL = "maddi:write-input-configuration";
+
+    /**
+     * How to write {@code file} again, from who wrote it: the Gradle plugin's task or the Maven plugin's goal, run
+     * in the project whose build directory holds the file, with the build's wrapper when there is one. Null for any
+     * other producer (a compile log, say): then only a command given at configuration can.
+     */
+    public static ProjectStore.Regenerate defaultRegenerate(BuildFiles buildFiles, Path file) {
+        if (buildFiles == null) return null;
+        Path parent = file.toAbsolutePath().normalize().getParent();
+        Path projectDir = parent == null ? null : parent.getParent();
+        if (projectDir == null) return null;
+        Path stop = buildFiles.root() == null ? projectDir : Path.of(buildFiles.root());
+        return switch (buildFiles.declaredBy()) {
+            case BuildFiles.GRADLE_PLUGIN -> !"build".equals(parent.getFileName().toString()) ? null
+                    : new ProjectStore.Regenerate(List.of(wrapper(projectDir, stop, "gradlew", "gradle"), "-q", "-p",
+                    projectDir.toString(), GRADLE_TASK), projectDir.toString());
+            case BuildFiles.MAVEN_PLUGIN -> !"target".equals(parent.getFileName().toString()) ? null
+                    : new ProjectStore.Regenerate(List.of(wrapper(projectDir, stop, "mvnw", "mvn"), "-q", "-f",
+                    projectDir.resolve("pom.xml").toString(), MAVEN_GOAL), projectDir.toString());
+            default -> null;
+        };
+    }
+
+    /* the wrapper script nearest above the project, up to the build's root; else the tool on the PATH */
+    private static String wrapper(Path from, Path root, String script, String tool) {
+        Path stop = root.toAbsolutePath().normalize();
+        for (Path dir = from; dir != null; dir = dir.getParent()) {
+            if (Files.isExecutable(dir.resolve(script))) return dir.resolve(script).toString();
+            if (dir.equals(stop)) break;
+        }
+        return tool;
     }
 
     /**
