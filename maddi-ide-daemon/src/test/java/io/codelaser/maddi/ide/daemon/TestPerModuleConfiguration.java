@@ -143,4 +143,23 @@ public class TestPerModuleConfiguration {
                 "the flat form is supposed to auto-wire every set to every part; if this fails the fallback "
                 + "changed and the per-module assertions above no longer prove a contrast. deps=" + aDeps);
     }
+
+    @Test
+    public void testRestrictToPackagesReachesEverySourceSet() {
+        DaemonProtocol.AnalyzeConfig all = perModuleConfig();
+        DaemonProtocol.AnalyzeConfig restricted = new DaemonProtocol.AnalyzeConfig(all.workingDirectory(),
+                all.sdkHome(), all.sourceEncoding(), all.jmods(), all.sources(), all.classpath(),
+                List.of("com.example.part."), false, false, all.moduleSourceSets());
+        InputConfiguration configuration = new InputConfigurationAssembler().build(restricted);
+
+        // ignored on this path until the MCP server's "analyze part of a project" needed it
+        for (String name : List.of("a/main", "b/main", "b/test")) {
+            SourceSet set = named(configuration, name);
+            assertEquals(Set.of("com.example.part."), set.restrictToPackages(), name);
+            assertTrue(set.acceptSource("com.example.part.x", "X"), name);
+            assertFalse(set.acceptSource("com.example.other", "Y"), name);
+        }
+        assertTrue(named(new InputConfigurationAssembler().build(all), "a/main")
+                .acceptSource("com.example.other", "Y"), "no restriction: every package");
+    }
 }

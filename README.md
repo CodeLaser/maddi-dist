@@ -98,6 +98,24 @@ JVM.
 `maddi-intellij-j2k` is not a plugin. It is a headless starter that runs IntelliJ's own J2K converter on a corpus, so
 that maddi's Kotlin translation can be compared with it.
 
+## Coding agents (MCP)
+
+`maddi-mcp` is an [MCP](https://modelcontextprotocol.io) server on stdin/stdout, for a coding agent to configure a
+project, analyse all or part of it, and ask for the verdicts. It drives the same daemon as the IDE plugins, bundled
+in its `daemon/` directory, and needs a JDK 25 or later for it: the one it runs on, or `--jdk`. Not released yet;
+build it with `./gradlew :maddi-mcp:installDist` and register `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`
+with the agent, for example `claude mcp add maddi -- <that path>`.
+
+| Tool | Does |
+|---|---|
+| `configure_project` | from the Gradle plugin's `build/inputConfiguration.json` (task `writeInputConfiguration`), the Maven plugin's equivalent, or directories and a class path |
+| `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
+| `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
+| `library_annotations` | what the last run knows of JDK and library types |
+
+Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
+stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.
+
 ## Building
 
 Check out the three repositories side by side, as described in maddi's
@@ -107,6 +125,7 @@ Check out the three repositories side by side, as described in maddi's
 ./gradlew build
 ./gradlew :maddi-cli:installDist           # the `maddi` CLI, in maddi-cli/build/install/maddi
 ./gradlew :maddi-ide-daemon:installDist    # the daemon the IDE plugins bundle
+./gradlew :maddi-mcp:installDist           # the MCP server, with that daemon in daemon/
 ```
 
 `release-cli.sh <tag>` builds both zips and publishes them, with their checksums, on the GitHub release for that tag.
