@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * A library file's declarations get the daemon's library elements by declaring type, kind and signature; the
@@ -56,9 +57,13 @@ public class MaddiLibraryTest {
             """;
 
     private static CompilationUnit parse() {
+        return parse(SOURCE, "/lib/Bag.java");
+    }
+
+    private static CompilationUnit parse(String source, String unitName) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setSource(SOURCE.toCharArray());
-        parser.setUnitName("/lib/Bag.java");
+        parser.setSource(source.toCharArray());
+        parser.setUnitName(unitName);
         parser.setEnvironment(null, null, null, true);
         Map<String, String> options = JavaCore.getOptions();
         JavaCore.setComplianceOptions(JavaCore.VERSION_21, options);
@@ -107,5 +112,55 @@ public class MaddiLibraryTest {
                 .beginLine());
         assertEquals("PARAMETER", placed.stream().filter(e -> e.fqn().contains("#1")).findFirst().orElseThrow()
                 .kind());
+    }
+
+    /*
+     A project file's annotations follow their declarations when an edit moves them. Recorded against the source with
+     the class's brace on its first line (the field on line 3), shown on SPLIT, where the brace has its own line: the
+     field's name is on line 4 now, and its hints must go with it, as the methods' must.
+     */
+    private static final String SPLIT = """
+            package p;
+            public class Bag
+            {
+                private final Object items = null;
+                public void add(String item) { }
+                public void gone() { }
+            }
+            """;
+
+    private static AnalysisModel.ElementAnnotation recorded(String kind, String owner, String signature, int line,
+                                                            int col, int length) {
+        return new AnalysisModel.ElementAnnotation("/p/Bag.java", line, col, line, col + length - 1, kind,
+                owner + "." + signature, List.of("@Modified"), List.of(), Map.of(), List.of(), owner, signature);
+    }
+
+    @Test
+    @DisplayName("a project file's annotations are placed on their declarations by name, not by the old position")
+    public void follow() {
+        Document document = new Document(SPLIT);
+        List<AnalysisModel.ElementAnnotation> shown = MaddiLibrary.follow(parse(SPLIT, "/p/Bag.java"), document, List.of(
+                recorded("TYPE", "p.Bag", "p.Bag", 2, 14, 3),
+                recorded("FIELD", "p.Bag", "items", 3, 26, 5),
+                recorded("METHOD", "p.Bag", "add(java.lang.String)", 4, 17, 3),
+                recorded("METHOD", "p.Bag", "clear()", 5, 17, 5),
+                // an older daemon's: no name, so it keeps its position
+                new AnalysisModel.ElementAnnotation("/p/Bag.java", 6, 17, 6, 20, "METHOD", "p.Bag.gone()",
+                        List.of("@NotModified"), List.of(), Map.of())));
+
+        assertEquals(4, shown.size(), shown.toString());
+        assertFalse(shown.stream().anyMatch(a -> a.fqn().endsWith("clear()")), "a declaration that is gone");
+        assertEquals(6, find(shown, "gone()").beginLine());
+        assertEquals(2, find(shown, "p.Bag.p.Bag").beginLine());
+        AnalysisModel.ElementAnnotation items = find(shown, "items");
+        assertEquals(4, items.beginLine());
+        assertEquals(26, items.beginCol());
+        assertEquals(30, items.endCol());
+        assertEquals(5, find(shown, "add(java.lang.String)").beginLine());
+    }
+
+    private static AnalysisModel.ElementAnnotation find(List<AnalysisModel.ElementAnnotation> annotations,
+                                                        String fqnSuffix) {
+        return annotations.stream().filter(a -> a.fqn().endsWith(fqnSuffix)).findFirst().orElseThrow();
     }
 }

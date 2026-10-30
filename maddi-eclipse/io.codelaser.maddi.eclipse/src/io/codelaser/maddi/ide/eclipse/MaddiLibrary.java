@@ -147,6 +147,47 @@ public final class MaddiLibrary {
         Map<String, AnalysisModel.LibraryElement> byKey = new HashMap<>();
         for (AnalysisModel.LibraryElement e : elements) byKey.put(key(e.type(), e.kind(), e.signature()), e);
         List<AnalysisModel.ElementAnnotation> out = new ArrayList<>();
+        declarations(unit, (key, name) -> {
+            AnalysisModel.LibraryElement element = byKey.get(key);
+            int[] at = element == null ? null : position(document, name);
+            if (at != null) out.add(AnalysisModel.place(element, uri, at[0], at[1], at[2], at[3]));
+        });
+        return out;
+    }
+
+    /**
+     * A project file's annotations on its declarations as they are NOW. The positions are those of the source the
+     * analysis read, and stop pointing at the declaration as soon as an edit moves its line (splitting a class's
+     * {@code {} onto a line of its own took the field's hints away). So an element that carries its name (owner and
+     * signature, from a daemon of 0.9.6 on) is placed on the declaration of that name, wherever it is now; one whose
+     * declaration is gone (renamed, deleted) is dropped rather than shown on whatever took its place. What has no
+     * such name (an older daemon, a member of an anonymous or local class) keeps its position. As IntelliJ's
+     * {@code MaddiLibraryPlacement.follow}.
+     */
+    public static List<AnalysisModel.ElementAnnotation> follow(CompilationUnit unit, IDocument document,
+                                                               List<AnalysisModel.ElementAnnotation> annotations) {
+        Set<String> types = new java.util.HashSet<>();
+        declarations(unit, (key, name) -> types.add(key.substring(0, key.indexOf('|'))));
+        Map<String, AnalysisModel.ElementAnnotation> byKey = new HashMap<>();
+        List<AnalysisModel.ElementAnnotation> out = new ArrayList<>();
+        for (AnalysisModel.ElementAnnotation a : annotations) {
+            if (a.owner() != null && a.signature() != null && types.contains(a.owner())) {
+                byKey.put(key(a.owner(), a.kind(), a.signature()), a);
+            } else {
+                out.add(a);
+            }
+        }
+        if (byKey.isEmpty()) return annotations;
+        declarations(unit, (key, name) -> {
+            AnalysisModel.ElementAnnotation a = byKey.get(key);
+            int[] at = a == null ? null : position(document, name);
+            if (at != null) out.add(a.at(at[0], at[1], at[2], at[3]));
+        });
+        return out;
+    }
+
+    /** Every named declaration of the unit, by its key: of a type, its fields, methods and their parameters. */
+    private static void declarations(CompilationUnit unit, java.util.function.BiConsumer<String, SimpleName> sink) {
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(TypeDeclaration node) {
@@ -172,7 +213,7 @@ public final class MaddiLibrary {
                 ITypeBinding binding = node.resolveBinding();
                 if (binding == null || binding.isLocal() || binding.isAnonymous()) return false;
                 String type = binding.getErasure().getQualifiedName();
-                add(out, document, uri, byKey.get(key(type, "TYPE", type)), node.getName());
+                sink.accept(key(type, "TYPE", type), node.getName());
                 return true;
             }
 
@@ -181,15 +222,14 @@ public final class MaddiLibrary {
                 String type = declaringType(node);
                 for (Object fragment : node.fragments()) {
                     SimpleName name = ((VariableDeclarationFragment) fragment).getName();
-                    add(out, document, uri, byKey.get(key(type, "FIELD", name.getIdentifier())), name);
+                    sink.accept(key(type, "FIELD", name.getIdentifier()), name);
                 }
                 return false;
             }
 
             @Override
             public boolean visit(EnumConstantDeclaration node) {
-                add(out, document, uri, byKey.get(key(declaringType(node), "FIELD", node.getName().getIdentifier())),
-                        node.getName());
+                sink.accept(key(declaringType(node), "FIELD", node.getName().getIdentifier()), node.getName());
                 return false;
             }
 
@@ -199,15 +239,14 @@ public final class MaddiLibrary {
                 if (binding == null) return false;
                 String type = declaringType(node);
                 String signature = signature(binding);
-                add(out, document, uri, byKey.get(key(type, "METHOD", signature)), node.getName());
+                sink.accept(key(type, "METHOD", signature), node.getName());
                 for (int i = 0; i < node.parameters().size(); i++) {
                     SimpleName name = ((SingleVariableDeclaration) node.parameters().get(i)).getName();
-                    add(out, document, uri, byKey.get(key(type, "PARAMETER", signature + "#" + i)), name);
+                    sink.accept(key(type, "PARAMETER", signature + "#" + i), name);
                 }
-                return false; // a local or anonymous class in a body is no library element
+                return false; // a local or anonymous class in a body has no name to be found by
             }
         });
-        return out;
     }
 
     private static String declaringType(ASTNode member) {
@@ -235,19 +274,18 @@ public final class MaddiLibrary {
         return type + "|" + kind + "|" + signature;
     }
 
-    private static void add(List<AnalysisModel.ElementAnnotation> out, IDocument document, String uri,
-                            AnalysisModel.LibraryElement element, SimpleName name) {
-        if (element == null || name == null) return;
+    /** The name's range as the daemon writes positions: 1-based, the end column inclusive; null when out of step. */
+    private static int[] position(IDocument document, SimpleName name) {
         int start = name.getStartPosition();
         int last = start + Math.max(0, name.getLength() - 1);
         try {
             int beginLine = document.getLineOfOffset(start);
             int endLine = document.getLineOfOffset(last);
-            // 1-based, the end column inclusive, as the daemon's positions
-            out.add(AnalysisModel.place(element, uri, beginLine + 1, start - document.getLineOffset(beginLine) + 1,
-                    endLine + 1, last - document.getLineOffset(endLine) + 1));
+            return new int[]{beginLine + 1, start - document.getLineOffset(beginLine) + 1,
+                    endLine + 1, last - document.getLineOffset(endLine) + 1};
         } catch (BadLocationException e) {
-            // the document is not the source the AST was made from: place nothing rather than guess
+            return null; // the document is not the source the AST was made from: place nothing rather than guess
         }
     }
+
 }

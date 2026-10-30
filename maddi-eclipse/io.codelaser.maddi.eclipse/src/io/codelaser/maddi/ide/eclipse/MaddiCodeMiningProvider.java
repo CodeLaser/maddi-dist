@@ -21,8 +21,15 @@ import io.codelaser.maddi.ide.client.AnalysisModel;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTParser;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.Position;
 import org.eclipse.jface.text.codemining.AbstractCodeMiningProvider;
@@ -52,9 +59,16 @@ import java.util.concurrent.CompletableFuture;
  *       so {@link MaddiCodeMiningRefresher} pushes the refresh when a new result lands.</li>
  * </ul>
  * Results come from the last whole-project analysis ({@link MaddiResults}); this provider never triggers one,
- * so typing shows stale hints until the next analysis rather than blocking the editor.
+ * so typing shows stale hints until the next analysis rather than blocking the editor. They stay on their
+ * declarations while one types, though: placed by name on the text as it is now ({@link MaddiLibrary#follow}).
  */
 public class MaddiCodeMiningProvider extends AbstractCodeMiningProvider {
+
+    // the last placement, and what it was made from: minings are asked for again on every redraw, a parse with
+    // bindings is needed only when the text or the result changed
+    private List<AnalysisModel.ElementAnnotation> followedFrom;
+    private long followedStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
+    private List<AnalysisModel.ElementAnnotation> followed;
 
     /** The one element kind whose hint has to be drawn inline; see {@link #mining}. */
     private static final String PARAMETER = "PARAMETER";
@@ -82,10 +96,11 @@ public class MaddiCodeMiningProvider extends AbstractCodeMiningProvider {
             elements = MaddiLibrary.get().placed(classFile, document);
             MaddiLibraryRuler.show(getAdapter(ITextEditor.class), document, elements);
         } else {
-            Path editedFile = editedFile();
-            if (editedFile == null) return List.of();
-            elements = result.elementAnnotations().stream()
-                    .filter(element -> editedFile.equals(MaddiDocumentPositions.toPath(element.uri()))).toList();
+            IFile file = editedFile();
+            if (file == null) return List.of();
+            Path editedFile = file.getLocation().toFile().toPath();
+            elements = follow(file, document, result.elementAnnotations().stream()
+                    .filter(element -> editedFile.equals(MaddiDocumentPositions.toPath(element.uri()))).toList());
         }
         if (!MaddiPreferences.inlineHints()) return List.of();
 
@@ -128,15 +143,51 @@ public class MaddiCodeMiningProvider extends AbstractCodeMiningProvider {
         return input == null ? null : input.getAdapter(IClassFile.class);
     }
 
-    /** The file this editor is showing, as an absolute path, or null when it is not a workspace file. */
-    private Path editedFile() {
+    /** The workspace file this editor is showing, or null when it is none. */
+    private IFile editedFile() {
         ITextEditor editor = getAdapter(ITextEditor.class);
         if (editor == null) return null;
         IEditorInput input = editor.getEditorInput();
         if (input == null) return null;
         IFile file = input.getAdapter(IFile.class);
-        if (file == null || file.getLocation() == null) return null;
-        return file.getLocation().toFile().toPath();
+        return file == null || file.getLocation() == null ? null : file;
+    }
+
+    /**
+     * The file's annotations on its declarations as the editor has them now. The text on screen is parsed, with
+     * bindings (a method is found by its erased signature), once per change of the text or of the result; when that
+     * cannot be done the positions of the analysed source are used, as before.
+     */
+    private List<AnalysisModel.ElementAnnotation> follow(IFile file, IDocument document,
+                                                         List<AnalysisModel.ElementAnnotation> elements) {
+        if (elements.isEmpty()) return elements;
+        long stamp = document instanceof IDocumentExtension4 d4 ? d4.getModificationStamp()
+                : IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
+        if (stamp != IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP && stamp == followedStamp
+            && elements.equals(followedFrom)) {
+            return followed;
+        }
+        List<AnalysisModel.ElementAnnotation> placed = elements;
+        ICompilationUnit unit = JavaCore.createCompilationUnitFrom(file);
+        if (unit != null && unit.getJavaProject() != null) {
+            try {
+                ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+                parser.setProject(unit.getJavaProject());
+                parser.setCompilerOptions(unit.getJavaProject().getOptions(true));
+                parser.setUnitName(file.getFullPath().toString());
+                parser.setSource(document.get().toCharArray());
+                parser.setResolveBindings(true);
+                parser.setBindingsRecovery(true);
+                ASTNode ast = parser.createAST(null);
+                if (ast instanceof CompilationUnit cu) placed = MaddiLibrary.follow(cu, document, elements);
+            } catch (RuntimeException e) {
+                MaddiEclipsePlugin.info("maddi: hints at the analysed positions, the editor's text did not parse: " + e);
+            }
+        }
+        followedFrom = elements;
+        followedStamp = stamp;
+        followed = placed;
+        return placed;
     }
 
 }
