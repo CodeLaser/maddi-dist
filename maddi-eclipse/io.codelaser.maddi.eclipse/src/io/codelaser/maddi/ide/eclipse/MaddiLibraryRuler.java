@@ -54,9 +54,7 @@ final class MaddiLibraryRuler {
                 String text = MaddiMarkers.gutterText(element, elements);
                 Position position = MaddiDocumentPositions.position(document, element.beginLine(), element.beginCol());
                 if (text == null || position == null) continue;
-                String note = element.properties() == null ? null : element.properties().get(AnalysisModel.LIBRARY_NOTE);
-                annotations.add(new Annotation(AnalysisModel.isEventual(element) ? HINT_EVENTUAL : HINT, false,
-                        note == null ? text : text + "\n" + note));
+                annotations.add(new Annotation(AnalysisModel.isEventual(element) ? HINT_EVENTUAL : HINT, false, text));
                 positions.add(position);
             }
         }
