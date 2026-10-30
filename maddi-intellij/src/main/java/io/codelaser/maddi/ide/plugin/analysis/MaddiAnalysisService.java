@@ -77,6 +77,8 @@ public final class MaddiAnalysisService implements Disposable {
     private final MaddiDaemonProcess daemon = new MaddiDaemonProcess();
     private final AtomicInteger requestCounter = new AtomicInteger();
     private final AtomicBoolean running = new AtomicBoolean(false);
+    // set by stopAnalysis(): the run that then fails was stopped, it did not fail
+    private volatile boolean stopRequested;
 
     private volatile AnalysisModel.Result latest;
     private volatile String daemonInstall = "";
@@ -103,13 +105,24 @@ public final class MaddiAnalysisService implements Disposable {
             LOG.info("maddi analysis already running; skipping this trigger");
             return;
         }
+        stopRequested = false;
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "maddi: analyzing", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
+                // the progress bar's cancel button: nothing in the run looks at the indicator while it waits for the
+                // daemon, so watch it from beside the run
+                java.util.concurrent.Future<?> cancelWatch = ApplicationManager.getApplication().executeOnPooledThread(
+                        () -> watchCancel(indicator));
                 try {
                     analyze(indicator);
                 } catch (Exception e) {
+                    if (stopRequested) {
+                        LOG.info("maddi analysis stopped on request");
+                        publishFailure("stopped", "stopped on request; the editor shows what the run had"
+                                                  + " established by then");
+                        return;
+                    }
                     LOG.warn("maddi analysis failed", e);
                     // The balloon is transient and the tool window used to learn nothing at all from this
                     // path, so a failed run was indistinguishable from a stale successful one (#29).
@@ -119,8 +132,9 @@ public final class MaddiAnalysisService implements Disposable {
                     notifyFailure("Analysis failed: " + message.lines().findFirst().orElse("")
                                   + ". Details in the maddi tool window.");
                 } finally {
+                    cancelWatch.cancel(true);
                     running.set(false);
-                    fetchLibrary(); // what was asked for during the run
+                    if (!stopRequested) fetchLibrary(); // what was asked for during the run
                 }
             }
         });
@@ -365,6 +379,36 @@ public final class MaddiAnalysisService implements Disposable {
      * directory at {@code maddi-ide-daemon/build/install/maddi-ide-daemon}, run {@code installDist}, restart
      * the daemon, analyze — no plugin rebuild, no reinstall, no IDE restart.
      */
+    /**
+     * Stop the running analysis: the daemon is killed, which ends the run at once (it is in the middle of a fixpoint
+     * iteration that has no other way out), and the next analysis starts a fresh one. What the run streamed so far
+     * stays on screen.
+     */
+    public void stopAnalysis() {
+        if (!running.get()) return;
+        stopRequested = true;
+        daemon.kill();
+        daemonBuild = "unknown";
+    }
+
+    public boolean isRunning() {
+        return running.get();
+    }
+
+    private void watchCancel(ProgressIndicator indicator) {
+        try {
+            while (running.get()) {
+                if (indicator.isCanceled()) {
+                    stopAnalysis();
+                    return;
+                }
+                Thread.sleep(250);
+            }
+        } catch (InterruptedException e) {
+            // the run ended
+        }
+    }
+
     public void restartDaemon() {
         daemon.restart();
         daemonBuild = "unknown";

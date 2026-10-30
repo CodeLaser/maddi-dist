@@ -329,6 +329,23 @@ public class MaddiFindingsPanel extends SimpleToolWindowPanel implements Disposa
                 return ActionUpdateThread.EDT;
             }
         });
+        group.add(new AnAction("Stop analysis", "Stop the running analysis; the next one starts a fresh daemon",
+                AllIcons.Actions.Suspend) {
+            @Override
+            public void actionPerformed(@NotNull AnActionEvent e) {
+                MaddiAnalysisService.getInstance(project).stopAnalysis();
+            }
+
+            @Override
+            public void update(@NotNull AnActionEvent e) {
+                e.getPresentation().setEnabled(running);
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        });
         // The fast loop: `installDist`, restart, analyze — no plugin rebuild and no IDE restart. Without this
         // the daemon is kept warm across the very rebuild being tested.
         group.add(new AnAction("Restart daemon", "Stop the daemon; the next analysis starts a fresh one",

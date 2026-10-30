@@ -42,7 +42,9 @@ public final class MaddiDaemonProcess implements Closeable {
     }
 
     private final DaemonLauncher launcher = new DaemonLauncher();
-    private DaemonLauncher.Handle handle;
+    // volatile: kill() reads it without the monitor, which a running analysis holds
+    private volatile DaemonLauncher.Handle handle;
+    private volatile boolean busy;
     private DaemonClient client;
     private String buildStamp = "unknown";
     private String maddiVersion = "unknown";
@@ -137,7 +139,27 @@ public final class MaddiDaemonProcess implements Closeable {
     public synchronized JsonNode analyze(String requestId, Object config, Consumer<JsonNode> onStatus)
             throws IOException {
         if (client == null) throw new IOException("daemon not started");
-        return client.analyze(requestId, config, onStatus);
+        busy = true;
+        try {
+            return client.analyze(requestId, config, onStatus);
+        } finally {
+            busy = false;
+        }
+    }
+
+    /**
+     * Stop the daemon now, whatever it is doing: how a run is stopped. The analysis waiting for its result then fails
+     * with "daemon closed the connection", and the next {@code ensureStarted} launches a fresh daemon; nothing is lost
+     * that a new run does not rebuild, since every run builds its own model.
+     * <p>
+     * Not synchronized, deliberately: a running analysis holds the monitor until its result arrives, which is exactly
+     * what is not to be waited for.
+     */
+    public void kill() {
+        DaemonLauncher.Handle h = handle;
+        if (h == null) return;
+        h.process().descendants().forEach(ProcessHandle::destroyForcibly);
+        h.process().destroyForcibly();
     }
 
     /**
@@ -158,9 +180,16 @@ public final class MaddiDaemonProcess implements Closeable {
         return handle != null && handle.process().isAlive();
     }
 
+    /**
+     * Stop the daemon: politely when it is idle, by {@link #kill()} when it is analyzing. ⛔ This used to wait for the
+     * monitor, which a running analysis holds until it ends: closing the IDE during a run left the daemon running on.
+     */
     @Override
-    public synchronized void close() {
-        closeQuietly();
+    public void close() {
+        if (busy) kill();
+        synchronized (this) {
+            closeQuietly();
+        }
     }
 
     /**

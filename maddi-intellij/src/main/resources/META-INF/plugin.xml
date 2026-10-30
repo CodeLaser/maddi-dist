@@ -72,5 +72,12 @@
                 description="Compile the project and run a whole-project maddi analysis">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="maddi.StopAnalysis"
+                class="io.codelaser.maddi.ide.plugin.action.StopMaddiAnalysisAction"
+                text="Stop maddi Analysis"
+                description="Stop the running maddi analysis"
+                icon="AllIcons.Actions.Suspend">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

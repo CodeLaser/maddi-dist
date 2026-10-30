@@ -44,6 +44,12 @@ import java.util.regex.Pattern;
  * Plain JDK only — no IntelliJ types — so it is unit-testable against a real install.
  */
 public final class DaemonLauncher {
+    /**
+     * The environment variable naming the pid of the process that launched the daemon (the IDE). The daemon exits when
+     * that process does, also when it is killed or crashes and never gets to stop the daemon itself. Mirrors
+     * {@code DaemonMain.ENV_PARENT_PID} in maddi-ide-daemon.
+     */
+    public static final String ENV_PARENT_PID = "MADDI_PARENT_PID";
     private static final Pattern PORT_LINE = Pattern.compile("DAEMON_PORT=(\\d+)");
     private static final Pattern PID_LINE = Pattern.compile("DAEMON_PID=(\\d+)");
     private static final int TAIL_LINES = 30;
@@ -103,6 +109,8 @@ public final class DaemonLauncher {
             // the Gradle 'application' start script honours JAVA_OPTS / DEFAULT_JVM_OPTS
             pb.environment().put("JAVA_OPTS", String.join(" ", jvmArgs));
         }
+        // this process, unless the caller names another (a test standing in for an IDE that dies)
+        pb.environment().put(ENV_PARENT_PID, Long.toString(ProcessHandle.current().pid()));
         if (environment != null) pb.environment().putAll(environment);
 
         Process process = pb.start();

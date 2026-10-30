@@ -80,11 +80,19 @@ public final class DaemonMain {
      */
     static final String ENV_K2_HOME = "MADDI_K2_HOME";
 
+    /**
+     * The pid of the process that launched this daemon, the IDE (maddi-ide-client's
+     * {@code DaemonLauncher.ENV_PARENT_PID}). The daemon exits when it does: an IDE that is killed or crashes never
+     * gets to stop its daemon, which would otherwise run on, holding its heap, until someone finds it.
+     */
+    static final String ENV_PARENT_PID = "MADDI_PARENT_PID";
+
     public static void main(String[] args) throws IOException {
         String k2Home = System.getenv(ENV_K2_HOME);
         if (k2Home != null && !k2Home.isBlank() && System.getProperty(K2Realm.HOME_PROPERTY) == null) {
             System.setProperty(K2Realm.HOME_PROPERTY, k2Home);
         }
+        exitWithParent(System.getenv(ENV_PARENT_PID));
         int port = 0; // 0 = ephemeral, OS picks a free port
         for (int i = 0; i < args.length; i++) {
             if ("--port".equals(args[i]) && i + 1 < args.length) {
@@ -92,6 +100,30 @@ public final class DaemonMain {
             }
         }
         new DaemonMain(new WarmAnalysisService()).run(port);
+    }
+
+    /*
+     Halt, not exit: a run in progress holds the one thread that would otherwise have to notice, and there is nobody
+     left to answer. Without a parent pid (a daemon started by hand, a test) nothing is watched.
+     */
+    static void exitWithParent(String parentPid) {
+        if (parentPid == null || parentPid.isBlank()) return;
+        long pid;
+        try {
+            pid = Long.parseLong(parentPid.trim());
+        } catch (NumberFormatException e) {
+            LOGGER.warn("ignoring {}={}: not a pid", ENV_PARENT_PID, parentPid);
+            return;
+        }
+        java.util.Optional<ProcessHandle> parent = ProcessHandle.of(pid);
+        if (parent.isEmpty()) {
+            LOGGER.info("the process that launched this daemon ({}) is gone; exiting", pid);
+            Runtime.getRuntime().halt(0);
+        }
+        parent.get().onExit().thenRun(() -> {
+            LOGGER.info("the process that launched this daemon ({}) exited; exiting too", pid);
+            Runtime.getRuntime().halt(0);
+        });
     }
 
     public void run(int port) throws IOException {
