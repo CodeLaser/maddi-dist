@@ -53,6 +53,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class MaddiAnalysis {
 
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
+    // set by stop(): the run that then fails was stopped, it did not fail
+    private static volatile boolean stopRequested;
 
     private MaddiAnalysis() {
     }
@@ -67,17 +69,30 @@ public final class MaddiAnalysis {
      * failure as a dialog — appropriate for a manual run, not for a background build trigger.
      */
     public static void schedule(IJavaProject javaProject, boolean reveal) {
-        Job job = Job.create("maddi: analyzing " + javaProject.getElementName(), monitor -> {
-            if (!RUNNING.compareAndSet(false, true)) return Status.OK_STATUS; // one at a time
-            try {
-                return analyze(javaProject, reveal, monitor);
-            } catch (Exception e) {
-                String message = e.getMessage() == null ? e.toString() : e.getMessage();
-                return failed(javaProject, reveal, e.getClass().getSimpleName(), message, e);
-            } finally {
-                RUNNING.set(false);
+        Job job = new Job("maddi: analyzing " + javaProject.getElementName()) {
+            @Override
+            protected IStatus run(IProgressMonitor monitor) {
+                // qualified: inside a Job, RUNNING is Job's own state constant
+                if (!MaddiAnalysis.RUNNING.compareAndSet(false, true)) return Status.OK_STATUS; // one at a time
+                stopRequested = false;
+                try {
+                    return analyze(javaProject, reveal, monitor);
+                } catch (Exception e) {
+                    if (stopRequested) return stopped(javaProject);
+                    String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                    return failed(javaProject, reveal, e.getClass().getSimpleName(), message, e);
+                } finally {
+                    MaddiAnalysis.RUNNING.set(false);
+                    if (!stopRequested) MaddiLibrary.get().fetchWanted(); // what was asked for during the run
+                }
             }
-        });
+
+            // the Progress view's stop: nothing in the run looks at the monitor while it waits for the daemon
+            @Override
+            protected void canceling() {
+                stop();
+            }
+        };
         job.setUser(reveal); // manual runs show foreground progress; build triggers stay quiet
         job.schedule();
     }
@@ -90,6 +105,23 @@ public final class MaddiAnalysis {
         if (!project.exists() || !project.isOpen()) return false;
         schedule(JavaCore.create(project), true);
         return true;
+    }
+
+    /**
+     * Stop the running analysis: the daemon is killed, which ends the run at once (it is in the middle of a fixpoint
+     * iteration that has no other way out), and the next analysis starts a fresh one. What the run streamed so far
+     * stays on screen.
+     */
+    public static void stop() {
+        if (!RUNNING.get()) return;
+        stopRequested = true;
+        MaddiEclipsePlugin.get().daemon().kill();
+    }
+
+    private static IStatus stopped(IJavaProject javaProject) {
+        MaddiRun.get().failed(javaProject.getElementName(), "stopped",
+                "stopped on request; the editor shows what the run had established by then");
+        return Status.CANCEL_STATUS;
     }
 
     /** Stop the daemon; the next analysis launches a fresh one (after installDist on a daemon install override). */

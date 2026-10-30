@@ -62,7 +62,7 @@ import java.util.Map;
  *       Double-click goes to the location.</li>
  *   <li><b>Run log</b> — every status frame, heartbeat, pass and error, timestamped.</li>
  * </ul>
- * The toolbar runs the last project's analysis again, restarts the daemon, and clears the log.
+ * The toolbar runs the last project's analysis again, stops a running one, restarts the daemon, and clears the log.
  */
 public class MaddiFindingsView extends ViewPart {
 
@@ -79,6 +79,7 @@ public class MaddiFindingsView extends ViewPart {
     private Text log;
     private Action analyze;
     private Action restart;
+    private Action stop;
     private final Runnable resultListener = () -> onUiThread(this::renderFindings);
     private final Runnable runListener = () -> onUiThread(this::renderRun);
     private final Runnable clock = this::tick;
@@ -133,6 +134,15 @@ public class MaddiFindingsView extends ViewPart {
             }
         };
         analyze.setToolTipText("Analyze the last analysed project again (Project → Analyze with maddi for another)");
+        stop = new Action("Stop analysis") {
+            @Override
+            public void run() {
+                MaddiAnalysis.stop();
+            }
+        };
+        stop.setToolTipText("Stop the running analysis; the next one starts a fresh daemon");
+        stop.setImageDescriptor(PlatformUI.getWorkbench().getSharedImages()
+                .getImageDescriptor(ISharedImages.IMG_ELCL_STOP));
         restart = new Action("Restart daemon") {
             @Override
             public void run() {
@@ -149,6 +159,7 @@ public class MaddiFindingsView extends ViewPart {
         clear.setImageDescriptor(PlatformUI.getWorkbench().getSharedImages()
                 .getImageDescriptor(ISharedImages.IMG_ETOOL_CLEAR));
         toolbar.add(analyze);
+        toolbar.add(stop);
         toolbar.add(restart);
         toolbar.add(clear);
     }
@@ -228,6 +239,7 @@ public class MaddiFindingsView extends ViewPart {
         }
         analyze.setEnabled(!state.running());
         restart.setEnabled(!state.running());
+        stop.setEnabled(state.running());
         stateLabel.getParent().layout();
         if (state.running()) Display.getDefault().timerExec(1000, clock);
     }

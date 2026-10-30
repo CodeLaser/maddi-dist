@@ -43,6 +43,7 @@ public final class MaddiResults {
 
     public void update(AnalysisModel.Result result) {
         this.latest = result;
+        MaddiLibrary.get().reset(); // what the daemon said of the library belongs to the previous result
         notifyListeners();
     }
 

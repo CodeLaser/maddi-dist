@@ -72,6 +72,9 @@
       <command id="io.codelaser.maddi.eclipse.analyze"
                name="Analyze with maddi"
                defaultHandler="io.codelaser.maddi.ide.eclipse.AnalyzeMaddiHandler"/>
+      <command id="io.codelaser.maddi.eclipse.stop"
+               name="Stop maddi Analysis"
+               defaultHandler="io.codelaser.maddi.ide.eclipse.StopMaddiHandler"/>
    </extension>
 
    <!-- Daemon settings under Window → Preferences → maddi. -->
@@ -99,6 +102,9 @@
       <menuContribution locationURI="menu:project?after=additions">
          <command commandId="io.codelaser.maddi.eclipse.analyze"
                   label="Analyze with maddi"
+                  style="push"/>
+         <command commandId="io.codelaser.maddi.eclipse.stop"
+                  label="Stop maddi Analysis"
                   style="push"/>
       </menuContribution>
    </extension>
@@ -131,12 +137,19 @@
             class="io.codelaser.maddi.ide.eclipse.MaddiCodeMiningProvider"
             id="io.codelaser.maddi.eclipse.codemining.hints"
             label="maddi analysis hints">
+         <!-- a library's class file too, shown with its attached source (Set.java from the JDK's src.zip): its hints
+              come from the daemon's libraryAnnotations, as JDT enables its own minings there -->
          <enabledWhen>
             <with variable="editorInput">
-               <adapt type="org.eclipse.core.resources.IFile">
-                  <test property="org.eclipse.core.resources.contentTypeId"
-                        value="org.eclipse.jdt.core.javaSource"/>
-               </adapt>
+               <or>
+                  <adapt type="org.eclipse.core.resources.IFile">
+                     <test property="org.eclipse.core.resources.contentTypeId"
+                           value="org.eclipse.jdt.core.javaSource"/>
+                  </adapt>
+                  <adapt type="org.eclipse.jdt.core.IClassFile">
+                     <instanceof value="org.eclipse.jdt.core.IClassFile"/>
+                  </adapt>
+               </or>
             </with>
          </enabledWhen>
       </codeMiningProvider>

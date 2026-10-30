@@ -20,6 +20,7 @@ package io.codelaser.maddi.ide.eclipse;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.IClassFile;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextViewer;
@@ -69,17 +70,28 @@ public class MaddiCodeMiningProvider extends AbstractCodeMiningProvider {
      * Returning an incomplete future here would only add latency and a cancellation path to maintain.
      */
     private List<ICodeMining> minings(ITextViewer viewer) {
-        if (!MaddiPreferences.inlineHints()) return List.of();
         AnalysisModel.Result result = MaddiResults.get().latest();
         if (result == null || result.elementAnnotations() == null) return List.of();
         IDocument document = viewer.getDocument();
-        Path editedFile = editedFile();
-        if (document == null || editedFile == null) return List.of();
+        if (document == null) return List.of();
+        List<AnalysisModel.ElementAnnotation> elements;
+        IClassFile classFile = classFile();
+        if (classFile != null) {
+            // a library's source: its elements come from the daemon, matched by signature (MaddiLibrary); its ruler
+            // icons are annotations rather than markers, so they are placed here too, hints shown or not
+            elements = MaddiLibrary.get().placed(classFile, document);
+            MaddiLibraryRuler.show(getAdapter(ITextEditor.class), document, elements);
+        } else {
+            Path editedFile = editedFile();
+            if (editedFile == null) return List.of();
+            elements = result.elementAnnotations().stream()
+                    .filter(element -> editedFile.equals(MaddiDocumentPositions.toPath(element.uri()))).toList();
+        }
+        if (!MaddiPreferences.inlineHints()) return List.of();
 
         HintFilter filter = MaddiPreferences.hintFilter();
         List<ICodeMining> minings = new ArrayList<>();
-        for (AnalysisModel.ElementAnnotation element : result.elementAnnotations()) {
-            if (!editedFile.equals(MaddiDocumentPositions.toPath(element.uri()))) continue;
+        for (AnalysisModel.ElementAnnotation element : elements) {
             String text = filter.textFor(element);
             if (text.isEmpty()) continue; // nothing to show for this declaration under the current filter
             ICodeMining mining = mining(document, element, text);
@@ -107,6 +119,13 @@ public class MaddiCodeMiningProvider extends AbstractCodeMiningProvider {
         } catch (BadLocationException e) {
             return null;
         }
+    }
+
+    /** The library class file this editor is showing (with its attached source), or null. */
+    private IClassFile classFile() {
+        ITextEditor editor = getAdapter(ITextEditor.class);
+        IEditorInput input = editor == null ? null : editor.getEditorInput();
+        return input == null ? null : input.getAdapter(IClassFile.class);
     }
 
     /** The file this editor is showing, as an absolute path, or null when it is not a workspace file. */
