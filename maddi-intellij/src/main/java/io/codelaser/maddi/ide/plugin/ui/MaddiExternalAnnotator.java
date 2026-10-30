@@ -60,9 +60,12 @@ public class MaddiExternalAnnotator
     public void apply(PsiFile file, List<AnalysisModel.Finding> findings, AnnotationHolder holder) {
         if (findings == null || findings.isEmpty()) return;
         Document doc = PsiDocumentManager.getInstance(file.getProject()).getDocument(file);
-        if (doc == null) return;
+        VirtualFile vf = file.getVirtualFile();
+        if (doc == null || vf == null) return;
+        MaddiAnalysisService service = MaddiAnalysisService.getInstance(file.getProject());
         for (AnalysisModel.Finding f : findings) {
-            TextRange range = MaddiPositions.range(doc, f.beginLine(), f.beginCol(), f.endLine(), f.endCol());
+            // where it is now: anchored on first showing, so that it moves with the edits
+            TextRange range = service.findingRange(f, vf, doc);
             if (range == null) continue;
             HighlightSeverity severity = severityOf(f);
             holder.newAnnotation(severity, f.message())

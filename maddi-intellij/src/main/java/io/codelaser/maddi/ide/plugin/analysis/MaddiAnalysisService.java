@@ -30,6 +30,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -37,6 +38,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
@@ -47,6 +49,7 @@ import io.codelaser.maddi.ide.plugin.settings.MaddiConfigurable;
 import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 
+import io.codelaser.maddi.ide.plugin.ui.MaddiFindingAnchors;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -62,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Owns the daemon for a project, runs whole-project analyses off the EDT, caches the latest result
@@ -87,6 +91,11 @@ public final class MaddiAnalysisService implements Disposable {
     // when the last run that ended with a result started (System.currentTimeMillis), 0 for none: a file saved
     // after it is not in that run's model
     private volatile long lastCompleteRunStarted;
+    // when the run that produced the shown result started reading the project (System.currentTimeMillis), 0 when
+    // unknown: a file not modified since, and not edited unsaved, holds the text the result's positions are about
+    private volatile long runReadingSince;
+    private volatile long indexedRunStarted;
+    private final MaddiFindingAnchors findingAnchors = new MaddiFindingAnchors();
 
     private volatile AnalysisModel.Result latest;
     private volatile String daemonInstall = "";
@@ -237,6 +246,7 @@ public final class MaddiAnalysisService implements Disposable {
         String requestId = "req-" + requestCounter.incrementAndGet();
         publishRun(l -> l.runStarted(requestId, daemonInstall, daemonBuild));
         long runStarted = System.currentTimeMillis(); // the daemon reads the files from here on
+        runReadingSince = runStarted;
         inputsRead = true;
 
         JsonNode node = daemon.analyze(requestId, config, frame -> onStreamedFrame(indicator, frame));
@@ -332,6 +342,8 @@ public final class MaddiAnalysisService implements Disposable {
             if (path != null) ab.computeIfAbsent(path, k -> new ArrayList<>()).add(e);
         }
         this.latest = result;
+        findingAnchors.clear();
+        indexedRunStarted = runReadingSince;
         this.findingsByPath = fb;
         this.annotationsByPath = ab;
         libraryByType.clear();
@@ -339,6 +351,17 @@ public final class MaddiAnalysisService implements Disposable {
 
     public List<AnalysisModel.Finding> findingsForPath(String path) {
         return findingsByPath.getOrDefault(path, List.of());
+    }
+
+    /**
+     * Where a finding of {@code file} is in its document now, following the edits made since it was first shown
+     * ({@link MaddiFindingAnchors}); {@code null} when its text is gone.
+     */
+    public @Nullable TextRange findingRange(AnalysisModel.Finding finding, VirtualFile file, Document doc) {
+        long since = indexedRunStarted;
+        boolean asAnalysed = since > 0 && !FileDocumentManager.getInstance().isDocumentUnsaved(doc)
+                             && file.getTimeStamp() <= since;
+        return findingAnchors.range(finding, doc, asAnalysed);
     }
 
     public List<AnalysisModel.ElementAnnotation> annotationsForPath(String path) {
