@@ -98,6 +98,49 @@ JVM.
 `maddi-intellij-j2k` is not a plugin. It is a headless starter that runs IntelliJ's own J2K converter on a corpus, so
 that maddi's Kotlin translation can be compared with it.
 
+## Coding agents (MCP)
+
+`maddi-mcp` is an [MCP](https://modelcontextprotocol.io) server on stdin/stdout, for a coding agent to configure a
+project, analyse all or part of it, and ask for the verdicts. It drives the same daemon as the IDE plugins, bundled
+in its `daemon/` directory. It runs on a JDK 25 or later, as the daemon does: by default the daemon uses the same one,
+or the one `--jdk` names. Not released yet;
+build it with `./gradlew :maddi-mcp:installDist` and register `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`
+with the agent, for example `claude mcp add maddi -- <that path>`.
+
+| Tool | Does |
+|---|---|
+| `configure_project`, `list_projects` | a Gradle build by its directory alone; or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
+| `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
+| `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
+| `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
+| `element_at` | the element at a file and line, explained |
+| `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
+| `library_annotations` | what the last run knows of JDK and library types |
+
+A Gradle build needs no maddi plugin: given its directory, the server compiles every Java source set with javac's
+arguments logged (an init script, run with the build's own wrapper) and has the daemon turn that log into the
+configuration, as the CLI's `--compile-log` does, with the build files hashed at that moment. The first `analyze`
+does this (or `analyze` with `configureOnly`); it takes a full compile.
+
+A configured project is stored (in `~/.maddi/mcp`, or `--store`), with the hashes of the build files that shaped
+it, and survives a restart. Every run first hashes those files again. When one changed, the configuration is
+computed again before the run: with the plugin's task or goal, or with the command given at configuration (a
+CLI-written file needs one). Computing it for a large build takes minutes; this way it happens only when the build
+changed. A project configured from directories has no such command: a change to its Gradle or Maven files fails
+the run, unless `analyze` is told `allowStale`.
+
+A project can name the JDK its daemon runs on (`configure_project` with `project` and `daemonJdk`, a JDK 25 or later),
+when the server's does not suit it: an annotation processor such as Lombok runs inside the daemon's javac, and an
+older one fails on a newer JDK, leaving its source sets parsed without the members it generates. `run_status` says so
+when it happened.
+
+A run that finished, or was stopped with values, is stored too, the last 8 per project: after a restart its
+verdicts can still be asked and compared with `diff_runs`. A stored run says when it was analysed and how many source
+files changed since.
+
+Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
+stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.
+
 ## Building
 
 Check out the three repositories side by side, as described in maddi's
@@ -107,6 +150,7 @@ Check out the three repositories side by side, as described in maddi's
 ./gradlew build
 ./gradlew :maddi-cli:installDist           # the `maddi` CLI, in maddi-cli/build/install/maddi
 ./gradlew :maddi-ide-daemon:installDist    # the daemon the IDE plugins bundle
+./gradlew :maddi-mcp:installDist           # the MCP server, with that daemon in daemon/
 ```
 
 `release-cli.sh <tag>` builds both zips and publishes them, with their checksums, on the GitHub release for that tag.

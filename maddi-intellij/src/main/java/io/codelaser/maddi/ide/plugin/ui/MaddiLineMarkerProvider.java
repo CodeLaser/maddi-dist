@@ -32,6 +32,7 @@ import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiMethod;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.client.GutterText;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,36 +69,10 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         List<AnalysisModel.ElementAnnotation> parameters = parameters(annotations, match);
 
         // The gutter keeps the FULL text, roster and all: it is the surface with room for it, and the inline
-        // hint deliberately abbreviates (AnalysisModel#abbreviate).
-        String text = String.join(" ", match.displayAnnotations());
-        String tooltip = "maddi: " + text;
-        String accessible = "maddi analysis: " + text;
-        // a library element: where its values come from, our annotated API or the default
-        String note = match.properties() == null ? null : match.properties().get(AnalysisModel.LIBRARY_NOTE);
-        if (!parameters.isEmpty() || !match.whys().isEmpty() || note != null) {
-            StringBuilder html = new StringBuilder("<html>maddi: ").append(StringUtil.escapeXmlEntities(text));
-            StringBuilder plain = new StringBuilder(accessible);
-            if (note != null) {
-                html.append("<br>&nbsp;&nbsp;<i>").append(StringUtil.escapeXmlEntities(note)).append("</i>");
-                plain.append("; ").append(note);
-            }
-            appendWhys(match, html, plain, "&nbsp;&nbsp;");
-            for (AnalysisModel.ElementAnnotation p : parameters) {
-                String name = p.fqn().substring(p.fqn().lastIndexOf(':') + 1);
-                String ofParameter = String.join(" ", p.displayAnnotations());
-                html.append("<br>&nbsp;&nbsp;").append(StringUtil.escapeXmlEntities(name)).append(": ")
-                        .append(StringUtil.escapeXmlEntities(ofParameter));
-                plain.append("; ").append(name).append(": ").append(ofParameter);
-                String parameterNote = p.properties() == null ? null : p.properties().get(AnalysisModel.LIBRARY_NOTE);
-                if (parameterNote != null && !parameterNote.equals(note)) {
-                    html.append(" <i>(").append(StringUtil.escapeXmlEntities(parameterNote)).append(")</i>");
-                    plain.append(" (").append(parameterNote).append(")");
-                }
-                appendWhys(p, html, plain, "&nbsp;&nbsp;&nbsp;&nbsp;");
-            }
-            tooltip = html.append("</html>").toString();
-            accessible = plain.toString();
-        }
+        // hint deliberately abbreviates (AnalysisModel#abbreviate). What it says is GutterText's, as Eclipse's.
+        List<GutterText.Line> lines = GutterText.lines(match, annotations);
+        String tooltip = html(lines);
+        String accessible = accessible(lines);
         // ⛔ AN EVENTUAL VERDICT AND A PLAIN ONE LOOKED IDENTICAL. Polarity drove filtering only, so
         // "@Immutable" and "@Immutable(hc=true,after=…)" -- a proven property and one that holds only after a
         // mark -- reached the gutter under the same icon, and the difference was legible only by reading the
@@ -116,27 +91,29 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
                 () -> accessibleName);
     }
 
-    /**
-     * Each annotation's why, a chain of statements: the element's own first, then into the callees. A step in the
-     * element's own file is "line n", one elsewhere "File.java:n".
-     */
-    private static void appendWhys(AnalysisModel.ElementAnnotation element, StringBuilder html, StringBuilder plain,
-                                   String indent) {
-        for (AnalysisModel.Why why : element.whys()) {
-            if (why.steps() == null || why.steps().isEmpty()) continue;
-            html.append("<br>").append(indent).append('@').append(StringUtil.escapeXmlEntities(why.annotation()))
-                    .append(':');
-            plain.append("; @").append(why.annotation()).append(':');
-            for (AnalysisModel.WhyStep step : why.steps()) {
-                // a step without a place (a contract, an annotation) is its text alone
-                String place = AnalysisModel.whereOf(element.uri(), step);
-                String where = place.isEmpty() ? "" : place + ": ";
-                html.append("<br>").append(indent).append("&nbsp;&nbsp;\u21d0 ")
-                        .append(StringUtil.escapeXmlEntities(where))
-                        .append(StringUtil.escapeXmlEntities(step.text()));
-                plain.append(" <= ").append(where).append(step.text());
+    /** The lines as the tooltip shows them: indented, a library note in italics. */
+    static String html(List<GutterText.Line> lines) {
+        if (lines.size() == 1) return GutterText.plain(lines);
+        StringBuilder html = new StringBuilder("<html>");
+        for (GutterText.Line line : lines) {
+            if (line.depth() > 0) html.append("<br>").append("&nbsp;&nbsp;".repeat(line.depth()));
+            String text = StringUtil.escapeXmlEntities(GutterText.prefixOf(line.kind()) + line.text());
+            html.append(line.kind() == GutterText.Kind.NOTE ? "<i>" + text + "</i>" : text);
+        }
+        return html.append("</html>").toString();
+    }
+
+    /** The lines as a screen reader says them: on one line, separated. */
+    static String accessible(List<GutterText.Line> lines) {
+        StringBuilder plain = new StringBuilder("maddi analysis: ");
+        for (GutterText.Line line : lines) {
+            switch (line.kind()) {
+                case ANNOTATIONS -> plain.append(line.text());
+                case STEP -> plain.append(" <= ").append(line.text());
+                default -> plain.append("; ").append(line.text());
             }
         }
+        return plain.toString();
     }
 
     static List<AnalysisModel.ElementAnnotation> parameters(List<AnalysisModel.ElementAnnotation> annotations,

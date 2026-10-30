@@ -187,6 +187,7 @@ public final class DaemonMain {
                 case DaemonProtocol.T_ANALYZE_PROJECT -> handleAnalyze(out, msg);
                 case DaemonProtocol.T_LIBRARY_ANNOTATIONS -> handleLibrary(out, msg);
                 case DaemonProtocol.T_TRANSLATE -> handleTranslate(out, msg);
+                case DaemonProtocol.T_WRITE_INPUT_CONFIGURATION -> handleWriteInputConfiguration(out, msg);
                 case DaemonProtocol.T_SHUTDOWN -> {
                     send(out, DaemonProtocol.T_BYE, null);
                     return false;
@@ -272,6 +273,30 @@ public final class DaemonMain {
             send(out, DaemonProtocol.T_LIBRARY_RESULT, handler.libraryAnnotations(request));
         } catch (RuntimeException e) {
             LOGGER.warn("library annotations failed for request {}", requestId, e);
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "internal",
+                    String.valueOf(e.getMessage())));
+        }
+    }
+
+    private void handleWriteInputConfiguration(Writer out, JsonNode msg) throws IOException {
+        String requestId = msg.path("requestId").asText(null);
+        DaemonProtocol.WriteInputConfiguration request;
+        try {
+            request = mapper.treeToValue(msg, DaemonProtocol.WriteInputConfiguration.class);
+        } catch (IOException e) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "malformed writeInputConfiguration: " + e.getMessage()));
+            return;
+        }
+        if (request.compileLog() == null || request.buildRoot() == null || request.output() == null) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "writeInputConfiguration needs compileLog, buildRoot and output"));
+            return;
+        }
+        try {
+            send(out, DaemonProtocol.T_INPUT_CONFIGURATION_WRITTEN, CompileLogConfiguration.write(request));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("writing the input configuration failed for request {}", requestId, e);
             send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "internal",
                     String.valueOf(e.getMessage())));
         }

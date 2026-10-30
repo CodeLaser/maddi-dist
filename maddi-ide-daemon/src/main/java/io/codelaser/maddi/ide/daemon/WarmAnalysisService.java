@@ -213,7 +213,8 @@ public class WarmAnalysisService implements AnalyzeHandler {
         Summary summary = parsed.summary();
 
         AnalysisEngine engine = AnalysisEngines.require("the IDE daemon's modification analysis");
-        ResultCollector collector = new ResultCollector(engine, parsed.runtime(), parsed.sourceSetOfRequest());
+        ResultCollector collector = new ResultCollector(engine, parsed.runtime(), parsed.sourceSetOfRequest(),
+                request.config().containerWhyMaxSlotsOrDefault());
 
         emit(status, requestId, "prep", "call graph", null, parsed.primaryTypes().size());
         // Fault-tolerant like RunAnalyzer's: on a partial parse a type whose supertype did not resolve is far

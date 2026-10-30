@@ -156,6 +156,66 @@ public class WhyTest {
                 why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
     }
 
+    @DisplayName("a type's level comes with its why: @Mutable at the assignable field, @Dependent at the return")
+    @Test
+    public void typeWhy(@TempDir Path bagDir, @TempDir Path holderDir) throws Exception {
+        DaemonProtocol.ElementAnnotation bag = type(DaemonAnalysisFixture.analyze(bagDir, "x/Bag.java", BAG, false,
+                null), "x.Bag");
+        assertTrue(bag.displayAnnotations().contains("@Mutable"), bag.displayAnnotations()::toString);
+        assertEquals(List.of("6 field count is assigned after construction (rule 0: all fields effectively final)",
+                        "14 assigned in bump(..): this.count=this.count+1"), steps(bag, "Mutable"));
+
+        DaemonProtocol.ElementAnnotation holder = type(DaemonAnalysisFixture.analyze(holderDir, "x/Holder.java",
+                HOLDER, false, null), "x.Holder");
+        assertTrue(holder.displayAnnotations().contains("@FinalFields"), holder.displayAnnotations()::toString);
+        assertEquals(List.of("5 field items is dependent: exposed to, or shared with, the outside world (rule 3)",
+                "7 Method 'items' returns field 'items': the caller can modify it"), steps(holder, "FinalFields"));
+    }
+
+    private static final String CONTAINERS = """
+            package x;
+            import java.util.List;
+            public class C {
+                public static final class Sink {
+                    public void fill(List<String> list) { list.add("x"); }
+                    public int size(List<String> list) { return list.size(); }
+                }
+                public static final class Many {
+                    public void a(List<String> a) { a.clear(); }
+                    public void b(List<String> b) { b.clear(); }
+                    public void c(List<String> c) { c.clear(); }
+                }
+            }
+            """;
+
+    @DisplayName("why a type is not @Container: a negative why, only for a type close to one (2 parameters, default)")
+    @Test
+    public void notContainer(@TempDir Path projectDir) throws Exception {
+        DaemonProtocol.Result result = DaemonAnalysisFixture.analyze(projectDir, "x/C.java", CONTAINERS, false, null);
+        DaemonProtocol.ElementAnnotation sink = type(result, "x.C.Sink");
+        DaemonProtocol.Why why = sink.whys().stream().filter(w -> "Container".equals(w.annotation())).findFirst()
+                .orElseThrow(() -> new AssertionError(sink.toString()));
+        assertTrue(why.negates());
+        assertEquals(List.of("5 parameter list of fill(..) is modified: calls list.add(..), a modifying method"
+                             + " outside the analysis"), steps(sink, "Container"));
+        assertTrue(sink.properties().keySet().stream().noneMatch(k -> k.endsWith("Culprit")),
+                sink.properties()::toString);
+        // three modified parameters: past the limit, no explanation
+        DaemonProtocol.ElementAnnotation many = type(result, "x.C.Many");
+        assertTrue(many.whys().stream().noneMatch(w -> "Container".equals(w.annotation())), many::toString);
+    }
+
+    private static List<String> steps(DaemonProtocol.ElementAnnotation element, String annotation) {
+        DaemonProtocol.Why why = element.whys().stream().filter(w -> annotation.equals(w.annotation())).findFirst()
+                .orElseThrow(() -> new AssertionError(element.toString()));
+        return why.steps().stream().map(st -> st.line() + " " + st.text()).toList();
+    }
+
+    private static DaemonProtocol.ElementAnnotation type(DaemonProtocol.Result result, String fqn) {
+        return result.elementAnnotations().stream().filter(e -> "TYPE".equals(e.kind()) && e.fqn().equals(fqn))
+                .findFirst().orElseThrow(() -> new AssertionError(fqn));
+    }
+
     private static DaemonProtocol.ElementAnnotation method(DaemonProtocol.Result result, String fqnPrefix) {
         return result.elementAnnotations().stream()
                 .filter(e -> "METHOD".equals(e.kind()) && e.fqn().startsWith(fqnPrefix))

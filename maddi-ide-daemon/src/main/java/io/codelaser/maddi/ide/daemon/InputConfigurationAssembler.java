@@ -105,6 +105,9 @@ public class InputConfigurationAssembler {
         Map<String, DaemonProtocol.ModuleSourceSet> byName = new LinkedHashMap<>();
         for (DaemonProtocol.ModuleSourceSet spec : specs) byName.put(spec.name(), spec);
         Map<String, SourceSet> built = new LinkedHashMap<>();
+        Set<String> restrict = config.restrictToPackages() == null ? Set.of()
+                : Set.copyOf(config.restrictToPackages().stream().filter(InputConfigurationAssembler::notBlank)
+                .toList());
         for (String name : topologicalOrder(byName)) {
             DaemonProtocol.ModuleSourceSet spec = byName.get(name);
             List<SourceSet> dependencies = new ArrayList<>(always);
@@ -136,6 +139,8 @@ public class InputConfigurationAssembler {
                     // and without it the set's requires/exports are not honoured
                     .setModule(hasModuleInfo(sourceDirs))
                     .setDependencies(List.copyOf(dependencies))
+                    // the flat path hands this to the configuration builder; per set, it is the set's own
+                    .setRestrictToPackages(restrict)
                     .build();
             built.put(spec.name(), set);
         }
