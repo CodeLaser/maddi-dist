@@ -86,17 +86,48 @@ public final class MaddiService implements Closeable {
 
     /** Configure (or configure again) a project, and store it. */
     public synchronized Map<String, Object> configure(ProjectStore.StoredProject project) throws IOException {
+        ProjectStore.StoredProject previous = projects.get(project.name());
+        if (project.daemonJdk() == null && previous != null && previous.daemonJdk() != null) {
+            project = project.withDaemonJdk(previous.daemonJdk()); // configured again: the JDK it needs stays
+        }
+        if (project.daemonJdk() != null) checkJdk(Path.of(project.daemonJdk()));
         ProjectStore.StoredProject complete = project.config() == null ? project
-                : project.with(withJdkModules(project.config()), project.buildFiles());
+                : project.with(withJdkModules(project.config(), project.daemonJdk()), project.buildFiles());
         if (complete.config() != null) ProjectConfigs.check(complete.config());
         store.save(complete);
         projects.put(complete.name(), complete);
         return describeProject(complete, BuildFileCheck.check(complete.buildFiles(), complete.config()));
     }
 
-    private AnalysisModel.AnalyzeConfig withJdkModules(AnalysisModel.AnalyzeConfig config) throws IOException {
+    /** Run this project's daemon on another JDK (null: the server's), keeping its configuration. */
+    public synchronized Map<String, Object> setDaemonJdk(String name, String jdk) throws IOException {
+        ProjectStore.StoredProject project = projects.get(name);
+        if (project == null) throw new IllegalArgumentException("no project '" + name + "'; configure it first");
+        if (jdk != null) checkJdk(Path.of(jdk));
+        ProjectStore.StoredProject changed = project.withDaemonJdk(jdk);
+        store.save(changed);
+        projects.put(name, changed);
+        return describeProject(changed, BuildFileCheck.check(changed.buildFiles(), changed.config()));
+    }
+
+    /** The JDK the daemon runs on for this project. */
+    public Path daemonJdkOf(ProjectStore.StoredProject project) {
+        return project.daemonJdk() != null ? Path.of(project.daemonJdk()) : settings.jdkHome();
+    }
+
+    private static void checkJdk(Path jdk) {
+        int feature = McpMain.featureVersion(jdk);
+        if (feature < 25) {
+            throw new IllegalArgumentException("the daemon needs a JDK 25 or later; " + jdk + " is "
+                                               + (feature < 0 ? "not a JDK (no release file)" : "JDK " + feature));
+        }
+    }
+
+    private AnalysisModel.AnalyzeConfig withJdkModules(AnalysisModel.AnalyzeConfig config, String daemonJdk)
+            throws IOException {
         if (config.jmods() != null && !config.jmods().isEmpty()) return config;
-        Path jdk = config.sdkHome() != null ? Path.of(config.sdkHome()) : settings.jdkHome();
+        Path jdk = config.sdkHome() != null ? Path.of(config.sdkHome())
+                : daemonJdk != null ? Path.of(daemonJdk) : settings.jdkHome();
         return new AnalysisModel.AnalyzeConfig(config.workingDirectory(), config.sdkHome(), config.sourceEncoding(),
                 ProjectConfigs.jdkModules(jdk), config.sources(), config.classpath(), config.restrictToPackages(),
                 config.parallel(), config.warnNearMisses(), config.moduleSourceSets());
@@ -134,6 +165,7 @@ public final class MaddiService implements Closeable {
         out.put("project", project.name());
         out.put("from", project.sourceFile() != null ? project.sourceFile() : project.kind());
         out.put("configuredAt", project.configuredAt());
+        if (project.daemonJdk() != null) out.put("daemonJdk", project.daemonJdk());
         out.put("regenerate", project.regenerate() == null ? "none: configure again when the build changes"
                 : project.regenerate().describe());
         if (config == null) {
@@ -228,8 +260,8 @@ public final class MaddiService implements Closeable {
                 return;
             }
             AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages);
-            run.phase("analyze", "starting the daemon");
-            daemon.ensureStarted(settings.installDir(), settings.jdkHome(), settings.xmxMb(), settings.logFile());
+            run.phase("analyze", "starting the daemon on " + daemonJdkOf(project));
+            daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), settings.logFile());
             JsonNode end = daemon.analyze(run.id(), request, frame -> run.onFrame(frame, mapper));
             run.onEnd(end, mapper);
         } catch (IOException | RuntimeException e) {
@@ -265,12 +297,30 @@ public final class MaddiService implements Closeable {
         if (run.finishedAt() != null && run.result() != null && project != null && project.config() != null) {
             int changed = sourcesChangedSince(project.config(), java.time.Instant.parse(run.finishedAt()));
             out.put("sourcesChangedSince", changed);
+            String hint = jdkHint(run.result());
+            if (hint != null) out.put("hint", hint);
             if (changed > 0) {
                 out.put("sourcesNote", changed + " source file(s) changed since this run: analyze again for verdicts"
                                        + " of the code as it is now");
             }
         }
         return out;
+    }
+
+    /*
+     An annotation processor that cannot run on the daemon's JDK (Lombok on a JDK newer than it knows) leaves its
+     source set parsed without the members it generates: the daemon says so per source set, in these words.
+     */
+    private static String jdkHint(AnalysisModel.Result result) {
+        if (result.findings() == null) return null;
+        for (AnalysisModel.Finding f : result.findings()) {
+            if ("parse".equals(f.category()) && f.message() != null && f.message().contains(" failed on JDK ")) {
+                return "an annotation processor could not run on the daemon's JDK, so source sets were parsed without"
+                       + " the members it generates: give the project a JDK it supports, configure_project with"
+                       + " project and daemonJdk (a JDK 25 or later), and analyze again";
+            }
+        }
+        return null;
     }
 
     private static int sourcesChangedSince(AnalysisModel.AnalyzeConfig config, java.time.Instant since) {
@@ -340,7 +390,7 @@ public final class MaddiService implements Closeable {
         }
         Path file = Path.of(project.sourceFile());
         ProjectStore.StoredProject fresh = project.with(
-                withJdkModules(ProjectConfigs.fromInputConfiguration(file, mapper)),
+                withJdkModules(ProjectConfigs.fromInputConfiguration(file, mapper), project.daemonJdk()),
                 ProjectConfigs.buildFilesOf(file, mapper));
         ProjectConfigs.check(fresh.config());
         synchronized (this) {
@@ -372,7 +422,7 @@ public final class MaddiService implements Closeable {
         }
         if (run.state() != AnalysisRun.State.RUNNING) return false; // stopped
         run.phase("configure", "making the configuration from the compile log");
-        daemon.ensureStarted(settings.installDir(), settings.jdkHome(), settings.xmxMb(), settings.logFile());
+        daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), settings.logFile());
         com.fasterxml.jackson.databind.JsonNode written = daemon.writeInputConfiguration("cfg-" + run.id(),
                 compileLog, root, GradleCapture.buildFileGlobs(), List.of(), Path.of(project.sourceFile()));
         if (!AnalysisModel.INPUT_CONFIGURATION_WRITTEN.equals(written.path("type").asText())) {

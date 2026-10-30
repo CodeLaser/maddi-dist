@@ -129,6 +129,11 @@ CLI-written file needs one). Computing it for a large build takes minutes; this 
 changed. A project configured from directories has no such command: a change to its Gradle or Maven files fails
 the run, unless `analyze` is told `allowStale`.
 
+A project can name the JDK its daemon runs on (`configure_project` with `project` and `daemonJdk`, a JDK 25 or later),
+when the server's does not suit it: an annotation processor such as Lombok runs inside the daemon's javac, and an
+older one fails on a newer JDK, leaving its source sets parsed without the members it generates. `run_status` says so
+when it happened.
+
 A run that finished, or was stopped with values, is stored too, the last 8 per project: after a restart its
 verdicts can still be asked and compared with `diff_runs`. A stored run says when it was analysed and how many source
 files changed since.

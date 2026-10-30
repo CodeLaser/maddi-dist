@@ -120,6 +120,35 @@ public class StoredProjectTest {
     }
 
     @Test
+    public void aProjectsOwnDaemonJdk(@TempDir Path dir) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("p"));
+        Files.createDirectories(project.resolve("src/x"));
+        Files.writeString(project.resolve("src/x/A.java"), "package x; public class A { int i; void inc() { i++; } }\n");
+        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(project, List.of("src"), List.of(),
+                List.of(), List.of(), null, 0, null, List.of("java.base"), null);
+        Path jdk = Path.of(System.getProperty("maddi.test.jdkHome", System.getProperty("java.home")));
+        Path store = dir.resolve("store");
+        try (MaddiService service = new MaddiService(settings(dir), store)) {
+            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
+                    BuildFileCheck.capture(config), "then", config));
+            assertNull(service.projects().getFirst().get("daemonJdk"));
+
+            assertThrows(IllegalArgumentException.class, () -> service.setDaemonJdk("p", dir.toString()),
+                    "not a JDK");
+            assertEquals(jdk.toString(), service.setDaemonJdk("p", jdk.toString()).get("daemonJdk"));
+
+            // configured again without one: the JDK the project needs stays
+            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
+                    BuildFileCheck.capture(config), "again", config));
+            AnalysisRun run = service.await(service.analyze("p", List.of(), List.of(), false).id(), 300, null);
+            assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
+        }
+        try (MaddiService service = new MaddiService(settings(dir), store)) {
+            assertEquals(jdk.toString(), service.projects().getFirst().get("daemonJdk"), "stored");
+        }
+    }
+
+    @Test
     public void staleWithoutACommand(@TempDir Path dir) throws Exception {
         Path project = Files.createDirectories(dir.resolve("p"));
         Files.createDirectories(project.resolve("src/x"));

@@ -60,18 +60,31 @@ public final class ProjectStore {
      *                   {@code directories} (named by hand: nothing can recompute it), or {@code gradle} (made by
      *                   this server from the build, into {@code sourceFile} in the store)
      * @param config     null until a {@code gradle} project's configuration is first made
+     * @param daemonJdk  the JDK the daemon runs on for this project; null for the server's. What a project needs can
+     *                   differ: an annotation processor (Lombok) runs inside the daemon's javac, and may not support
+     *                   the newest JDK
      * @param buildFiles the files that shaped the configuration, hashed when it was made; null when unknown
      * @param regenerate null when there is no way to compute it again
      */
     public record StoredProject(String name, String kind, String sourceFile, Regenerate regenerate,
-                               BuildFiles buildFiles, String configuredAt, AnalysisModel.AnalyzeConfig config) {
+                               BuildFiles buildFiles, String configuredAt, AnalysisModel.AnalyzeConfig config,
+                               String daemonJdk) {
         public static final String INPUT_CONFIGURATION = "inputConfiguration";
         public static final String DIRECTORIES = "directories";
         public static final String GRADLE = "gradle";
 
+        public StoredProject(String name, String kind, String sourceFile, Regenerate regenerate, BuildFiles buildFiles,
+                             String configuredAt, AnalysisModel.AnalyzeConfig config) {
+            this(name, kind, sourceFile, regenerate, buildFiles, configuredAt, config, null);
+        }
+
         public StoredProject with(AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
             return new StoredProject(name, kind, sourceFile, regenerate, newBuildFiles,
-                    java.time.Instant.now().toString(), newConfig);
+                    java.time.Instant.now().toString(), newConfig, daemonJdk);
+        }
+
+        public StoredProject withDaemonJdk(String jdk) {
+            return new StoredProject(name, kind, sourceFile, regenerate, buildFiles, configuredAt, config, jdk);
         }
     }
 

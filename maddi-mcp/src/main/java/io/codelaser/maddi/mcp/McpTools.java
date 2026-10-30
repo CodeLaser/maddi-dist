@@ -82,6 +82,7 @@ public final class McpTools {
                 """
                         {"type":"object","properties":{
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
+                          "daemonJdk":{"type":"string","description":"a JDK 25+ to run the daemon on for this project, when the server's does not suit it (an annotation processor such as Lombok that does not support it). Given with project alone: changes only that, keeping the configuration"},
                           "build":{"type":"string","enum":["gradle"],"description":"make the configuration from this build; default when only workingDirectory is given and it holds a Gradle build"},
                           "inputConfiguration":{"type":"string","description":"path of an inputConfiguration.json"},
                           "regenerate":{"type":"array","items":{"type":"string"},"description":"a command that writes the inputConfiguration file again; default: the plugin's task or goal"},
@@ -247,6 +248,10 @@ public final class McpTools {
     private Object configure(Args a, McpSyncServerExchange x, Object token) throws Exception {
         String project = a.string("project", "default");
         String inputConfiguration = a.string("inputConfiguration");
+        String daemonJdk = a.string("daemonJdk");
+        if (daemonJdk != null && inputConfiguration == null && a.string("workingDirectory") == null) {
+            return service.setDaemonJdk(project, daemonJdk);
+        }
         String now = java.time.Instant.now().toString();
         if (inputConfiguration != null) {
             Path file = Path.of(inputConfiguration).toAbsolutePath().normalize();
@@ -263,7 +268,7 @@ public final class McpTools {
             }
             return service.configure(new ProjectStore.StoredProject(project,
                     ProjectStore.StoredProject.INPUT_CONFIGURATION, file.toString(), regenerate, buildFiles, now,
-                    config));
+                    config, daemonJdk));
         }
         String build = a.string("build");
         String workingDirectoryArg = a.string("workingDirectory");
@@ -280,7 +285,8 @@ public final class McpTools {
             }
             return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.GRADLE,
                     service.inputConfigurationOf(project).toString(),
-                    ProjectStore.Regenerate.builtin(GradleCapture.BUILTIN, root.toString()), null, now, null));
+                    ProjectStore.Regenerate.builtin(GradleCapture.BUILTIN, root.toString()), null, now, null,
+                    daemonJdk));
         }
         AnalysisModel.AnalyzeConfig config;
         {
@@ -294,7 +300,7 @@ public final class McpTools {
                     a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
         }
         return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.DIRECTORIES,
-                null, null, BuildFileCheck.capture(config), now, config));
+                null, null, BuildFileCheck.capture(config), now, config, daemonJdk));
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
