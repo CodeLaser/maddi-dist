@@ -139,6 +139,25 @@ implementation against it and reports a violation as a problem, with the reasoni
 *Warn about near misses* (off by default) also reports types and methods that narrowly miss a property, e.g. a
 type that would be `@Container` but for one method. Useful on code you are cleaning up; noisy elsewhere.
 
+## Translating Java to Kotlin (IntelliJ)
+
+maddi translates Java to Kotlin with its own translator, which reads the analysis's verdicts: a `List` field or
+result becomes Kotlin's read-only `List` where nothing modifies it and `MutableList` where something does, a type
+gets `?` only where the analysis finds that `null` can occur, and a record becomes a `data class`. Right-click in the
+Project view or the editor:
+
+- **Translate to Kotlin with maddi (Preview)**, on one or more Java files: each translation opens beside its Java in
+  the diff viewer. Nothing is written. A preview, because a single Kotlin file among Java ones may need interop
+  details (`@JvmStatic`, getter names) the translator does not write yet.
+- **Translate Module to Kotlin with maddi**, on a module: its main sources are translated together, as one Kotlin
+  code base, into `build/maddi-kotlin/` of the module, with `translation-report.txt` beside them. The notification
+  then offers **Replace the Java sources…**: each Java file becomes its Kotlin file, in place. The module must be set
+  up to build Kotlin; Local History keeps the Java files (label *Before maddi Translate to Kotlin*).
+
+When the files changed since the last analysis, the project is built and analysed first. The report lists what the
+translator could not say the same way: *INFO* (said differently, same behaviour), *BEHAVIOUR_CHANGE*, *LOSS*
+(something of the Java's is not in the Kotlin) and *ERROR* (not translated: the file will not compile as is).
+
 ## Settings
 
 IntelliJ: *Settings → Tools → maddi*. Eclipse: *Preferences → maddi*.

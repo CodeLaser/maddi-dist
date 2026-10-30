@@ -22,6 +22,7 @@ import io.codelaser.maddi.analysis.api.AnalysisEngines;
 import io.codelaser.maddi.analysis.api.AnalysisProblem;
 import io.codelaser.maddi.analysis.api.ModificationOptions;
 import io.codelaser.maddi.analysis.api.ModificationRequest;
+import io.codelaser.maddi.analysis.api.NullabilityTarget;
 import io.codelaser.maddi.analysis.api.PrepOutcome;
 import io.codelaser.maddi.analysis.api.PrepRequest;
 import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
@@ -32,6 +33,10 @@ import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.info.Info;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
+import io.codelaser.maddi.cst.impl.analysis.NullabilityFacts;
+import io.codelaser.maddi.cst.print.kotlin.KotlinPrintOptions;
+import io.codelaser.maddi.cst.print.kotlin.KotlinTranslator;
+import io.codelaser.maddi.cst.print.kotlin.KotlinWorld;
 import io.codelaser.maddi.inspection.api.integration.JavaInspector;
 import io.codelaser.maddi.inspection.api.parser.ParseResult;
 import io.codelaser.maddi.inspection.api.parser.Summary;
@@ -46,9 +51,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -98,7 +108,8 @@ public class WarmAnalysisService implements AnalyzeHandler {
      next run starts, so that two models never live at once. Requests come one at a time, on the connection's thread,
      which keeps maddi's runtime on one thread as the analysis requires.
      */
-    private record LastRun(Runtime runtime, SourceSet sourceSet, ResultCollector collector) {
+    private record LastRun(Runtime runtime, SourceSet sourceSet, ResultCollector collector, AnalysisEngine engine,
+                           List<Info> order, Collection<TypeInfo> primaryTypes) {
     }
 
     private LastRun lastRun;
@@ -118,6 +129,56 @@ public class WarmAnalysisService implements AnalyzeHandler {
             }
         }
         return new DaemonProtocol.LibraryResult(request.requestId(), elements, unknown);
+    }
+
+    /*
+     As the CLI's --translate kotlin (RunAnalyzer): the nullability pass's facts, !! where a value the analysis cannot
+     prove non-null meets a non-null type. The translator writes files; they are read back and the directory removed.
+     */
+    @Override
+    public DaemonProtocol.TranslateResult translate(DaemonProtocol.Translate request) throws IOException {
+        LastRun run = lastRun;
+        if (run == null) {
+            return new DaemonProtocol.TranslateResult(request.requestId(), List.of(), List.of(), List.of(),
+                    request.types());
+        }
+        Map<String, TypeInfo> byName = new HashMap<>();
+        for (TypeInfo t : run.primaryTypes()) byName.put(t.fullyQualifiedName(), t);
+        List<TypeInfo> types = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        for (String fqn : request.types()) {
+            TypeInfo t = byName.get(fqn);
+            if (t == null) unknown.add(fqn);
+            else types.add(t);
+        }
+        NullabilityFacts facts = run.engine().nullabilityFacts(run.order(), NullabilityTarget.KOTLIN);
+        KotlinPrintOptions options = new KotlinPrintOptions(facts, KotlinPrintOptions.NullCheck.ASSERT)
+                .withWorld(request.together() ? KotlinWorld.of(types) : KotlinWorld.FILE);
+        Path out = Files.createTempDirectory("maddi-translate");
+        try {
+            KotlinTranslator.Result result = KotlinTranslator.translate(run.runtime(), types, options, out);
+            Map<Path, String> typeOfFile = new HashMap<>();
+            for (TypeInfo t : types) {
+                typeOfFile.put(out.resolve(t.packageName().replace('.', '/')).resolve(t.simpleName() + ".kt")
+                        .toAbsolutePath().normalize(), t.fullyQualifiedName());
+            }
+            List<DaemonProtocol.TranslatedFile> files = new ArrayList<>();
+            for (Path file : result.files()) {
+                files.add(new DaemonProtocol.TranslatedFile(typeOfFile.get(file),
+                        out.toAbsolutePath().normalize().relativize(file).toString().replace('\\', '/'),
+                        Files.readString(file)));
+            }
+            List<DaemonProtocol.TranslationMessage> messages = result.messages().stream()
+                    .map(m -> new DaemonProtocol.TranslationMessage(m.severity().name(), m.code().name(), m.type(),
+                            m.line(), m.position(), m.detail()))
+                    .toList();
+            return new DaemonProtocol.TranslateResult(request.requestId(), files, messages, result.crashes(),
+                    unknown);
+        } finally {
+            try (Stream<Path> walk = Files.walk(out)) {
+                walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            }
+        }
     }
 
     @Override
@@ -222,7 +283,8 @@ public class WarmAnalysisService implements AnalyzeHandler {
         LOGGER.info("analysis complete in {} ms ({}{}): {} findings, {} element annotations",
                 elapsed, outcome, parsed.partial() ? ", PARTIAL parse" : "", findings.size(), elementAnnotations.size());
         int parseErrors = summary == null ? 0 : summary.parseExceptions().size();
-        lastRun = new LastRun(parsed.runtime(), parsed.sourceSetOfRequest(), collector);
+        lastRun = new LastRun(parsed.runtime(), parsed.sourceSetOfRequest(), collector, engine, order,
+                parsed.primaryTypes());
         return new DaemonProtocol.Result(requestId, findings, elementAnnotations, initProblems,
                 parseErrors, parsed.hints(), elapsed, outcome);
     }

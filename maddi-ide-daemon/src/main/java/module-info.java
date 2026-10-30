@@ -4,6 +4,8 @@ module io.codelaser.maddi.ide.daemon {
     requires io.codelaser.maddi.analysis.api;
     requires io.codelaser.maddi.cst.analysis;
     requires io.codelaser.maddi.cst.api;
+    // maddi's Java-to-Kotlin translator, for the IDE's "Translate to Kotlin with maddi"
+    requires io.codelaser.maddi.cst.print.kotlin;
     requires io.codelaser.maddi.inspection.api;
     requires io.codelaser.maddi.inspection.openjdk;
     requires io.codelaser.maddi.inspection.resource;

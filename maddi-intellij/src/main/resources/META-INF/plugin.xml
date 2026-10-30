@@ -72,6 +72,14 @@
                 description="Compile the project and run a whole-project maddi analysis">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="maddi.TranslateToKotlin"
+                class="io.codelaser.maddi.ide.plugin.action.TranslateToKotlinAction"
+                text="Translate to Kotlin with maddi"
+                description="Translate Java to Kotlin with maddi's translator, which uses the analysis's verdicts: a module as one Kotlin code base, or files as a preview">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="RefactoringMenu" anchor="last"/>
+        </action>
         <action id="maddi.StopAnalysis"
                 class="io.codelaser.maddi.ide.plugin.action.StopMaddiAnalysisAction"
                 text="Stop maddi Analysis"

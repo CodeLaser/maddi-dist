@@ -53,6 +53,7 @@ dependencies {
     implementation("io.codelaser:maddi-cst-impl:$maddiVersion")
     implementation("io.codelaser:maddi-cst-io:$maddiVersion")
     implementation("io.codelaser:maddi-cst-print:$maddiVersion")
+    implementation("io.codelaser:maddi-cst-print-kotlin:$maddiVersion")     // the IDE's Translate to Kotlin
     implementation("io.codelaser:maddi-inspection-openjdk:$maddiVersion")       // JavaInspectorImpl (the integration one is phased out)
     implementation("io.codelaser:maddi-inspection-resource:$maddiVersion")      // InputConfigurationImpl
     // A project with Kotlin sources: the mixed parse (MixedProjectInspector), the census of what K2 could not read

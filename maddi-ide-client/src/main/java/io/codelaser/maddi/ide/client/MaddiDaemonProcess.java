@@ -172,6 +172,18 @@ public final class MaddiDaemonProcess implements Closeable {
                 "types", types), AnalysisModel.LIBRARY_RESULT, null);
     }
 
+    /**
+     * These project types in Kotlin, from the last analysis: a {@code translateResult} frame, or an {@code error} one
+     * (an older daemon knows no such request). {@code together}: compiled as one Kotlin code base (a module); else
+     * each file on its own, the rest staying Java.
+     */
+    public synchronized JsonNode translate(String requestId, List<String> types, boolean together)
+            throws IOException {
+        if (client == null) throw new IOException("daemon not started");
+        return client.requestUntil(java.util.Map.of("type", AnalysisModel.TRANSLATE, "requestId", requestId,
+                "types", types, "together", together), AnalysisModel.TRANSLATE_RESULT, null);
+    }
+
     public synchronized DaemonClient client() {
         return client;
     }

@@ -186,6 +186,7 @@ public final class DaemonMain {
                         new DaemonProtocol.Pong(System.nanoTime()));
                 case DaemonProtocol.T_ANALYZE_PROJECT -> handleAnalyze(out, msg);
                 case DaemonProtocol.T_LIBRARY_ANNOTATIONS -> handleLibrary(out, msg);
+                case DaemonProtocol.T_TRANSLATE -> handleTranslate(out, msg);
                 case DaemonProtocol.T_SHUTDOWN -> {
                     send(out, DaemonProtocol.T_BYE, null);
                     return false;
@@ -271,6 +272,30 @@ public final class DaemonMain {
             send(out, DaemonProtocol.T_LIBRARY_RESULT, handler.libraryAnnotations(request));
         } catch (RuntimeException e) {
             LOGGER.warn("library annotations failed for request {}", requestId, e);
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "internal",
+                    String.valueOf(e.getMessage())));
+        }
+    }
+
+    private void handleTranslate(Writer out, JsonNode msg) throws IOException {
+        String requestId = msg.path("requestId").asText(null);
+        DaemonProtocol.Translate request;
+        try {
+            request = mapper.treeToValue(msg, DaemonProtocol.Translate.class);
+        } catch (IOException e) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "malformed translate: " + e.getMessage()));
+            return;
+        }
+        if (request.types() == null) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "translate without types"));
+            return;
+        }
+        try {
+            send(out, DaemonProtocol.T_TRANSLATE_RESULT, handler.translate(request));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("translation failed for request {}", requestId, e);
             send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "internal",
                     String.valueOf(e.getMessage())));
         }

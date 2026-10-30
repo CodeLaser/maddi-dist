@@ -395,6 +395,24 @@ public final class AnalysisModel {
     public record LibraryResult(String requestId, List<LibraryElement> elements, List<String> unknownTypes) {
     }
 
+    // ---- translation (the daemon's translateResult) ----
+
+    public static final String TRANSLATE = "translate";
+    public static final String TRANSLATE_RESULT = "translateResult";
+
+    /** One Kotlin file: {@code path} relative to a source root ({@code a/b/Foo.kt}), for the Java type {@code type}. */
+    public record TranslatedFile(String type, String path, String source) {
+    }
+
+    /** A translator's message at a line of the Java type: severity INFO, BEHAVIOUR_CHANGE, LOSS or ERROR. */
+    public record TranslationMessage(String severity, String code, String type, int line, int position,
+                                     String detail) {
+    }
+
+    public record TranslateResult(String requestId, List<TranslatedFile> files, List<TranslationMessage> messages,
+                                  List<String> crashes, List<String> unknownTypes) {
+    }
+
     /** The key, among a placed library element's properties, of {@link #libraryNote}'s text. */
     public static final String LIBRARY_NOTE = "maddi.libraryNote";
 

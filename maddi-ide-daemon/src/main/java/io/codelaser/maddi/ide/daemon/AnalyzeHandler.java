@@ -51,4 +51,10 @@ public interface AnalyzeHandler {
     default DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
         return new DaemonProtocol.LibraryResult(request.requestId(), java.util.List.of(), request.types());
     }
+
+    /** The given types in Kotlin. Default: nothing translated, every type unknown — a handler that keeps no model. */
+    default DaemonProtocol.TranslateResult translate(DaemonProtocol.Translate request) throws java.io.IOException {
+        return new DaemonProtocol.TranslateResult(request.requestId(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), request.types());
+    }
 }

@@ -75,6 +75,13 @@ public final class DaemonProtocol {
      */
     public static final String T_LIBRARY_ANNOTATIONS = "libraryAnnotations";
     public static final String T_LIBRARY_RESULT = "libraryResult";
+    /**
+     * The given project types translated to Kotlin by maddi's translator, from the last analysis's model: its
+     * verdicts decide read-only collection types and nullability. Answered by {@link #T_TRANSLATE_RESULT}; an older
+     * daemon answers {@code error} {@code bad-request}.
+     */
+    public static final String T_TRANSLATE = "translate";
+    public static final String T_TRANSLATE_RESULT = "translateResult";
 
     // ---- responses (serialized; DaemonMain adds the "type" field) ----
 
@@ -292,6 +299,38 @@ public final class DaemonProtocol {
     public record LibraryElement(String kind, String type, String fqn, String signature, String origin,
                                  List<String> assumed, List<String> displayAnnotations, List<Annotation> annotations,
                                  Map<String, String> properties) {
+    }
+
+    /**
+     * @param types    fully qualified names of primary types of the project's sources
+     * @param together the types are translated and compiled together, as one Kotlin code base (a module): what one
+     *                 of them may assume of the others' members. False: each file on its own, the rest of the code
+     *                 staying Java (a preview)
+     */
+    public record Translate(String requestId, List<String> types, boolean together) {
+    }
+
+    /** One Kotlin file: {@code path} relative to a source root ({@code a/b/Foo.kt}), for the Java type {@code type}. */
+    public record TranslatedFile(String type, String path, String source) {
+    }
+
+    /**
+     * What the translator says of a construct, at a line of the Java type it was translating.
+     *
+     * @param severity INFO (said differently, same behaviour), BEHAVIOUR_CHANGE, LOSS (something of the Java's is not
+     *                 in the Kotlin) or ERROR (not translated: the file will not compile)
+     * @param line     the line in the Java source, -1 when unknown
+     */
+    public record TranslationMessage(String severity, String code, String type, int line, int position,
+                                     String detail) {
+    }
+
+    /**
+     * @param crashes      the types the printer failed on: no file for them
+     * @param unknownTypes the requested types the last analysis does not know, or all of them before any analysis
+     */
+    public record TranslateResult(String requestId, List<TranslatedFile> files, List<TranslationMessage> messages,
+                                  List<String> crashes, List<String> unknownTypes) {
     }
 
     /** @param unknownTypes the requested types the last analysis does not know, or all of them before any analysis */
