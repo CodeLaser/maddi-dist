@@ -27,7 +27,6 @@ import com.intellij.codeInsight.hints.declarative.InlineInlayPosition;
 import com.intellij.codeInsight.hints.declarative.SharedBypassCollector;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiTypeParameter;
@@ -63,13 +62,12 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         MaddiSettings.State settings = MaddiSettings.getInstance().getState();
         InlineHintsMode mode = settings.inlineHintsMode;
         if (mode == InlineHintsMode.NONE) return null;
-        VirtualFile vf = file.getVirtualFile();
-        if (vf == null) return null;
-        List<AnalysisModel.ElementAnnotation> annotations =
-                MaddiAnalysisService.getInstance(file.getProject()).annotationsForPath(vf.getPath());
-        if (annotations.isEmpty()) return null;
         Document doc = file.getViewProvider().getDocument();
         if (doc == null) return null;
+        // a library file's too (Set.java from the JDK's sources), matched by signature
+        List<AnalysisModel.ElementAnnotation> annotations =
+                MaddiAnalysisService.getInstance(file.getProject()).annotationsFor(file, doc);
+        if (annotations.isEmpty()) return null;
         return new Collector(annotations, doc, mode, settings.hintPlacement, this::kindsOf, this::parameterHintOffset);
     }
 

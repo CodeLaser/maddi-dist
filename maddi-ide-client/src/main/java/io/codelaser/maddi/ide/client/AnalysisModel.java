@@ -370,4 +370,63 @@ public final class AnalysisModel {
     private static String identity(ElementAnnotation e) {
         return e.kind() + " " + e.fqn();
     }
+
+    // ---- library elements (the daemon's libraryResult) ----
+
+    /** Frame types of the library request and its answer. */
+    public static final String LIBRARY_ANNOTATIONS = "libraryAnnotations";
+    public static final String LIBRARY_RESULT = "libraryResult";
+
+    /** Where a library element's values come from: see the daemon's {@code DaemonProtocol.LibraryElement}. */
+    public static final String ORIGIN_ANNOTATED = "annotated";
+    public static final String ORIGIN_DEFAULT = "default";
+    public static final String ORIGIN_COMPUTED = "computed";
+
+    /**
+     * One element of a library type, without a position: matched to the declaration on screen by {@code type} (the
+     * declaring type), {@code kind} and {@code signature} (a method's name and erased parameter types, a field's
+     * name, a parameter's method signature with {@code #index}, a type's fully qualified name).
+     */
+    public record LibraryElement(String kind, String type, String fqn, String signature, String origin,
+                                 List<String> assumed, List<String> displayAnnotations, List<Annotation> annotations,
+                                 Map<String, String> properties) {
+    }
+
+    public record LibraryResult(String requestId, List<LibraryElement> elements, List<String> unknownTypes) {
+    }
+
+    /** The key, among a placed library element's properties, of {@link #libraryNote}'s text. */
+    public static final String LIBRARY_NOTE = "maddi.libraryNote";
+
+    /** What to tell the reader about where a library element's values come from. */
+    public static String libraryNote(LibraryElement element) {
+        if (ORIGIN_ANNOTATED.equals(element.origin())) return "Manually annotated, in maddi's annotated API";
+        if (ORIGIN_DEFAULT.equals(element.origin())) {
+            String which = element.assumed() == null ? "" : element.assumed().stream()
+                    .map(AnalysisModel::annotationOfAssumed).distinct()
+                    .collect(java.util.stream.Collectors.joining(", "));
+            return "No annotation in maddi's annotated API" + (which.isEmpty() ? "" : ": " + which + " is the default");
+        }
+        return "Not in maddi's annotated API: the analysis's defaults for a library";
+    }
+
+    private static String annotationOfAssumed(String propertyKey) {
+        return switch (propertyKey) {
+            case "nonModifyingMethod", "unmodifiedParameter" -> "@Modified";
+            default -> propertyKey;
+        };
+    }
+
+    /**
+     * A library element placed on the declaration it matched, as the editor's surfaces take an element of the
+     * project's: the note on where its values come from rides along among the properties ({@link #LIBRARY_NOTE}).
+     */
+    public static ElementAnnotation place(LibraryElement element, String uri, int beginLine, int beginCol,
+                                          int endLine, int endCol) {
+        Map<String, String> properties = new LinkedHashMap<>();
+        if (element.properties() != null) properties.putAll(element.properties());
+        properties.put(LIBRARY_NOTE, libraryNote(element));
+        return new ElementAnnotation(uri, beginLine, beginCol, endLine, endCol, element.kind(), element.fqn(),
+                element.displayAnnotations(), element.annotations(), properties, List.of());
+    }
 }

@@ -140,6 +140,16 @@ public final class MaddiDaemonProcess implements Closeable {
         return client.analyze(requestId, config, onStatus);
     }
 
+    /**
+     * What the last analysis knows of these library types: a {@code libraryResult} frame, or an {@code error} one
+     * (an older daemon knows no such request). Waits for a running analysis, as every request does.
+     */
+    public synchronized JsonNode libraryAnnotations(String requestId, List<String> types) throws IOException {
+        if (client == null) throw new IOException("daemon not started");
+        return client.requestUntil(java.util.Map.of("type", AnalysisModel.LIBRARY_ANNOTATIONS, "requestId", requestId,
+                "types", types), AnalysisModel.LIBRARY_RESULT, null);
+    }
+
     public synchronized DaemonClient client() {
         return client;
     }

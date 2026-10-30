@@ -43,4 +43,12 @@ public interface AnalyzeHandler {
      * message and keeps the daemon alive.
      */
     DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception;
+
+    /**
+     * What the last analysis knows of the given library types. Default: nothing, every type unknown — a handler
+     * that keeps no model.
+     */
+    default DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
+        return new DaemonProtocol.LibraryResult(request.requestId(), java.util.List.of(), request.types());
+    }
 }

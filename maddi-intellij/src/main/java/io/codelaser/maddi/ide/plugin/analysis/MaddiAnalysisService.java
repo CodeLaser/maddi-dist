@@ -29,14 +29,18 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiJavaFile;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.plugin.settings.MaddiConfigurable;
@@ -52,6 +56,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -78,6 +84,10 @@ public final class MaddiAnalysisService implements Disposable {
     // keyed by absolute source-file path (scheme stripped), so VirtualFile.getPath() lookups match
     private volatile Map<String, List<AnalysisModel.Finding>> findingsByPath = Map.of();
     private volatile Map<String, List<AnalysisModel.ElementAnnotation>> annotationsByPath = Map.of();
+    // what the last analysis knows of library types, by qualified name: asked for when a library file is on screen,
+    // cleared by every result. An empty list: asked, and nothing to show (an unknown type, an older daemon).
+    private final Map<String, List<AnalysisModel.LibraryElement>> libraryByType = new ConcurrentHashMap<>();
+    private final Set<String> libraryWanted = ConcurrentHashMap.newKeySet();
 
     public MaddiAnalysisService(Project project) {
         this.project = project;
@@ -110,6 +120,7 @@ public final class MaddiAnalysisService implements Disposable {
                                   + ". Details in the maddi tool window.");
                 } finally {
                     running.set(false);
+                    fetchLibrary(); // what was asked for during the run
                 }
             }
         });
@@ -262,6 +273,7 @@ public final class MaddiAnalysisService implements Disposable {
         this.latest = result;
         this.findingsByPath = fb;
         this.annotationsByPath = ab;
+        libraryByType.clear();
     }
 
     public List<AnalysisModel.Finding> findingsForPath(String path) {
@@ -270,6 +282,69 @@ public final class MaddiAnalysisService implements Disposable {
 
     public List<AnalysisModel.ElementAnnotation> annotationsForPath(String path) {
         return annotationsByPath.getOrDefault(path, List.of());
+    }
+
+    /**
+     * The annotations to show in a file: a project file's, by path; a library file's (Set.java from the JDK's
+     * sources), matched to its declarations by signature, asked of the daemon the first time the file is shown
+     * after an analysis.
+     */
+    public List<AnalysisModel.ElementAnnotation> annotationsFor(PsiFile file, Document doc) {
+        VirtualFile vf = file.getVirtualFile();
+        if (vf == null) return List.of();
+        List<AnalysisModel.ElementAnnotation> own = annotationsForPath(vf.getPath());
+        if (!own.isEmpty() || latest == null || !(file instanceof PsiJavaFile javaFile)
+            || !ProjectFileIndex.getInstance(project).isInLibrary(vf)) {
+            return own;
+        }
+        List<String> types = MaddiLibraryPlacement.typesOf(javaFile);
+        List<AnalysisModel.LibraryElement> elements = new ArrayList<>();
+        boolean missing = false;
+        for (String type : types) {
+            List<AnalysisModel.LibraryElement> known = libraryByType.get(type);
+            if (known == null) {
+                libraryWanted.add(type);
+                missing = true;
+            } else {
+                elements.addAll(known);
+            }
+        }
+        if (missing) ApplicationManager.getApplication().executeOnPooledThread(this::fetchLibrary);
+        return elements.isEmpty() ? List.of() : MaddiLibraryPlacement.place(javaFile, doc, vf.getPath(), elements);
+    }
+
+    /*
+     Asks the daemon for the library types wanted, unless an analysis is running: the daemon serves one request at a
+     time, and the run's end asks again. Then has the editor recompute its hints, now with the answers.
+     */
+    private void fetchLibrary() {
+        if (running.get() || libraryWanted.isEmpty() || !daemon.isAlive()) return;
+        List<String> types = List.copyOf(libraryWanted);
+        libraryWanted.removeAll(types);
+        Map<String, List<AnalysisModel.LibraryElement>> answer = new HashMap<>();
+        types.forEach(t -> answer.put(t, new ArrayList<>()));
+        try {
+            JsonNode node = daemon.libraryAnnotations("lib-" + requestCounter.incrementAndGet(), types);
+            if (AnalysisModel.LIBRARY_RESULT.equals(node.path("type").asText())) {
+                AnalysisModel.LibraryResult result =
+                        daemon.client().objectMapper().treeToValue(node, AnalysisModel.LibraryResult.class);
+                for (AnalysisModel.LibraryElement e : result.elements()) {
+                    // a nested type's elements come with its top-level type, asked for by the latter's name
+                    types.stream().filter(t -> e.type().equals(t) || e.type().startsWith(t + ".")).findFirst()
+                            .ifPresent(t -> answer.get(t).add(e));
+                }
+            } else {
+                LOG.info("maddi: no library annotations from this daemon: " + node.path("message").asText(""));
+            }
+        } catch (Exception e) {
+            LOG.warn("maddi: library annotations failed", e);
+        }
+        libraryByType.putAll(answer);
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) return;
+            DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp();
+            DaemonCodeAnalyzer.getInstance(project).restart("maddi library annotations");
+        });
     }
 
     public AnalysisModel.Result latestResult() {

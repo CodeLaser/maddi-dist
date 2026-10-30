@@ -68,6 +68,13 @@ public final class DaemonProtocol {
     public static final String T_CANCEL = "cancel";
     public static final String T_SHUTDOWN = "shutdown";
     public static final String T_BYE = "bye";
+    /**
+     * What the last analysis knows of library types, which have no position in the project's sources: asked when the
+     * editor shows a library file (Set.java from the JDK's sources). Answered by {@link #T_LIBRARY_RESULT}. A daemon
+     * from before answers {@code error} {@code bad-request}, which a client takes as "nothing to show".
+     */
+    public static final String T_LIBRARY_ANNOTATIONS = "libraryAnnotations";
+    public static final String T_LIBRARY_RESULT = "libraryResult";
 
     // ---- responses (serialized; DaemonMain adds the "type" field) ----
 
@@ -256,5 +263,38 @@ public final class DaemonProtocol {
                                 boolean fullPass,
                                 boolean certain,
                                 List<ElementAnnotation> elements) {
+    }
+
+    /** @param types fully qualified names of library types, a nested type's with dots ({@code java.util.Map.Entry}) */
+    public record LibraryAnnotations(String requestId, List<String> types) {
+    }
+
+    /** Where a library element's values come from. */
+    public static final String ORIGIN_ANNOTATED = "annotated";
+    public static final String ORIGIN_DEFAULT = "default";
+    public static final String ORIGIN_COMPUTED = "computed";
+
+    /**
+     * One element of a library type, matched in the editor by {@code kind} and {@code signature} rather than by a
+     * position: a library has no source in the analysis, and the file on screen (the JDK's src.zip, a sources jar, a
+     * decompiled class) is not what the hints were read from.
+     *
+     * @param type       the declaring type's fully qualified name; the type itself for a type
+     * @param signature  a method's name and erased parameter types ({@code add(java.lang.Object)},
+     *                   {@code <init>(int)}, arrays as {@code []}); a field's name; a parameter's method signature,
+     *                   {@code #} and its index; a type's fully qualified name
+     * @param origin     {@link #ORIGIN_ANNOTATED}: our annotated API (the hints) says so; {@link #ORIGIN_DEFAULT}: the
+     *                   hints have no annotation, and {@code assumed} lists the properties that are the default;
+     *                   {@link #ORIGIN_COMPUTED}: not in the hints, the analysis's defaults for a library
+     * @param assumed    the properties at their default for want of an annotation (keys, e.g.
+     *                   {@code nonModifyingMethod}); empty unless {@code origin} is {@link #ORIGIN_DEFAULT}
+     */
+    public record LibraryElement(String kind, String type, String fqn, String signature, String origin,
+                                 List<String> assumed, List<String> displayAnnotations, List<Annotation> annotations,
+                                 Map<String, String> properties) {
+    }
+
+    /** @param unknownTypes the requested types the last analysis does not know, or all of them before any analysis */
+    public record LibraryResult(String requestId, List<LibraryElement> elements, List<String> unknownTypes) {
     }
 }

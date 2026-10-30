@@ -76,6 +76,14 @@ public class DaemonHandshakeTest {
             assertTrue(unknown.contains("\"type\":\"error\""), unknown);
             assertTrue(unknown.contains("bad-request"), unknown);
 
+            // a handler without a model knows no library type
+            String library = exchange(out, in, "{\"type\":\"libraryAnnotations\",\"requestId\":\"r2\","
+                                               + "\"types\":[\"java.util.Set\"]}");
+            assertTrue(library.contains("\"type\":\"libraryResult\""), library);
+            assertTrue(library.contains("\"unknownTypes\":[\"java.util.Set\"]"), library);
+            String noTypes = exchange(out, in, "{\"type\":\"libraryAnnotations\",\"requestId\":\"r3\"}");
+            assertTrue(noTypes.contains("bad-request"), noTypes);
+
             String bye = exchange(out, in, "{\"type\":\"shutdown\"}");
             assertTrue(bye.contains("\"type\":\"bye\""), bye);
         }

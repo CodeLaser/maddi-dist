@@ -93,9 +93,37 @@ public class WarmAnalysisService implements AnalyzeHandler {
                           int hints) {
     }
 
+    /*
+     The last run's model, kept for the library types the editor asks about (libraryAnnotations), and dropped as the
+     next run starts, so that two models never live at once. Requests come one at a time, on the connection's thread,
+     which keeps maddi's runtime on one thread as the analysis requires.
+     */
+    private record LastRun(Runtime runtime, SourceSet sourceSet, ResultCollector collector) {
+    }
+
+    private LastRun lastRun;
+
+    @Override
+    public DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
+        LastRun run = lastRun;
+        if (run == null) return new DaemonProtocol.LibraryResult(request.requestId(), List.of(), request.types());
+        List<DaemonProtocol.LibraryElement> elements = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        for (String fqn : request.types()) {
+            TypeInfo typeInfo = run.runtime().getFullyQualified(fqn, false, run.sourceSet());
+            if (typeInfo == null) {
+                unknown.add(fqn);
+            } else {
+                elements.addAll(run.collector().collectLibrary(typeInfo));
+            }
+        }
+        return new DaemonProtocol.LibraryResult(request.requestId(), elements, unknown);
+    }
+
     @Override
     public DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception {
         long start = System.currentTimeMillis();
+        lastRun = null;
         String requestId = request.requestId();
         boolean parallel = request.config().parallel();
 
@@ -194,6 +222,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
         LOGGER.info("analysis complete in {} ms ({}{}): {} findings, {} element annotations",
                 elapsed, outcome, parsed.partial() ? ", PARTIAL parse" : "", findings.size(), elementAnnotations.size());
         int parseErrors = summary == null ? 0 : summary.parseExceptions().size();
+        lastRun = new LastRun(parsed.runtime(), parsed.sourceSetOfRequest(), collector);
         return new DaemonProtocol.Result(requestId, findings, elementAnnotations, initProblems,
                 parseErrors, parsed.hints(), elapsed, outcome);
     }

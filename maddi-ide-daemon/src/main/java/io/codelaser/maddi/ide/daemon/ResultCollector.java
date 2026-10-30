@@ -28,6 +28,7 @@ import io.codelaser.maddi.cst.api.info.MethodInfo;
 import io.codelaser.maddi.cst.api.info.ParameterInfo;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
+import io.codelaser.maddi.cst.api.type.ParameterizedType;
 import io.codelaser.maddi.cst.impl.analysis.PropertyImpl;
 import io.codelaser.maddi.cst.impl.analysis.ValueImpl;
 import io.codelaser.maddi.inspection.api.parser.Summary;
@@ -176,6 +177,60 @@ public class ResultCollector {
         out.add(new DaemonProtocol.ElementAnnotation(
                 uri, source.beginLine(), source.beginPos(), source.endLine(), source.endPos(),
                 kindOf(info), info.fullyQualifiedName(), displayAnnotations, annotations, properties, whys));
+    }
+
+    // ---- library elements ----
+
+    /** A library type's own elements and its nested types', with where their values come from; no positions. */
+    public List<DaemonProtocol.LibraryElement> collectLibrary(TypeInfo libraryType) {
+        List<DaemonProtocol.LibraryElement> out = new ArrayList<>();
+        libraryType.recursiveSubTypeStream().forEach(type -> {
+            String owner = type.fullyQualifiedName();
+            addLibraryElement(out, type, owner, owner);
+            type.fields().forEach(field -> addLibraryElement(out, field, owner, field.name()));
+            type.constructorAndMethodStream().forEach(method -> {
+                String signature = signature(method);
+                addLibraryElement(out, method, owner, signature);
+                for (ParameterInfo parameter : method.parameters()) {
+                    addLibraryElement(out, parameter, owner, signature + "#" + parameter.index());
+                }
+            });
+        });
+        return out;
+    }
+
+    private void addLibraryElement(List<DaemonProtocol.LibraryElement> out, Info info, String owner,
+                                   String signature) {
+        if (info.isSynthetic()) return;
+        List<DaemonProtocol.Annotation> annotations = tagger.tag(info);
+        if (annotations.isEmpty()) return;
+        Map<String, String> properties = new LinkedHashMap<>();
+        info.analysis().propertyValueStream()
+                .filter(pv -> !bookkeeping.contains(pv.property()) && !CULPRITS.containsKey(pv.property()))
+                .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
+        List<String> assumed = List.copyOf(info.analysis()
+                .getOrDefault(PropertyImpl.ASSUMED_DEFAULTS, ValueImpl.SetOfStringsImpl.EMPTY_SET).set());
+        String origin = !assumed.isEmpty() ? DaemonProtocol.ORIGIN_DEFAULT
+                : info.analysis().getOrDefault(PropertyImpl.ANNOTATED_API, ValueImpl.BoolImpl.FALSE).isTrue()
+                ? DaemonProtocol.ORIGIN_ANNOTATED : DaemonProtocol.ORIGIN_COMPUTED;
+        out.add(new DaemonProtocol.LibraryElement(kindOf(info), owner, info.fullyQualifiedName(), signature, origin,
+                assumed,
+                annotations.stream().map(DaemonProtocol.Annotation::text).toList(), annotations, properties));
+    }
+
+    /*
+     A method's name and its parameters' erasures, the leftmost bound for a type variable, as the JVM erases them: what
+     the editor computes from the declaration on screen. Nested types with dots, as a canonical name.
+     */
+    static String signature(MethodInfo method) {
+        return (method.isConstructor() ? "<init>" : method.name()) + method.parameters().stream()
+                .map(p -> {
+                    ParameterizedType erased = p.parameterizedType().erasedForFQN();
+                    TypeInfo typeInfo = erased.bestTypeInfo();
+                    String name = typeInfo == null ? "java.lang.Object" : typeInfo.fullyQualifiedName();
+                    return name + "[]".repeat(erased.arrays());
+                })
+                .collect(java.util.stream.Collectors.joining(",", "(", ")"));
     }
 
     /*

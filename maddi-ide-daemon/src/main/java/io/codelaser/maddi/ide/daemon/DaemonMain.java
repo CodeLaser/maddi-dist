@@ -153,6 +153,7 @@ public final class DaemonMain {
                 case DaemonProtocol.T_PING -> send(out, DaemonProtocol.T_PONG,
                         new DaemonProtocol.Pong(System.nanoTime()));
                 case DaemonProtocol.T_ANALYZE_PROJECT -> handleAnalyze(out, msg);
+                case DaemonProtocol.T_LIBRARY_ANNOTATIONS -> handleLibrary(out, msg);
                 case DaemonProtocol.T_SHUTDOWN -> {
                     send(out, DaemonProtocol.T_BYE, null);
                     return false;
@@ -216,6 +217,30 @@ public final class DaemonMain {
             LOGGER.warn("analysis failed for request {}", requestId, e);
             send(out, DaemonProtocol.T_ERROR,
                     new DaemonProtocol.ErrorMsg(requestId, "analyze", String.valueOf(e.getMessage())));
+        }
+    }
+
+    private void handleLibrary(Writer out, JsonNode msg) throws IOException {
+        String requestId = msg.path("requestId").asText(null);
+        DaemonProtocol.LibraryAnnotations request;
+        try {
+            request = mapper.treeToValue(msg, DaemonProtocol.LibraryAnnotations.class);
+        } catch (IOException e) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "malformed libraryAnnotations: " + e.getMessage()));
+            return;
+        }
+        if (request.types() == null) {
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "bad-request",
+                    "libraryAnnotations without types"));
+            return;
+        }
+        try {
+            send(out, DaemonProtocol.T_LIBRARY_RESULT, handler.libraryAnnotations(request));
+        } catch (RuntimeException e) {
+            LOGGER.warn("library annotations failed for request {}", requestId, e);
+            send(out, DaemonProtocol.T_ERROR, new DaemonProtocol.ErrorMsg(requestId, "internal",
+                    String.valueOf(e.getMessage())));
         }
     }
 

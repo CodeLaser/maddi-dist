@@ -22,7 +22,6 @@ import com.intellij.codeInsight.daemon.LineMarkerProvider;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
@@ -53,13 +52,12 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         if (kinds.isEmpty() || kinds.contains("PARAMETER")) return null;
 
         PsiFile file = element.getContainingFile();
-        VirtualFile vf = file == null ? null : file.getVirtualFile();
-        if (vf == null) return null;
-        List<AnalysisModel.ElementAnnotation> annotations =
-                MaddiAnalysisService.getInstance(element.getProject()).annotationsForPath(vf.getPath());
-        if (annotations.isEmpty()) return null;
+        if (file == null) return null;
         Document doc = file.getViewProvider().getDocument();
         if (doc == null) return null;
+        List<AnalysisModel.ElementAnnotation> annotations =
+                MaddiAnalysisService.getInstance(element.getProject()).annotationsFor(file, doc);
+        if (annotations.isEmpty()) return null;
 
         // a method shows its parameters' annotations too: a parameter has no gutter mark of its own, and its inline
         // hint is abbreviated, or gone when the parameter is on a line of its own after an edit
@@ -74,9 +72,15 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         String text = String.join(" ", match.displayAnnotations());
         String tooltip = "maddi: " + text;
         String accessible = "maddi analysis: " + text;
-        if (!parameters.isEmpty() || !match.whys().isEmpty()) {
+        // a library element: where its values come from, our annotated API or the default
+        String note = match.properties() == null ? null : match.properties().get(AnalysisModel.LIBRARY_NOTE);
+        if (!parameters.isEmpty() || !match.whys().isEmpty() || note != null) {
             StringBuilder html = new StringBuilder("<html>maddi: ").append(StringUtil.escapeXmlEntities(text));
             StringBuilder plain = new StringBuilder(accessible);
+            if (note != null) {
+                html.append("<br>&nbsp;&nbsp;<i>").append(StringUtil.escapeXmlEntities(note)).append("</i>");
+                plain.append("; ").append(note);
+            }
             appendWhys(match, html, plain, "&nbsp;&nbsp;");
             for (AnalysisModel.ElementAnnotation p : parameters) {
                 String name = p.fqn().substring(p.fqn().lastIndexOf(':') + 1);
@@ -84,6 +88,11 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
                 html.append("<br>&nbsp;&nbsp;").append(StringUtil.escapeXmlEntities(name)).append(": ")
                         .append(StringUtil.escapeXmlEntities(ofParameter));
                 plain.append("; ").append(name).append(": ").append(ofParameter);
+                String parameterNote = p.properties() == null ? null : p.properties().get(AnalysisModel.LIBRARY_NOTE);
+                if (parameterNote != null && !parameterNote.equals(note)) {
+                    html.append(" <i>(").append(StringUtil.escapeXmlEntities(parameterNote)).append(")</i>");
+                    plain.append(" (").append(parameterNote).append(")");
+                }
                 appendWhys(p, html, plain, "&nbsp;&nbsp;&nbsp;&nbsp;");
             }
             tooltip = html.append("</html>").toString();
