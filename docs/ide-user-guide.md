@@ -1,0 +1,178 @@
+# maddi in the IDE — user guide
+
+maddi analyses a whole Java (or Kotlin) project and shows what it concludes beside each declaration, written as
+the annotations you would otherwise write by hand: whether a type is immutable or a container, whether a method
+modifies its object, whether a parameter is changed by the call, what may be `null`. It also checks the
+annotations you *did* write, and reports a contract the code breaks.
+
+This guide covers the IntelliJ IDEA and Eclipse plugins. They work the same way; where they differ, each has its
+own short section.
+
+## Before you start
+
+- **A JDK 25 or later.** The analysis runs in a separate process (the *daemon*, bundled with the plugin), and that
+  process needs JDK 25+. The IDE itself can keep running on whatever it runs on. The plugin picks a JDK 25+ the
+  IDE already knows about; if there is none, add one (IntelliJ: *File → Project Structure → SDKs*; Eclipse:
+  *Preferences → Java → Installed JREs*) or choose one in the maddi settings.
+- **A project that compiles.** maddi reads your sources and the compiled classes next to them. The plugin builds
+  the project before each analysis. Files that do not parse are left out and the result says so; the rest is
+  still analysed.
+
+## Installing
+
+| IDE | Requires | Install |
+|---|---|---|
+| IntelliJ IDEA | 2025.3 or later | *Settings → Plugins → Marketplace*, search for **maddi** |
+| Eclipse | 2025-09 or later | *Help → Install New Software… → Add…*, location `https://codelaser.github.io/maddi-dist/eclipse/` |
+
+## Your first analysis
+
+- IntelliJ: *Tools → Analyze with maddi*. The **maddi** tool window (bottom) shows the run.
+- Eclipse: *Project → Analyze with maddi*, or right-click a Java project. *Window → Show View → Other… → maddi →
+  maddi Findings* shows the run.
+
+The first run starts the daemon and loads maddi's knowledge of the JDK and common libraries; later runs reuse
+the daemon. Hints appear in open editors while the analysis is still running and fill in as it goes. A large
+project can take minutes: the tool window shows the phase, the pass and the elapsed time.
+
+### Stopping a run
+
+Any of these stops a running analysis at once:
+
+- the **Stop** button in the maddi tool window (IntelliJ) or the maddi Findings view (Eclipse);
+- *Tools → Stop maddi Analysis* (IntelliJ), *Project → Stop maddi Analysis* (Eclipse);
+- the cancel button on the progress bar (IntelliJ) or in the Progress view (Eclipse).
+
+What the run had shown so far stays in the editor. The next analysis starts from scratch.
+
+Closing the IDE stops the daemon too, also in the middle of a run.
+
+## Turning the hints on
+
+### IntelliJ IDEA
+
+Hints are on by default. If you see none after an analysis:
+
+- *Settings → Editor → Inlay Hints → Other → Java → maddi analysis hints* must be ticked, and inlay hints must not be switched
+  off altogether.
+- *Settings → Tools → maddi → Inline hints* must not be *Off (gutter only)*.
+
+### Eclipse
+
+Eclipse draws maddi's hints as **code minings**, and code minings are **off by default** in Eclipse. Turn them on
+once:
+
+1. *Preferences → Java → Editor → Code Minings*;
+2. tick **Enable code minings**;
+3. reopen the editors that were already open.
+
+Without this, the analysis runs and the ruler icons and problems appear, but no hints. *Preferences → maddi →
+Show hints in the editor* must be ticked too (it is by default).
+
+## Reading the results
+
+maddi shows its results on three surfaces:
+
+- **Hints**: the computed annotations, on a line of their own above each type, method and field, and before
+  each parameter, where you would write them. *Hint placement* in the settings puts them after the name instead.
+- **Gutter (IntelliJ) / ruler (Eclipse) icons**: on each analysed type, method and field. The tooltip has the
+  full set, each parameter's included, and for some verdicts the reason: the chain of statements that made a
+  method `@Modified`, from the method to the call that modifies. A verdict that holds only after a mark (see
+  `after=` below) has an icon of its own (Eclipse: a ring instead of a dot).
+- **Problems**: a contract you wrote that the code breaks, underlined, with the reasoning that led to it.
+
+### What the annotations mean
+
+| Annotation | On | Means |
+|---|---|---|
+| `@NotModified` / `@Modified` | method | does not / does change the object it is called on |
+| `@NotModified` / `@Modified` | parameter, field | the object is not / is changed through it |
+| `@Modified(hc=true)` | parameter, method | only what the object *holds* is changed (the elements of a list), not the object itself |
+| `@Immutable` | type | an instance never changes, nor does anything it holds |
+| `@Immutable(hc=true)` | type | as `@Immutable`, except for content it holds without knowing its type (a type parameter, an interface): that content may change |
+| `@FinalFields` | type | all fields are final, yet the object is not immutable: what they point to changes |
+| `@Mutable` | type | none of the above |
+| `@Container` | type | its methods do not change the arguments you pass them |
+| `@Independent` | method, parameter, type | no mutable state is shared with the caller: changing the result (or the argument) cannot change this object |
+| `@Independent(hc=true)` / `@Dependent` | method, parameter, type | only content of unknown type is shared / mutable state is shared |
+| `@UnmodifiableView` | method | the result is a read-only view of mutable state |
+| `@Identity`, `@Fluent` | method | returns its first argument / returns `this` |
+| `@StaticSideEffects` | method | changes static state |
+| `@Nullable` / `@NotNull` | field, parameter, method | may be / is never `null` |
+| `…(after="m")` | type, method | the property holds once the mark `m` has been set, e.g. after a `freeze()` |
+
+### Which hints you see
+
+Many verdicts are the expected default in their context, and showing them all would bury the interesting ones:
+`@Mutable` on most classes, `@Modified` on a `void` setter. By default these *context defaults* are hidden.
+*Inline hints* in the settings chooses:
+
+- **Hide context defaults** (default): the informative verdicts only;
+- **Show all**: everything the analysis concluded;
+- **Positive only**: the guarantees (`@NotModified`, `@Immutable`, …);
+- **Negative only**: the warnings (`@Modified`, `@Mutable`, …);
+- **Off (gutter only)**: no hints; the icons keep everything.
+
+## Library code
+
+Follow a call into the JDK or a library (`Set.add`, `List.of`) after an analysis, and the library's source shows
+the hints and icons too, provided the IDE has the library's sources (the JDK's `src.zip`, a sources jar).
+These verdicts come from maddi's own description of the library, its *annotated API*, and the icon's tooltip
+says which kind each is:
+
+- **Manually annotated, in maddi's annotated API**: written down by the maddi authors after reading the
+  library;
+- **No annotation in maddi's annotated API: @Modified is the default**: nothing was written down, so maddi
+  assumes the safe answer: the method may modify;
+- **Not in maddi's annotated API**: a library maddi has no description of; its verdicts are the analysis's
+  defaults.
+
+Library hints appear once an analysis has finished in this IDE session. A decompiled class (no sources) shows
+none.
+
+## Writing your own contracts
+
+Annotate your code with maddi's annotations (`io.codelaser:maddi-annotation`) to state what a type or method
+must be: `@Container` on an interface, `@NotModified` on a method, `@Immutable` on a type. maddi then checks every
+implementation against it and reports a violation as a problem, with the reasoning.
+
+*Warn about near misses* (off by default) also reports types and methods that narrowly miss a property, e.g. a
+type that would be `@Container` but for one method. Useful on code you are cleaning up; noisy elsewhere.
+
+## Settings
+
+IntelliJ: *Settings → Tools → maddi*. Eclipse: *Preferences → maddi*.
+
+| Setting | Default | |
+|---|---|---|
+| maddi JDK | the IDE's newest JDK 25+ | the JDK the daemon runs on |
+| Daemon max heap (MB) | 4096 | raise it for a large project that runs out of memory |
+| Re-analyze automatically after a build | IntelliJ on, Eclipse off | Eclipse builds on every save |
+| Inline hints | Hide context defaults | see *Which hints you see* |
+| Hint placement | Above the declaration | or inline, after the name |
+| Show gutter / ruler icons | on | |
+| Mark guard contract violations | on | the problems for violated contracts |
+| Warn about near misses | off | |
+| Daemon install override | empty | a daemon built from source, for developing maddi itself |
+
+IntelliJ also has the Kotlin settings below.
+
+## Kotlin (IntelliJ)
+
+For a project with Kotlin sources, maddi needs its Kotlin front end, a separate download. The first analysis
+of such a project offers it in a notification (*Download Kotlin support*); until then the Java sources are
+analysed and the result says the Kotlin ones were not. *Settings → Tools → maddi → Kotlin front end override*
+points at a front end you downloaded by hand.
+
+## When something is wrong
+
+- **No hints at all**: see *Turning the hints on*. Then check that the analysis finished: the maddi tool window
+  (IntelliJ) or the maddi Findings view (Eclipse) says how the last run ended.
+- **"maddi needs a JDK 25 or later"**: add one to the IDE (see *Before you start*) or choose one in the settings.
+- **Results look incomplete**: some files did not parse, or the analysis stopped before it converged; the tool
+  window says which. A partial result can show weaker verdicts than the code deserves.
+- **The analysis fails**: the tool window has the message. The daemon's own log is next to the IDE's
+  (IntelliJ: *Help → Show Log in Finder/Explorer*; Eclipse: `.metadata/.plugins/io.codelaser.maddi.eclipse/
+  maddi-daemon.log` in the workspace).
+
+Questions and bug reports: https://github.com/CodeLaser/maddi/issues.
