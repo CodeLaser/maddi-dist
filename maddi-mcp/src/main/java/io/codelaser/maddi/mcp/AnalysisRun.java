@@ -172,6 +172,14 @@ public final class AnalysisRun {
         notifyAll();
     }
 
+    /** A run asked only to bring the configuration up to date has done so: finished, without values. */
+    synchronized void configured() {
+        if (state != State.RUNNING) return;
+        state = State.FINISHED;
+        ended();
+        notifyAll();
+    }
+
     synchronized void fail(String message) {
         if (state != State.RUNNING) return;
         error = message;

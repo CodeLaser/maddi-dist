@@ -395,6 +395,11 @@ public final class AnalysisModel {
     public record LibraryResult(String requestId, List<LibraryElement> elements, List<String> unknownTypes) {
     }
 
+    // ---- a compile log's configuration (the daemon's inputConfigurationWritten) ----
+
+    public static final String WRITE_INPUT_CONFIGURATION = "writeInputConfiguration";
+    public static final String INPUT_CONFIGURATION_WRITTEN = "inputConfigurationWritten";
+
     // ---- translation (the daemon's translateResult) ----
 
     public static final String TRANSLATE = "translate";

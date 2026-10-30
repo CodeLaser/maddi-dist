@@ -109,13 +109,18 @@ with the agent, for example `claude mcp add maddi -- <that path>`.
 
 | Tool | Does |
 |---|---|
-| `configure_project`, `list_projects` | from an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`), or directories and a class path |
+| `configure_project`, `list_projects` | a Gradle build by its directory alone; or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
 | `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
 | `element_at` | the element at a file and line, explained |
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
 | `library_annotations` | what the last run knows of JDK and library types |
+
+A Gradle build needs no maddi plugin: given its directory, the server compiles every Java source set with javac's
+arguments logged (an init script, run with the build's own wrapper) and has the daemon turn that log into the
+configuration, as the CLI's `--compile-log` does, with the build files hashed at that moment. The first `analyze`
+does this (or `analyze` with `configureOnly`); it takes a full compile.
 
 A configured project is stored (in `~/.maddi/mcp`, or `--store`), with the hashes of the build files that shaped
 it, and survives a restart. Every run first hashes those files again. When one changed, the configuration is

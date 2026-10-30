@@ -75,10 +75,14 @@ public final class McpTools {
                         'regenerate' command given here (needed for a CLI-written file). Or name the directories \
                         yourself (any build): workingDirectory, sourceDirectories, classPath (jars and class \
                         directories), optional test directories; a change to its Gradle or Maven files is then noticed \
-                        but cannot be redone. Compile the project first.""",
+                        but cannot be redone. Compile the project first. Or, for a Gradle build without the maddi \
+                        plugin: workingDirectory alone (or with build 'gradle'). The configuration is then made by \
+                        compiling every Java source set with javac's arguments logged, at the next analyze (or \
+                        analyze with configureOnly), and made again whenever the build files change.""",
                 """
                         {"type":"object","properties":{
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
+                          "build":{"type":"string","enum":["gradle"],"description":"make the configuration from this build; default when only workingDirectory is given and it holds a Gradle build"},
                           "inputConfiguration":{"type":"string","description":"path of an inputConfiguration.json"},
                           "regenerate":{"type":"array","items":{"type":"string"},"description":"a command that writes the inputConfiguration file again; default: the plugin's task or goal"},
                           "regenerateDirectory":{"type":"string","description":"where to run it; default: the build's root"},
@@ -110,7 +114,8 @@ public final class McpTools {
                           "sourceSets":{"type":"array","items":{"type":"string"}},
                           "packages":{"type":"array","items":{"type":"string"}},
                           "waitSeconds":{"type":"integer","description":"wait this long for the run to finish before answering; default 0"},
-                          "allowStale":{"type":"boolean","description":"analyse with a stale configuration that cannot be computed again, rather than fail"}
+                          "allowStale":{"type":"boolean","description":"analyse with a stale configuration that cannot be computed again, rather than fail"},
+                          "configureOnly":{"type":"boolean","description":"bring the configuration up to date (make it, for a gradle project), and stop there"}
                         }}""", this::analyze));
         out.add(tool("run_status", """
                         The state of a run (RUNNING, FINISHED, FAILED, STOPPED), its progress, certainty and a summary \
@@ -260,6 +265,23 @@ public final class McpTools {
                     ProjectStore.StoredProject.INPUT_CONFIGURATION, file.toString(), regenerate, buildFiles, now,
                     config));
         }
+        String build = a.string("build");
+        String workingDirectoryArg = a.string("workingDirectory");
+        if (build == null && workingDirectoryArg != null && a.strings("sourceDirectories").isEmpty()
+            && GradleCapture.isGradleBuild(Path.of(workingDirectoryArg))) {
+            build = GradleCapture.BUILTIN;
+        }
+        if (build != null) {
+            if (!GradleCapture.BUILTIN.equals(build)) throw new IllegalArgumentException("unknown build '" + build + "'");
+            if (workingDirectoryArg == null) throw new IllegalArgumentException("a gradle project needs workingDirectory");
+            Path root = Path.of(workingDirectoryArg).toAbsolutePath().normalize();
+            if (!GradleCapture.isGradleBuild(root)) {
+                throw new IllegalArgumentException(root + " holds no settings.gradle(.kts) or build.gradle(.kts)");
+            }
+            return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.GRADLE,
+                    service.inputConfigurationOf(project).toString(),
+                    ProjectStore.Regenerate.builtin(GradleCapture.BUILTIN, root.toString()), null, now, null));
+        }
         AnalysisModel.AnalyzeConfig config;
         {
             String workingDirectory = a.string("workingDirectory");
@@ -277,7 +299,7 @@ public final class McpTools {
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
         AnalysisRun run = service.analyze(a.string("project"), a.strings("sourceSets"),
-                a.strings("packages"), a.bool("allowStale"));
+                a.strings("packages"), a.bool("allowStale"), a.bool("configureOnly"));
         int wait = a.integer("waitSeconds", 0);
         if (wait > 0) service.await(run.id(), Math.min(wait, 600), r -> progress(x, token, r));
         return service.describe(run);

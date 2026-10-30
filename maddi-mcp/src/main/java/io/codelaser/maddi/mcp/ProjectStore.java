@@ -37,14 +37,29 @@ public final class ProjectStore {
 
     /**
      * How to compute the configuration again: run {@code command} in {@code directory}, which rewrites the
-     * project's {@code sourceFile}.
+     * project's {@code sourceFile}; or, when {@code builtin} names one ({@link GradleCapture#BUILTIN}), let this
+     * server make it from the build in {@code directory}.
      */
-    public record Regenerate(List<String> command, String directory) {
+    public record Regenerate(List<String> command, String directory, String builtin) {
+        public Regenerate(List<String> command, String directory) {
+            this(command, directory, null);
+        }
+
+        public static Regenerate builtin(String builtin, String directory) {
+            return new Regenerate(List.of(), directory, builtin);
+        }
+
+        public String describe() {
+            return builtin != null ? builtin + " build in " + directory + ", every Java source set compiled"
+                    : String.join(" ", command);
+        }
     }
 
     /**
-     * @param kind       {@code inputConfiguration} (read from {@code sourceFile}, which a build tool wrote) or
-     *                   {@code directories} (named by hand: nothing can recompute it)
+     * @param kind       {@code inputConfiguration} (read from {@code sourceFile}, which a build tool wrote),
+     *                   {@code directories} (named by hand: nothing can recompute it), or {@code gradle} (made by
+     *                   this server from the build, into {@code sourceFile} in the store)
+     * @param config     null until a {@code gradle} project's configuration is first made
      * @param buildFiles the files that shaped the configuration, hashed when it was made; null when unknown
      * @param regenerate null when there is no way to compute it again
      */
@@ -52,6 +67,7 @@ public final class ProjectStore {
                                BuildFiles buildFiles, String configuredAt, AnalysisModel.AnalyzeConfig config) {
         public static final String INPUT_CONFIGURATION = "inputConfiguration";
         public static final String DIRECTORIES = "directories";
+        public static final String GRADLE = "gradle";
 
         public StoredProject with(AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
             return new StoredProject(name, kind, sourceFile, regenerate, newBuildFiles,
@@ -154,6 +170,16 @@ public final class ProjectStore {
 
     private Path runsOf(String project) {
         return directory.resolve("runs").resolve(safe(project));
+    }
+
+    /** Where a project's configuration goes when this server makes it. */
+    public Path inputConfigurationOf(String name) {
+        return directory.resolve(safe(name) + ".inputConfiguration.json");
+    }
+
+    /** Where the javac invocations of a project's build go. */
+    public Path compileLogOf(String name) {
+        return directory.resolve(safe(name) + ".compile.log");
     }
 
     /** Where the output of a project's regeneration goes. */

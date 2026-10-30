@@ -86,8 +86,9 @@ public final class MaddiService implements Closeable {
 
     /** Configure (or configure again) a project, and store it. */
     public synchronized Map<String, Object> configure(ProjectStore.StoredProject project) throws IOException {
-        ProjectStore.StoredProject complete = project.with(withJdkModules(project.config()), project.buildFiles());
-        ProjectConfigs.check(complete.config());
+        ProjectStore.StoredProject complete = project.config() == null ? project
+                : project.with(withJdkModules(project.config()), project.buildFiles());
+        if (complete.config() != null) ProjectConfigs.check(complete.config());
         store.save(complete);
         projects.put(complete.name(), complete);
         return describeProject(complete, BuildFileCheck.check(complete.buildFiles(), complete.config()));
@@ -117,6 +118,11 @@ public final class MaddiService implements Closeable {
         return out;
     }
 
+    /** Where this server writes the configuration it makes for a project. */
+    public Path inputConfigurationOf(String name) {
+        return store.inputConfigurationOf(name);
+    }
+
     public Path storeDirectory() {
         return store.directory();
     }
@@ -128,9 +134,14 @@ public final class MaddiService implements Closeable {
         out.put("project", project.name());
         out.put("from", project.sourceFile() != null ? project.sourceFile() : project.kind());
         out.put("configuredAt", project.configuredAt());
-        out.putAll(freshness.describe());
         out.put("regenerate", project.regenerate() == null ? "none: configure again when the build changes"
-                : String.join(" ", project.regenerate().command()));
+                : project.regenerate().describe());
+        if (config == null) {
+            out.put("configuration", "not made yet: the next analyze makes it first (or analyze with configureOnly)."
+                                     + " It compiles every Java source set of the build, which takes a while");
+            return out;
+        }
+        out.putAll(freshness.describe());
         out.put("workingDirectory", config.workingDirectory());
         if (config.sdkHome() != null) out.put("sdkHome", config.sdkHome());
         List<Map<String, Object>> sets = new ArrayList<>();
@@ -156,6 +167,12 @@ public final class MaddiService implements Closeable {
      */
     public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages,
                                             boolean allowStale) {
+        return analyze(project, sourceSets, packages, allowStale, false);
+    }
+
+    /** @param configureOnly bring the configuration up to date, and stop there */
+    public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages,
+                                            boolean allowStale, boolean configureOnly) {
         if (project == null) project = projects.size() == 1 ? projects.keySet().iterator().next() : "default";
         ProjectStore.StoredProject stored = projects.get(project);
         if (stored == null) throw new IllegalArgumentException("no project '" + project + "'; configure it first");
@@ -163,7 +180,8 @@ public final class MaddiService implements Closeable {
             throw new IllegalStateException("run " + current.id() + " of project " + current.project()
                                             + " is still going on: wait for it, or stop it");
         }
-        ProjectConfigs.part(stored.config(), sourceSets, packages); // refuses unknown source sets now, not later
+        // refuses unknown source sets now, not after a long capture; a configuration not made yet is checked then
+        if (stored.config() != null) ProjectConfigs.part(stored.config(), sourceSets, packages);
         Map<String, Object> scope = new LinkedHashMap<>();
         if (!sourceSets.isEmpty()) scope.put("sourceSets", List.copyOf(sourceSets));
         if (!packages.isEmpty()) scope.put("packages", List.copyOf(packages));
@@ -171,8 +189,8 @@ public final class MaddiService implements Closeable {
         current = run;
         runs.put(run.id(), run);
         forgetOldRuns();
-        lastRuns.put(project, run);
-        runner.execute(() -> execute(run, stored, sourceSets, packages, allowStale));
+        if (!configureOnly) lastRuns.put(project, run); // a run without verdicts hides none of the last one's
+        runner.execute(() -> execute(run, stored, sourceSets, packages, allowStale, configureOnly));
         return run;
     }
 
@@ -201,10 +219,14 @@ public final class MaddiService implements Closeable {
     }
 
     private void execute(AnalysisRun run, ProjectStore.StoredProject stored, List<String> sourceSets,
-                         List<String> packages, boolean allowStale) {
+                         List<String> packages, boolean allowStale, boolean configureOnly) {
         try {
             ProjectStore.StoredProject project = upToDate(run, stored, allowStale);
             if (project == null) return; // the run has failed, saying why
+            if (configureOnly) {
+                run.configured();
+                return;
+            }
             AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages);
             run.phase("analyze", "starting the daemon");
             daemon.ensureStarted(settings.installDir(), settings.jdkHome(), settings.xmxMb(), settings.logFile());
@@ -240,7 +262,7 @@ public final class MaddiService implements Closeable {
         synchronized (this) {
             project = projects.get(run.project());
         }
-        if (run.finishedAt() != null && project != null) {
+        if (run.finishedAt() != null && run.result() != null && project != null && project.config() != null) {
             int changed = sourcesChangedSince(project.config(), java.time.Instant.parse(run.finishedAt()));
             out.put("sourcesChangedSince", changed);
             if (changed > 0) {
@@ -282,6 +304,9 @@ public final class MaddiService implements Closeable {
      */
     private ProjectStore.StoredProject upToDate(AnalysisRun run, ProjectStore.StoredProject project,
                                                 boolean allowStale) throws IOException {
+        if (project.config() == null) {
+            return regenerate(run, project, "made, for the first time");
+        }
         run.phase("configure", "checking the build files");
         BuildFileCheck.Freshness freshness = BuildFileCheck.check(project.buildFiles(), project.config());
         if (freshness.state() != BuildFileCheck.State.STALE) {
@@ -300,28 +325,17 @@ public final class MaddiService implements Closeable {
                      + " has no command to compute its configuration again: configure it again, or pass allowStale");
             return null;
         }
-        run.phase("configure", "regenerating the configuration: " + changed + " changed");
-        Path log = store.logOf(project.name());
+        return regenerate(run, project, "regenerated, as " + changed + " changed");
+    }
+
+    /* the configuration made again, by the project's command or by this server; null when the run failed */
+    private ProjectStore.StoredProject regenerate(AnalysisRun run, ProjectStore.StoredProject project, String why)
+            throws IOException {
         ProjectStore.Regenerate regenerate = project.regenerate();
-        Process process = new ProcessBuilder(regenerate.command())
-                .directory(regenerate.directory() == null ? null : Path.of(regenerate.directory()).toFile())
-                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
-        run.attach(process);
-        int exit;
-        try {
-            exit = process.waitFor();
-        } catch (InterruptedException e) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            run.fail("interrupted while regenerating the configuration");
-            return null;
-        } finally {
-            run.attach(null);
-        }
-        if (run.state() != AnalysisRun.State.RUNNING) return null; // stopped
-        if (exit != 0) {
-            run.fail("regenerating the configuration failed (exit " + exit + ", " + String.join(" ", regenerate.command())
-                     + "); its output is in " + log);
+        Path log = store.logOf(project.name());
+        if (GradleCapture.BUILTIN.equals(regenerate.builtin())) {
+            if (!captureGradle(run, project, log)) return null;
+        } else if (!runCommand(run, regenerate, log)) {
             return null;
         }
         Path file = Path.of(project.sourceFile());
@@ -334,11 +348,65 @@ public final class MaddiService implements Closeable {
             projects.put(fresh.name(), fresh);
         }
         BuildFileCheck.Freshness after = BuildFileCheck.check(fresh.buildFiles(), fresh.config());
-        run.configuration("regenerated, as " + changed + " changed"
-                          + (after.state() == BuildFileCheck.State.STALE
+        run.configuration(why + (after.state() == BuildFileCheck.State.STALE
                 ? "; its build files still differ from the recorded ones (" + after.changed().size()
                   + "), so it will be regenerated on every run until the producer records them" : ""));
         return fresh;
+    }
+
+    /* the Gradle build compiled with javac's arguments logged, and the log made a configuration by the daemon */
+    private boolean captureGradle(AnalysisRun run, ProjectStore.StoredProject project, Path log) throws IOException {
+        Path root = Path.of(project.regenerate().directory());
+        Path compileLog = store.compileLogOf(project.name());
+        run.phase("configure", "compiling every Java source set of the Gradle build in " + root);
+        try {
+            GradleCapture.compile(root, compileLog, log,
+                    p -> run.phase("configure", "compiling the Gradle build: " + p), run::attach);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            run.fail("interrupted while compiling the Gradle build");
+            return false;
+        } catch (IOException e) {
+            if (run.state() == AnalysisRun.State.RUNNING) run.fail(e.getMessage());
+            return false;
+        }
+        if (run.state() != AnalysisRun.State.RUNNING) return false; // stopped
+        run.phase("configure", "making the configuration from the compile log");
+        daemon.ensureStarted(settings.installDir(), settings.jdkHome(), settings.xmxMb(), settings.logFile());
+        com.fasterxml.jackson.databind.JsonNode written = daemon.writeInputConfiguration("cfg-" + run.id(),
+                compileLog, root, GradleCapture.buildFileGlobs(), List.of(), Path.of(project.sourceFile()));
+        if (!AnalysisModel.INPUT_CONFIGURATION_WRITTEN.equals(written.path("type").asText())) {
+            run.fail("the daemon could not make the configuration: " + written.path("message").asText(written.toString()));
+            return false;
+        }
+        return true;
+    }
+
+    /* the project's own command; false when the run failed */
+    private boolean runCommand(AnalysisRun run, ProjectStore.Regenerate regenerate, Path log) throws IOException {
+        run.phase("configure", "regenerating the configuration: " + regenerate.describe());
+        Process process = new ProcessBuilder(regenerate.command())
+                .directory(regenerate.directory() == null ? null : Path.of(regenerate.directory()).toFile())
+                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        run.attach(process);
+        int exit;
+        try {
+            exit = process.waitFor();
+        } catch (InterruptedException e) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+            run.fail("interrupted while regenerating the configuration");
+            return false;
+        } finally {
+            run.attach(null);
+        }
+        if (run.state() != AnalysisRun.State.RUNNING) return false; // stopped
+        if (exit != 0) {
+            run.fail("regenerating the configuration failed (exit " + exit + ", " + regenerate.describe()
+                     + "); its output is in " + log);
+            return false;
+        }
+        return true;
     }
 
     /**

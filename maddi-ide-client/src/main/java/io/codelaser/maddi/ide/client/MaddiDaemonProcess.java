@@ -184,6 +184,21 @@ public final class MaddiDaemonProcess implements Closeable {
                 "types", types, "together", together), AnalysisModel.TRANSLATE_RESULT, null);
     }
 
+    /**
+     * A compile log turned into an {@code inputConfiguration.json} at {@code output}, the build files matched by
+     * {@code buildFileGlobs} (relative to {@code buildRoot}) hashed into it: an {@code inputConfigurationWritten}
+     * frame, or an {@code error} one (an older daemon knows no such request). Needs no analysis.
+     */
+    public synchronized JsonNode writeInputConfiguration(String requestId, Path compileLog, Path buildRoot,
+                                                         List<String> buildFileGlobs, List<String> extraJmods,
+                                                         Path output) throws IOException {
+        if (client == null) throw new IOException("daemon not started");
+        return client.requestUntil(java.util.Map.of("type", AnalysisModel.WRITE_INPUT_CONFIGURATION,
+                "requestId", requestId, "compileLog", compileLog.toString(), "buildRoot", buildRoot.toString(),
+                "buildFileGlobs", buildFileGlobs, "extraJmods", extraJmods, "output", output.toString()),
+                AnalysisModel.INPUT_CONFIGURATION_WRITTEN, null);
+    }
+
     public synchronized DaemonClient client() {
         return client;
     }

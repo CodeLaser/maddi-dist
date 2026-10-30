@@ -82,6 +82,14 @@ public final class DaemonProtocol {
      */
     public static final String T_TRANSLATE = "translate";
     public static final String T_TRANSLATE_RESULT = "translateResult";
+    /**
+     * A compile log turned into an {@code inputConfiguration.json}, with the build files that shaped it hashed now: what
+     * the CLI's {@code --compile-log --build-files --write-input-configuration} does, for a client that has no CLI.
+     * Answered by {@link #T_INPUT_CONFIGURATION_WRITTEN}; an older daemon answers {@code error} {@code bad-request}.
+     * Needs no analysis, and leaves the last one's model alone.
+     */
+    public static final String T_WRITE_INPUT_CONFIGURATION = "writeInputConfiguration";
+    public static final String T_INPUT_CONFIGURATION_WRITTEN = "inputConfigurationWritten";
 
     // ---- responses (serialized; DaemonMain adds the "type" field) ----
 
@@ -307,6 +315,22 @@ public final class DaemonProtocol {
      *                 of them may assume of the others' members. False: each file on its own, the rest of the code
      *                 staying Java (a preview)
      */
+    /**
+     * @param compileLog     a log holding the javac invocations: Gradle's {@code Compiler arguments:} lines (its debug
+     *                       output), Maven's, Ant's, or plain {@code javac} lines
+     * @param buildRoot      the directory the globs are relative to: the build's root
+     * @param buildFileGlobs the build files to hash; empty: none declared ("none"), staleness cannot be checked
+     * @param extraJmods     JDK modules to add to every source set, beyond what the log names
+     * @param output         where to write the configuration
+     */
+    public record WriteInputConfiguration(String requestId, String compileLog, String buildRoot,
+                                          List<String> buildFileGlobs, List<String> extraJmods, String output) {
+    }
+
+    /** @param sourceSets how many the log gave; @param buildFiles how many were hashed */
+    public record InputConfigurationWritten(String requestId, String output, int sourceSets, int buildFiles) {
+    }
+
     public record Translate(String requestId, List<String> types, boolean together) {
     }
 
