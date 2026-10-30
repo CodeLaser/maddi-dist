@@ -92,7 +92,8 @@ public class McpRoundTripTest {
                 JsonNode tools = request("tools/list", Map.of());
                 List<String> names = tools.path("result").path("tools").findValuesAsText("name");
                 assertTrue(names.containsAll(List.of("configure_project", "analyze", "run_status", "stop_run",
-                        "verdicts", "explain", "findings", "library_annotations")), names::toString);
+                        "verdicts", "explain", "element_at", "diff_runs", "findings", "library_annotations")),
+                        names::toString);
 
                 JsonNode configured = call("configure_project", Map.of("workingDirectory", dir.toString(),
                         "sourceDirectories", List.of("src")));
@@ -122,6 +123,35 @@ public class McpRoundTripTest {
 
                 JsonNode library = call("library_annotations", Map.of("types", List.of("java.util.List")));
                 assertTrue(library.path("elements").size() > 0, library::toString);
+
+                // Counter.java line 4 is increment(): the method, explained, inside its type
+                JsonNode at = call("element_at", Map.of("file", "x/Counter.java", "line", 4));
+                assertEquals("x.Counter.increment()", at.path("element").path("fqn").asText(), at::toString);
+                assertEquals("TYPE x.Counter", at.path("enclosing").path(0).asText(), at::toString);
+
+                // an edit, a second run, and what it changed: Point gains a setter and is no longer immutable
+                Files.writeString(pkg.resolve("Point.java"), """
+                        package x;
+                        public final class Point {
+                            private int x;
+                            public Point(int x) { this.x = x; }
+                            public int x() { return x; }
+                            public void setX(int x) { this.x = x; }
+                        }
+                        """);
+                call("analyze", Map.of());
+                JsonNode second = call("run_status", Map.of("waitSeconds", 300));
+                assertEquals("FINISHED", second.path("state").asText(), second::toString);
+                JsonNode diff = call("diff_runs", Map.of());
+                assertEquals("run-1", diff.path("from").path("runId").asText(), diff::toString);
+                assertEquals("run-2", diff.path("to").path("runId").asText(), diff::toString);
+                JsonNode pointChange = null;
+                for (JsonNode c : diff.path("changed")) if ("x.Point".equals(c.path("fqn").asText())) pointChange = c;
+                assertNotNull(pointChange, diff::toString);
+                assertTrue(pointChange.path("removed").toString().contains("@Immutable"), diff::toString);
+                boolean setterAppeared = false;
+                for (JsonNode e : diff.path("appeared")) setterAppeared |= "x.Point.setX(int)".equals(e.path("fqn").asText());
+                assertTrue(setterAppeared, diff::toString);
             } finally {
                 server.closeGracefully();
             }

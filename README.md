@@ -111,6 +111,8 @@ with the agent, for example `claude mcp add maddi -- <that path>`.
 | `configure_project` | from the Gradle plugin's `build/inputConfiguration.json` (task `writeInputConfiguration`), the Maven plugin's equivalent, or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
+| `element_at` | the element at a file and line, explained |
+| `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
 | `library_annotations` | what the last run knows of JDK and library types |
 
 Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or

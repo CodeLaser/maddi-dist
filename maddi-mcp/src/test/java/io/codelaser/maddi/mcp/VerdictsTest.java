@@ -79,4 +79,50 @@ public class VerdictsTest {
         run.stop();
         assertEquals("STOPPED", run.describe().get("state"));
     }
+
+    /* Shape's contract broken in Circle.java: the finding is located there, one cause in Shape */
+    private static final AnalysisModel.Result CONTRACT = new AnalysisModel.Result("r", List.of(
+            new AnalysisModel.Finding("file:///p/Circle.java", 8, 9, 8, 20, "ERROR", "contract-violation",
+                    "Circle.area() assigns a static field, which makes s.Shape.area() modifying", List.of(
+                    new AnalysisModel.Finding("file:///p/Shape.java", 11, 5, 11, 20, "WARN", "general",
+                            "abstract method is modifying", List.of()))),
+            new AnalysisModel.Finding("file:///p/Other.java", 3, 1, 3, 1, "WARN", "general",
+                    "s.ShapeFactory makes things; s.Shape2 too", List.of())),
+            List.of(new AnalysisModel.ElementAnnotation("file:///p/Shape.java", 9, 1, 12, 1, "TYPE", "s.Shape",
+                            List.of("@FinalFields"), List.of(), Map.of()),
+                    new AnalysisModel.ElementAnnotation("file:///p/Circle.java", 4, 1, 11, 1, "TYPE", "s.Circle",
+                            List.of("@Mutable"), List.of(), Map.of()),
+                    new AnalysisModel.ElementAnnotation("file:///p/Circle.java", 6, 5, 10, 5, "METHOD",
+                            "s.Circle.area()", List.of("@Modified"), List.of(), Map.of()),
+                    new AnalysisModel.ElementAnnotation("file:///p/Circle.java", 6, 30, 6, 40, "PARAMETER",
+                            "s.Circle.area():0:p", List.of(), List.of(), Map.of())),
+            List.of(), 0, 0, 10, "CERTIFIED");
+
+    @Test
+    public void aFindingElsewhereConcernsTheTypeThroughItsCause() {
+        AnalysisModel.ElementAnnotation shape = CONTRACT.elementAnnotations().getFirst();
+        AnalysisModel.Finding violation = CONTRACT.findings().getFirst();
+        assertEquals("cause", Verdicts.concerns(violation, shape));
+        assertNull(Verdicts.concerns(CONTRACT.findings().get(1), shape), "ShapeFactory and Shape2 are not Shape");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> findings = (List<Map<String, Object>>) Verdicts.explain(CONTRACT, shape)
+                .get("findings");
+        assertEquals(1, findings.size());
+        assertEquals("cause", findings.getFirst().get("via"));
+        assertEquals(1, Verdicts.findings(CONTRACT, null, null, null, "s.Shape").size());
+
+        AnalysisModel.Finding named = new AnalysisModel.Finding(null, null, null, null, null, "WARN", "general",
+                "see s.Shape.", List.of());
+        assertEquals("named", Verdicts.concerns(named, shape));
+    }
+
+    @Test
+    public void elementsAtAPosition() {
+        assertEquals(List.of("s.Circle", "s.Circle.area()"), fqns(Verdicts.at(CONTRACT, "Circle.java", 6, null)),
+                "a method's line: the method, not its parameter");
+        assertEquals(List.of("s.Circle", "s.Circle.area()", "s.Circle.area():0:p"),
+                fqns(Verdicts.at(CONTRACT, "Circle.java", 6, 32)));
+        assertEquals(List.of("s.Circle"), fqns(Verdicts.at(CONTRACT, "p/Circle.java", 4, null)));
+        assertEquals(List.of(), Verdicts.at(CONTRACT, "Circle.java", 30, null));
+    }
 }

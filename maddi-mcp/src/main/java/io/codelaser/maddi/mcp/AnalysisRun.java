@@ -37,6 +37,7 @@ public final class AnalysisRun {
 
     private final String id;
     private final String project;
+    private final Map<String, Object> scope;
     private final long startNanos = System.nanoTime();
     private State state = State.RUNNING;
     private AnalysisModel.Result result;
@@ -46,8 +47,18 @@ public final class AnalysisRun {
     private long endNanos;
 
     public AnalysisRun(String id, String project) {
+        this(id, project, Map.of());
+    }
+
+    /** @param scope the part of the project analysed: the source sets and packages asked for; empty for all */
+    public AnalysisRun(String id, String project, Map<String, Object> scope) {
         this.id = id;
         this.project = project;
+        this.scope = scope;
+    }
+
+    public Map<String, Object> scope() {
+        return scope;
     }
 
     public String id() {
@@ -146,6 +157,7 @@ public final class AnalysisRun {
         out.put("runId", id);
         out.put("project", project);
         out.put("state", state.name());
+        if (!scope.isEmpty()) out.put("scope", scope);
         out.put("elapsedSeconds", ((state == State.RUNNING ? System.nanoTime() : endNanos) - startNanos) / 1_000_000_000L);
         if (state == State.RUNNING && lastStatus != null) {
             Map<String, Object> progress = new LinkedHashMap<>();

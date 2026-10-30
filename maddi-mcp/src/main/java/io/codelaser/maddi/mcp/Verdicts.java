@@ -116,7 +116,7 @@ public final class Verdicts {
 
     /**
      * One element in full: its annotations with polarity, the analyzer's properties (where a "why not" is read:
-     * the values behind the annotations), the culprits it records, and the findings located inside it.
+     * the values behind the annotations), the culprits it records, and the findings about it (see {@link #concerns}).
      */
     public static Map<String, Object> explain(AnalysisModel.Result result, AnalysisModel.ElementAnnotation e) {
         Map<String, Object> out = brief(e);
@@ -139,10 +139,84 @@ public final class Verdicts {
             whys.add(m);
         }
         if (!whys.isEmpty()) out.put("whys", whys);
-        List<Map<String, Object>> findings = nonNull(result.findings()).stream()
-                .filter(f -> inside(f, e)).map(Verdicts::finding).toList();
+        List<Map<String, Object>> findings = new ArrayList<>();
+        for (AnalysisModel.Finding f : nonNull(result.findings())) {
+            String via = concerns(f, e);
+            if (via == null) continue;
+            Map<String, Object> m = finding(f);
+            if (!"inside".equals(via)) m.put("via", via);
+            findings.add(m);
+        }
         if (!findings.isEmpty()) out.put("findings", findings);
         return out;
+    }
+
+    /**
+     * Whether a finding is about this element, and how: located inside it ({@code inside}), through a cause located
+     * inside it ({@code cause}), or naming it in its message ({@code named}); null when none of these.
+     * <p>
+     * ⚠ Location alone is not enough. A violation of a contract on an interface is reported where the implementation
+     * breaks it: an assignment in {@code Circle.area()} makes the abstract {@code Shape.area()} modifying, and the
+     * finding sits in Circle.java while being the whole reason {@code Shape} is not immutable.
+     */
+    static String concerns(AnalysisModel.Finding f, AnalysisModel.ElementAnnotation e) {
+        if (inside(f, e)) return "inside";
+        if (causeInside(f.causes(), e)) return "cause";
+        if (names(f, e.fqn())) return "named";
+        return null;
+    }
+
+    private static boolean causeInside(List<AnalysisModel.Finding> causes, AnalysisModel.ElementAnnotation e) {
+        for (AnalysisModel.Finding cause : nonNull(causes)) {
+            if (inside(cause, e) || causeInside(cause.causes(), e)) return true;
+        }
+        return false;
+    }
+
+    /* the fqn as a whole name: not the start of a longer identifier (Shape in ShapeFactory) */
+    private static boolean names(AnalysisModel.Finding f, String fqn) {
+        if (fqn == null || f.message() == null) return false;
+        String message = f.message();
+        for (int at = message.indexOf(fqn); at >= 0; at = message.indexOf(fqn, at + 1)) {
+            int end = at + fqn.length();
+            boolean startOk = at == 0 || !Character.isJavaIdentifierPart(message.charAt(at - 1))
+                                         && message.charAt(at - 1) != '.';
+            if (startOk && (end == message.length() || !Character.isJavaIdentifierPart(message.charAt(end)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The elements at a position, outermost first. Without a column a parameter is never chosen: on a method's first
+     * line it is the method that is meant, not its first parameter.
+     */
+    public static List<AnalysisModel.ElementAnnotation> at(AnalysisModel.Result result, String file, int line,
+                                                           Integer column) {
+        List<AnalysisModel.ElementAnnotation> out = new ArrayList<>();
+        for (AnalysisModel.ElementAnnotation e : nonNull(result.elementAnnotations())) {
+            if (e.uri() == null || !e.uri().endsWith(file) || e.beginLine() == null || e.endLine() == null) continue;
+            if (line < e.beginLine() || line > e.endLine()) continue;
+            if (column == null) {
+                if ("PARAMETER".equals(e.kind())) continue;
+            } else if (!containsColumn(e, line, column)) {
+                continue;
+            }
+            out.add(e);
+        }
+        // outermost first: a larger range first, then the earlier start
+        out.sort(java.util.Comparator
+                .comparingInt((AnalysisModel.ElementAnnotation e) -> -(e.endLine() - e.beginLine()))
+                .thenComparingInt(e -> e.beginLine())
+                .thenComparingInt(e -> e.beginCol() == null ? 0 : e.beginCol())
+                .thenComparingInt(e -> -(e.endCol() == null ? 0 : e.endCol())));
+        return out;
+    }
+
+    private static boolean containsColumn(AnalysisModel.ElementAnnotation e, int line, int column) {
+        if (line == e.beginLine() && e.beginCol() != null && column < e.beginCol()) return false;
+        return line != e.endLine() || e.endCol() == null || column <= e.endCol();
     }
 
     private static boolean inside(AnalysisModel.Finding f, AnalysisModel.ElementAnnotation e) {
@@ -164,7 +238,7 @@ public final class Verdicts {
             if (category != null && (f.category() == null || !f.category().startsWith(category))) continue;
             if (severity != null && !severity.equalsIgnoreCase(f.severity())) continue;
             if (file != null && (f.uri() == null || !f.uri().endsWith(file))) continue;
-            if (scope != null && scope.stream().noneMatch(e -> inside(f, e))) continue;
+            if (scope != null && scope.stream().noneMatch(e -> concerns(f, e) != null)) continue;
             out.add(f);
         }
         return out;

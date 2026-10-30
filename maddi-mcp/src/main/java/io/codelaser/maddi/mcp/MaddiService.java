@@ -118,8 +118,12 @@ public final class MaddiService implements Closeable {
 
     // ---- runs ----
 
-    /** Start an analysis of (part of) a project; returns at once with the run, which goes on in the background. */
+    /**
+     * Start an analysis of (part of) a project; returns at once with the run, which goes on in the background.
+     * {@code project} null: the only project configured, or else the one named {@code default}.
+     */
     public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages) {
+        if (project == null) project = projects.size() == 1 ? projects.keySet().iterator().next() : "default";
         AnalysisModel.AnalyzeConfig config = projects.get(project);
         if (config == null) throw new IllegalArgumentException("no project '" + project + "'; configure it first");
         if (current != null && current.state() == AnalysisRun.State.RUNNING) {
@@ -127,12 +131,40 @@ public final class MaddiService implements Closeable {
                                             + " is still going on: wait for it, or stop it");
         }
         AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(config, sourceSets, packages);
-        AnalysisRun run = new AnalysisRun("run-" + runCounter.incrementAndGet(), project);
+        Map<String, Object> scope = new LinkedHashMap<>();
+        if (!sourceSets.isEmpty()) scope.put("sourceSets", List.copyOf(sourceSets));
+        if (!packages.isEmpty()) scope.put("packages", List.copyOf(packages));
+        AnalysisRun run = new AnalysisRun("run-" + runCounter.incrementAndGet(), project, scope);
         current = run;
         runs.put(run.id(), run);
+        forgetOldRuns();
         lastRuns.put(project, run);
         runner.execute(() -> execute(run, request));
         return run;
+    }
+
+    /*
+     A result holds every element of a project, which on a large one is not small: keep the last few runs to compare,
+     and always each project's latest.
+     */
+    private void forgetOldRuns() {
+        var it = runs.values().iterator();
+        while (runs.size() > KEPT_RUNS && it.hasNext()) {
+            AnalysisRun run = it.next();
+            if (run != current && !lastRuns.containsValue(run)) it.remove();
+        }
+    }
+
+    private static final int KEPT_RUNS = 8;
+
+    /** The project's run before this one, among those kept; null if there is none. */
+    public synchronized AnalysisRun previous(AnalysisRun run) {
+        AnalysisRun previous = null;
+        for (AnalysisRun r : runs.values()) {
+            if (r == run) return previous;
+            if (r.project().equals(run.project())) previous = r;
+        }
+        return null;
     }
 
     private void execute(AnalysisRun run, AnalysisModel.AnalyzeConfig request) {

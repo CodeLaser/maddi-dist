@@ -92,7 +92,7 @@ public final class McpTools {
                         ('a.b' one package, 'a.b.' a package and its subpackages, 'a.b.C' one type).""",
                 """
                         {"type":"object","properties":{
-                          "project":{"type":"string","description":"default 'default'"},
+                          "project":{"type":"string","description":"default: the only project configured, else 'default'"},
                           "sourceSets":{"type":"array","items":{"type":"string"}},
                           "packages":{"type":"array","items":{"type":"string"}},
                           "waitSeconds":{"type":"integer","description":"wait this long for the run to finish before answering; default 0"}
@@ -129,12 +129,38 @@ public final class McpTools {
         out.add(tool("explain", """
                         One element in full: annotations with polarity, the analyzer's properties behind them (read \
                         these to see why a type is not @Immutable or a method is @Modified), the statements recorded \
-                        as culprits, and the findings inside it. Unknown or ambiguous names answer candidates.""",
+                        as culprits, and the findings about it: located inside it, or through a cause inside it \
+                        ('via':'cause': a contract on an interface broken by an implementation elsewhere), or naming \
+                        it ('via':'named'). Unknown or ambiguous names answer candidates.""",
                 """
                         {"type":"object","properties":{
                           "project":{"type":"string"},
                           "element":{"type":"string","description":"fully qualified name"}
                         },"required":["element"]}""", this::explain));
+        out.add(tool("element_at", """
+                        The element at a position in a source file, explained in full as by explain, with the \
+                        elements around it. Without a column, a method's line gives the method, not its parameters.""",
+                """
+                        {"type":"object","properties":{
+                          "project":{"type":"string"},
+                          "file":{"type":"string","description":"the source path, or a suffix of it, e.g. a/b/C.java"},
+                          "line":{"type":"integer","description":"1-based"},
+                          "column":{"type":"integer","description":"1-based; optional"}
+                        },"required":["file","line"]}""", this::elementAt));
+        out.add(tool("diff_runs", """
+                        What changed between two runs of a project: elements whose annotations changed (with what was \
+                        added and removed), elements that appeared or disappeared, findings that are new or gone. \
+                        Edit, analyze again, then diff_runs to see what the edit did. Elements are matched by name, \
+                        not position. Default: the project's latest run against the one before it.""",
+                """
+                        {"type":"object","properties":{
+                          "project":{"type":"string"},
+                          "from":{"type":"string","description":"run id; default: the run before 'to'"},
+                          "to":{"type":"string","description":"run id; default: the project's latest run"},
+                          "element":{"type":"string","description":"limit to these elements, as in verdicts"},
+                          "limit":{"type":"integer","description":"default 100 changed elements"},
+                          "offset":{"type":"integer"}
+                        }}""", this::diffRuns));
         out.add(tool("findings", """
                         Errors and warnings with their why-chains: contract violations, near misses (advisory: one \
                         member away from a stronger verdict), parse problems. Select by category prefix, severity \
@@ -207,7 +233,7 @@ public final class McpTools {
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
-        AnalysisRun run = service.analyze(a.string("project", "default"), a.strings("sourceSets"),
+        AnalysisRun run = service.analyze(a.string("project"), a.strings("sourceSets"),
                 a.strings("packages"));
         int wait = a.integer("waitSeconds", 0);
         if (wait > 0) service.await(run.id(), Math.min(wait, 600), r -> progress(x, token, r));
@@ -259,6 +285,57 @@ public final class McpTools {
         out.put("message", exact.isEmpty() ? "no element named " + element + "; candidates containing that text"
                 : "several elements of that name");
         out.put("candidates", candidates.stream().map(Verdicts::brief).toList());
+        return out;
+    }
+
+    private Object elementAt(Args a, McpSyncServerExchange x, Object token) {
+        AnalysisRun run = service.resultsOf(a.string("project"));
+        AnalysisModel.Result result = requireResult(run);
+        String file = a.string("file");
+        if (file == null) throw new IllegalArgumentException("file is required");
+        int line = a.integer("line", -1);
+        if (line < 1) throw new IllegalArgumentException("line is required, 1-based");
+        int column = a.integer("column", -1);
+        List<AnalysisModel.ElementAnnotation> found = Verdicts.at(result, file, line, column < 1 ? null : column);
+        Map<String, Object> out = header(run);
+        if (found.isEmpty()) {
+            out.put("message", "no analysed element at " + file + ":" + line + " (outside every type, or a file"
+                               + " that was not analysed)");
+            return out;
+        }
+        out.put("element", Verdicts.explain(result, found.getLast()));
+        if (found.size() > 1) {
+            out.put("enclosing", found.subList(0, found.size() - 1).stream()
+                    .map(e -> e.kind() + " " + e.fqn()).toList());
+        }
+        return out;
+    }
+
+    private Object diffRuns(Args a, McpSyncServerExchange x, Object token) {
+        AnalysisRun to = a.string("to") != null ? service.run(a.string("to")) : service.resultsOf(a.string("project"));
+        AnalysisRun from = a.string("from") != null ? service.run(a.string("from")) : service.previous(to);
+        if (from == null) {
+            throw new IllegalStateException("run " + to.id() + " is the project's first: analyze again after an edit,"
+                                            + " then compare");
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("from", runHeader(from));
+        out.put("to", runHeader(to));
+        if (!from.scope().equals(to.scope())) {
+            out.put("note", "the runs analysed different parts of the project: elements outside the smaller part"
+                            + " appear or disappear for that reason alone");
+        }
+        Map<String, Object> diff = RunDiff.diff(requireResult(from), requireResult(to), a.string("element"));
+        @SuppressWarnings("unchecked")
+        List<Object> changed = (List<Object>) diff.remove("changed");
+        page(out, "changed", changed, a);
+        out.putAll(diff);
+        return out;
+    }
+
+    private static Map<String, Object> runHeader(AnalysisRun run) {
+        Map<String, Object> out = header(run);
+        if (!run.scope().isEmpty()) out.put("scope", run.scope());
         return out;
     }
 
