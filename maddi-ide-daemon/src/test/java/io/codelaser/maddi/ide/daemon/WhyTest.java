@@ -156,6 +156,33 @@ public class WhyTest {
                 why.steps().stream().map(st -> st.line() + " " + st.text()).toList());
     }
 
+    @DisplayName("a type's level comes with its why: @Mutable at the assignable field, @Dependent at the return")
+    @Test
+    public void typeWhy(@TempDir Path bagDir, @TempDir Path holderDir) throws Exception {
+        DaemonProtocol.ElementAnnotation bag = type(DaemonAnalysisFixture.analyze(bagDir, "x/Bag.java", BAG, false,
+                null), "x.Bag");
+        assertTrue(bag.displayAnnotations().contains("@Mutable"), bag.displayAnnotations()::toString);
+        assertEquals(List.of("6 field count is assigned after construction (rule 0: all fields effectively final)",
+                        "14 assigned in bump(..): this.count=this.count+1"), steps(bag, "Mutable"));
+
+        DaemonProtocol.ElementAnnotation holder = type(DaemonAnalysisFixture.analyze(holderDir, "x/Holder.java",
+                HOLDER, false, null), "x.Holder");
+        assertTrue(holder.displayAnnotations().contains("@FinalFields"), holder.displayAnnotations()::toString);
+        assertEquals(List.of("5 field items is dependent: exposed to, or shared with, the outside world (rule 3)",
+                "7 Method 'items' returns field 'items': the caller can modify it"), steps(holder, "FinalFields"));
+    }
+
+    private static List<String> steps(DaemonProtocol.ElementAnnotation element, String annotation) {
+        DaemonProtocol.Why why = element.whys().stream().filter(w -> annotation.equals(w.annotation())).findFirst()
+                .orElseThrow(() -> new AssertionError(element.toString()));
+        return why.steps().stream().map(st -> st.line() + " " + st.text()).toList();
+    }
+
+    private static DaemonProtocol.ElementAnnotation type(DaemonProtocol.Result result, String fqn) {
+        return result.elementAnnotations().stream().filter(e -> "TYPE".equals(e.kind()) && e.fqn().equals(fqn))
+                .findFirst().orElseThrow(() -> new AssertionError(fqn));
+    }
+
     private static DaemonProtocol.ElementAnnotation method(DaemonProtocol.Result result, String fqnPrefix) {
         return result.elementAnnotations().stream()
                 .filter(e -> "METHOD".equals(e.kind()) && e.fqn().startsWith(fqnPrefix))

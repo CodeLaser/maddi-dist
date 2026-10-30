@@ -235,7 +235,8 @@ public class ResultCollector {
 
     /*
      The culprit properties, and the annotation each explains. The analysis writes them only when the run asks for
-     culprits, as the daemon's does (WarmAnalysisService); more will join as other analyses record theirs.
+     culprits, as the daemon's does (WarmAnalysisService); more will join as other analyses record theirs. A type's
+     IMMUTABLE_CULPRIT is not here: it explains whichever immutability level the type shows (see whys).
      */
     private static final Map<Property, String> CULPRITS = Map.of(
             PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects",
@@ -258,7 +259,24 @@ public class ResultCollector {
                         .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList()));
             }
         });
+        // why a type stops below @Immutable: beside whichever level it shows, @Mutable to @ImmutableContainer(hc=true)
+        ValueImpl.CulpritImpl immutable = info.analysis().getOrNull(PropertyImpl.IMMUTABLE_CULPRIT,
+                ValueImpl.CulpritImpl.class);
+        if (immutable != null && !immutable.steps().isEmpty()) {
+            displayAnnotations.stream().map(ResultCollector::immutabilityLevel).filter(java.util.Objects::nonNull)
+                    .findFirst()
+                    .ifPresent(annotation -> whys.add(new DaemonProtocol.Why(annotation, immutable.steps().stream()
+                            .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList())));
+        }
         return whys;
+    }
+
+    /* the simple name of a displayed immutability level ("@ImmutableContainer(hc=true)": ImmutableContainer), or null */
+    private static String immutabilityLevel(String displayed) {
+        for (String level : List.of("ImmutableContainer", "Immutable", "FinalFields", "Mutable")) {
+            if (displayed.equals("@" + level) || displayed.startsWith("@" + level + "(")) return level;
+        }
+        return null;
     }
 
     private static String kindOf(Info info) {
