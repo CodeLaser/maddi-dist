@@ -259,7 +259,9 @@ public final class MaddiService implements Closeable {
                 run.configured();
                 return;
             }
-            AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages);
+            // an IDE explains only a type close to @Container; asked here, every non-container is explained
+            AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages)
+                    .withContainerWhyMaxSlots(Integer.MAX_VALUE);
             run.phase("analyze", "starting the daemon on " + daemonJdkOf(project));
             daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), settings.logFile());
             JsonNode end = daemon.analyze(run.id(), request, frame -> run.onFrame(frame, mapper));

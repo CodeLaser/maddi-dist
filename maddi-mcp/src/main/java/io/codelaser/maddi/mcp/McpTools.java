@@ -161,7 +161,8 @@ public final class McpTools {
         out.add(tool("explain", """
                         One element in full: annotations with polarity, the analyzer's properties behind them (read \
                         these to see why a type is not @Immutable or a method is @Modified), the statements recorded \
-                        as culprits, and the findings about it: located inside it, or through a cause inside it \
+                        as culprits ('whys'; one with 'holds':false explains a verdict the element does NOT have: \
+                        why a type is not @Container, one step per modified parameter), and the findings about it: located inside it, or through a cause inside it \
                         ('via':'cause': a contract on an interface broken by an implementation elsewhere), or naming \
                         it ('via':'named'). Unknown or ambiguous names answer candidates.""",
                 """

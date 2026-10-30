@@ -66,6 +66,20 @@ public class GutterTextTest {
     }
 
     @Test
+    @DisplayName("why a type is not an annotation it does not show: a negative why")
+    public void negative() {
+        AnalysisModel.ElementAnnotation bag = new AnalysisModel.ElementAnnotation(URI, 3, 1, 9, 1, "TYPE", "x.Bag",
+                List.of("@FinalFields"), List.of(), Map.of(),
+                List.of(new AnalysisModel.Why("Container", List.of(new AnalysisModel.WhyStep(URI, 5, 9,
+                        "parameter list of fill(..) is modified: calls list.add(..)")), true)));
+        assertEquals("""
+                maddi: @FinalFields
+                  not @Container:
+                    ⇐ line 5: parameter list of fill(..) is modified: calls list.add(..)""",
+                GutterText.plain(GutterText.lines(bag, List.of(bag))));
+    }
+
+    @Test
     @DisplayName("a library note follows the annotations; a parameter's only when it differs from its method's")
     public void libraryNotes() {
         Map<String, String> annotated = Map.of(AnalysisModel.LIBRARY_NOTE, "from the annotated API");

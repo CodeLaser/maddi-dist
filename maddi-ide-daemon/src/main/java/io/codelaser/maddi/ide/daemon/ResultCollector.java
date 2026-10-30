@@ -54,10 +54,18 @@ public class ResultCollector {
 
     private final AnnotationTagger tagger;
     private final java.util.Set<Property> bookkeeping;
+    private final int containerWhyMaxSlots;
 
     public ResultCollector(AnalysisEngine engine, Runtime runtime, SourceSet sourceSetOfRequest) {
+        this(engine, runtime, sourceSetOfRequest, DaemonProtocol.AnalyzeConfig.DEFAULT_CONTAINER_WHY_MAX_SLOTS);
+    }
+
+    /** @param containerWhyMaxSlots why a type is not {@code @Container}, only up to this many modified parameters */
+    public ResultCollector(AnalysisEngine engine, Runtime runtime, SourceSet sourceSetOfRequest,
+                           int containerWhyMaxSlots) {
         this.tagger = new AnnotationTagger(engine, runtime, sourceSetOfRequest);
         this.bookkeeping = engine.bookkeepingProperties();
+        this.containerWhyMaxSlots = containerWhyMaxSlots;
     }
 
     // ---- findings ----
@@ -167,7 +175,7 @@ public class ResultCollector {
         info.analysis().propertyValueStream()
                 // the engine's bookkeeping properties (prep's PREPPED) are per-run state, not a result: showing it would put a property on
                 // every prepped type and defeat the "nothing to show → skip" test just below
-                .filter(pv -> !bookkeeping.contains(pv.property()) && !CULPRITS.containsKey(pv.property()))
+                .filter(pv -> !bookkeeping.contains(pv.property()) && !isCulprit(pv.property()))
                 .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
         List<DaemonProtocol.Why> whys = whys(info, displayAnnotations);
 
@@ -206,7 +214,7 @@ public class ResultCollector {
         if (annotations.isEmpty()) return;
         Map<String, String> properties = new LinkedHashMap<>();
         info.analysis().propertyValueStream()
-                .filter(pv -> !bookkeeping.contains(pv.property()) && !CULPRITS.containsKey(pv.property()))
+                .filter(pv -> !bookkeeping.contains(pv.property()) && !isCulprit(pv.property()))
                 .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
         List<String> assumed = List.copyOf(info.analysis()
                 .getOrDefault(PropertyImpl.ASSUMED_DEFAULTS, ValueImpl.SetOfStringsImpl.EMPTY_SET).set());
@@ -236,7 +244,8 @@ public class ResultCollector {
     /*
      The culprit properties, and the annotation each explains. The analysis writes them only when the run asks for
      culprits, as the daemon's does (WarmAnalysisService); more will join as other analyses record theirs. A type's
-     IMMUTABLE_CULPRIT is not here: it explains whichever immutability level the type shows (see whys).
+     IMMUTABLE_CULPRIT is not here: it explains whichever immutability level the type shows; nor is CONTAINER_CULPRIT,
+     which explains a verdict NOT shown (see whys).
      */
     private static final Map<Property, String> CULPRITS = Map.of(
             PropertyImpl.STATIC_SIDE_EFFECTS_CULPRIT_METHOD, "StaticSideEffects",
@@ -248,7 +257,12 @@ public class ResultCollector {
      Only beside its annotation, as shown: a culprit can outlive its verdict (a later MODREACH round leaves an element
      unmodified that an earlier one reached), and an annotation can be hidden by the tagger.
      */
-    private static List<DaemonProtocol.Why> whys(Info info, List<String> displayAnnotations) {
+    private static boolean isCulprit(Property property) {
+        return CULPRITS.containsKey(property) || property == PropertyImpl.IMMUTABLE_CULPRIT
+               || property == PropertyImpl.CONTAINER_CULPRIT;
+    }
+
+    private List<DaemonProtocol.Why> whys(Info info, List<String> displayAnnotations) {
         List<DaemonProtocol.Why> whys = new java.util.ArrayList<>();
         CULPRITS.forEach((property, annotation) -> {
             ValueImpl.CulpritImpl culprit = info.analysis().getOrNull(property, ValueImpl.CulpritImpl.class);
@@ -267,6 +281,14 @@ public class ResultCollector {
                     .findFirst()
                     .ifPresent(annotation -> whys.add(new DaemonProtocol.Why(annotation, immutable.steps().stream()
                             .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList())));
+        }
+        // why a type is not @Container: one step per modified parameter, and only for a type close to being one
+        ValueImpl.CulpritImpl container = info.analysis().getOrNull(PropertyImpl.CONTAINER_CULPRIT,
+                ValueImpl.CulpritImpl.class);
+        if (container != null && !container.steps().isEmpty() && container.steps().size() <= containerWhyMaxSlots
+            && displayAnnotations.stream().noneMatch(a -> a.equals("@Container") || a.startsWith("@Container("))) {
+            whys.add(new DaemonProtocol.Why("Container", container.steps().stream()
+                    .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList(), true));
         }
         return whys;
     }

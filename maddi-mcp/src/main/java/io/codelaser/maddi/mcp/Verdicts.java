@@ -134,6 +134,8 @@ public final class Verdicts {
         for (AnalysisModel.Why why : e.whys()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("annotation", why.annotation());
+            // the culprit of a verdict the element does NOT have: why it is not @Container
+            if (why.negates()) m.put("holds", false);
             m.put("steps", nonNull(why.steps()).stream()
                     .map(s -> location(s.uri(), s.line()) + ":" + s.column() + " " + s.text()).toList());
             whys.add(m);

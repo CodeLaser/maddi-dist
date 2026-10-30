@@ -165,7 +165,27 @@ public final class DaemonProtocol {
                                 List<String> restrictToPackages,
                                 boolean parallel,
                                 boolean warnNearMisses,
-                                List<ModuleSourceSet> moduleSourceSets) {
+                                List<ModuleSourceSet> moduleSourceSets,
+                                Integer containerWhyMaxSlots) {
+
+        /**
+         * Why a type is not {@code @Container} is sent only when at most this many parameters stand in its way: a
+         * type close to a container is worth the explanation, one that modifies everything it is given is not.
+         */
+        public static final int DEFAULT_CONTAINER_WHY_MAX_SLOTS = 2;
+
+        public AnalyzeConfig(String workingDirectory, String sdkHome, String sourceEncoding, List<String> jmods,
+                             List<SourceRoot> sources, List<ClasspathEntry> classpath,
+                             List<String> restrictToPackages, boolean parallel, boolean warnNearMisses,
+                             List<ModuleSourceSet> moduleSourceSets) {
+            this(workingDirectory, sdkHome, sourceEncoding, jmods, sources, classpath, restrictToPackages,
+                    parallel, warnNearMisses, moduleSourceSets, null);
+        }
+
+        /** {@link #containerWhyMaxSlots}, or its default when the front-end did not say. */
+        public int containerWhyMaxSlotsOrDefault() {
+            return containerWhyMaxSlots == null ? DEFAULT_CONTAINER_WHY_MAX_SLOTS : containerWhyMaxSlots;
+        }
 
         /**
          * The flat form: no per-module structure, so the assembler falls back to the string-style builder and
@@ -212,7 +232,15 @@ public final class DaemonProtocol {
      * @param annotation the annotation's simple name, e.g. {@code StaticSideEffects}
      * @param steps      the element's own statement first
      */
-    public record Why(String annotation, List<WhyStep> steps) {
+    public record Why(String annotation, List<WhyStep> steps, Boolean negative) {
+        public Why(String annotation, List<WhyStep> steps) {
+            this(annotation, steps, null);
+        }
+
+        /** Why the element is NOT {@code @annotation} (not {@code @Container}): the culprit of a verdict not shown. */
+        public boolean negates() {
+            return Boolean.TRUE.equals(negative);
+        }
     }
 
     /** One statement of a {@link Why}: where it is, and what it does. Line and column are 1-based. */

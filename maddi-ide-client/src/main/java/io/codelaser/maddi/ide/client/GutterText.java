@@ -36,7 +36,7 @@ public final class GutterText {
         ANNOTATIONS,
         /** Where a library element's values come from: our annotated API, or the default. */
         NOTE,
-        /** A why's heading: the annotation it explains, e.g. {@code @Modified:}. */
+        /** A why's heading: the annotation it explains, e.g. {@code @Modified:}, or does not hold: {@code not @Container:}. */
         HEADING,
         /** One statement of a why, with its place when it has one: {@code line 9: calls store(..)}. */
         STEP,
@@ -96,7 +96,7 @@ public final class GutterText {
         if (element.whys() == null) return;
         for (AnalysisModel.Why why : element.whys()) {
             if (why.steps() == null || why.steps().isEmpty()) continue;
-            lines.add(new Line(depth, Kind.HEADING, '@' + why.annotation() + ':'));
+            lines.add(new Line(depth, Kind.HEADING, (why.negates() ? "not @" : "@") + why.annotation() + ':'));
             for (AnalysisModel.WhyStep step : why.steps()) {
                 // a step without a place (a contract, an annotation) is its text alone
                 String place = AnalysisModel.whereOf(element.uri(), step);
