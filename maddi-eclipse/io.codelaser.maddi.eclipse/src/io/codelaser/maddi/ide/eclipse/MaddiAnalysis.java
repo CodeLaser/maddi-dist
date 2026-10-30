@@ -38,13 +38,18 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 
 import java.nio.file.Path;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runs a whole-project analysis on the shared daemon, off the UI thread, and surfaces the result (markers +
  * findings view). Shared by the manual {@link AnalyzeMaddiHandler} and the {@link MaddiBuildListener}
- * auto-trigger. Coalesces: while one run is in flight, further triggers are dropped (the daemon is
- * single-request, and re-running on every incremental build would only pile up).
+ * auto-trigger. Coalesces: while one run is in flight, no second one starts (the daemon is single-request). A trigger
+ * that comes before the run has sent its request is part of that run, which reads the project afterwards; one that
+ * comes later, or names another project, is queued and analysed when the run ends. ⛔ Those used to be dropped: a
+ * build that ended while a run was reading the project was never analysed (#1).
  * <p>
  * Every way a run ends is recorded in {@link MaddiRun}, which the findings view shows. A manual run that fails
  * also returns an error status, which Eclipse shows as a dialog, and opens the view: the Error Log alone is a place
@@ -55,13 +60,27 @@ public final class MaddiAnalysis {
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
     // set by stop(): the run that then fails was stopped, it did not fail
     private static volatile boolean stopRequested;
+    // the running analysis: its project, and whether it has sent its request (the daemon reads the class files from
+    // then on, so a build that ends later may not be in it)
+    private static volatile IJavaProject runningProject;
+    private static volatile boolean inputsRead;
+    // triggers that came while a run was going, in order, each with its reveal (a manual one shows the view)
+    private static final Map<IJavaProject, Boolean> PENDING = new LinkedHashMap<>();
 
     private MaddiAnalysis() {
     }
 
-    /** True while a run is in flight; the build listener ignores the builds a run itself starts. */
+    /** True while a run is in flight. */
     public static boolean isRunning() {
         return RUNNING.get();
+    }
+
+    /**
+     * True while a run is in flight and has not yet sent its request: the builds that end now are the run's own (it
+     * builds before it analyses) or are read by it anyway, so the build listener ignores them.
+     */
+    public static boolean isPreparing() {
+        return RUNNING.get() && !inputsRead;
     }
 
     /**
@@ -73,8 +92,13 @@ public final class MaddiAnalysis {
             @Override
             protected IStatus run(IProgressMonitor monitor) {
                 // qualified: inside a Job, RUNNING is Job's own state constant
-                if (!MaddiAnalysis.RUNNING.compareAndSet(false, true)) return Status.OK_STATUS; // one at a time
+                if (!MaddiAnalysis.RUNNING.compareAndSet(false, true)) { // one at a time
+                    if (inputsRead || !javaProject.equals(runningProject)) queue(javaProject, reveal);
+                    return Status.OK_STATUS;
+                }
                 stopRequested = false;
+                runningProject = javaProject;
+                inputsRead = false;
                 try {
                     return analyze(javaProject, reveal, monitor);
                 } catch (Exception e) {
@@ -82,8 +106,17 @@ public final class MaddiAnalysis {
                     String message = e.getMessage() == null ? e.toString() : e.getMessage();
                     return failed(javaProject, reveal, e.getClass().getSimpleName(), message, e);
                 } finally {
+                    inputsRead = false;
+                    runningProject = null;
                     MaddiAnalysis.RUNNING.set(false);
-                    if (!stopRequested) MaddiLibrary.get().fetchWanted(); // what was asked for during the run
+                    if (stopRequested) {
+                        synchronized (PENDING) {
+                            PENDING.clear(); // what came between the stop and the run's end, too
+                        }
+                    } else {
+                        MaddiLibrary.get().fetchWanted(); // what was asked for during the run
+                        scheduleNextPending();
+                    }
                 }
             }
 
@@ -95,6 +128,24 @@ public final class MaddiAnalysis {
         };
         job.setUser(reveal); // manual runs show foreground progress; build triggers stay quiet
         job.schedule();
+    }
+
+    private static void queue(IJavaProject javaProject, boolean reveal) {
+        synchronized (PENDING) {
+            PENDING.merge(javaProject, reveal, Boolean::logicalOr);
+        }
+    }
+
+    /** One at a time: the others stay queued, and the run this starts schedules the next when it ends. */
+    private static void scheduleNextPending() {
+        Map.Entry<IJavaProject, Boolean> next;
+        synchronized (PENDING) {
+            Iterator<Map.Entry<IJavaProject, Boolean>> it = PENDING.entrySet().iterator();
+            if (!it.hasNext()) return;
+            next = it.next();
+            it.remove();
+        }
+        schedule(next.getKey(), next.getValue());
     }
 
     /** The project of the last run, analysed again; false when there has been none. */
@@ -115,6 +166,9 @@ public final class MaddiAnalysis {
     public static void stop() {
         if (!RUNNING.get()) return;
         stopRequested = true;
+        synchronized (PENDING) {
+            PENDING.clear(); // stopping means stop, not the next run in line
+        }
         MaddiEclipsePlugin.get().daemon().kill();
     }
 
@@ -179,6 +233,7 @@ public final class MaddiAnalysis {
         // Streamed frames land here: values established by each analysis pass, so the editor is annotated
         // while the run continues rather than only when it ends, and the progress text says what is
         // happening. Everything that is not the terminal frame arrives through this consumer.
+        inputsRead = true;
         JsonNode node = daemon.analyze("req-" + System.nanoTime(), config,
                 frame -> onStreamedFrame(daemon, frame, progress));
         if ("error".equals(node.path("type").asText())) {

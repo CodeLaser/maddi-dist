@@ -79,6 +79,11 @@ public final class MaddiAnalysisService implements Disposable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     // set by stopAnalysis(): the run that then fails was stopped, it did not fail
     private volatile boolean stopRequested;
+    // the running analysis has sent its request, so the daemon reads the class files from here on: a build that ends
+    // later may not be in this run. A trigger before it is covered by the run (the manual action's make fires the
+    // compilation listener as well as its own callback, for one build); a trigger after it asks for a run afterwards.
+    private volatile boolean inputsRead;
+    private final AtomicBoolean rerunWanted = new AtomicBoolean(false);
     // when the last run that ended with a result started (System.currentTimeMillis), 0 for none: a file saved
     // after it is not in that run's model
     private volatile long lastCompleteRunStarted;
@@ -102,7 +107,12 @@ public final class MaddiAnalysisService implements Disposable {
         return project.getService(MaddiAnalysisService.class);
     }
 
-    /** Kick off a whole-project analysis with a progress indicator. Coalesces: skips if one is running. */
+    /**
+     * Kick off a whole-project analysis with a progress indicator. Coalesces: a trigger while a run is going starts no
+     * second one (the daemon serves one request at a time). ⛔ Such a trigger used to be dropped: a build that ended
+     * while a run was reading the project was never analysed (#1). It now asks for one more run when this one ends,
+     * unless it came before the run had read its inputs, which makes it part of this run.
+     */
     public void analyzeInBackground() {
         analyzeInBackground(null);
     }
@@ -113,10 +123,17 @@ public final class MaddiAnalysisService implements Disposable {
      */
     public boolean analyzeInBackground(Runnable afterResult) {
         if (!running.compareAndSet(false, true)) {
-            LOG.info("maddi analysis already running; skipping this trigger");
+            if (inputsRead) {
+                rerunWanted.set(true);
+                LOG.info("maddi analysis already running; analysing again when it ends");
+            } else {
+                LOG.info("maddi analysis already running and not yet reading the project; this trigger is part of it");
+            }
             return false;
         }
         stopRequested = false;
+        inputsRead = false;
+        rerunWanted.set(false);
         long started = System.currentTimeMillis();
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "maddi: analyzing", true) {
             @Override
@@ -145,10 +162,13 @@ public final class MaddiAnalysisService implements Disposable {
                                   + ". Details in the maddi tool window.");
                 } finally {
                     cancelWatch.cancel(true);
+                    inputsRead = false;
                     running.set(false);
                     if (!stopRequested) fetchLibrary(); // what was asked for during the run
                 }
                 if (afterResult != null && !stopRequested && lastCompleteRunStarted >= started) afterResult.run();
+                // a stopped run is not followed by another: stopping means stop
+                if (rerunWanted.getAndSet(false) && !stopRequested) analyzeInBackground();
             }
         });
         return true;
@@ -217,6 +237,7 @@ public final class MaddiAnalysisService implements Disposable {
         String requestId = "req-" + requestCounter.incrementAndGet();
         publishRun(l -> l.runStarted(requestId, daemonInstall, daemonBuild));
         long runStarted = System.currentTimeMillis(); // the daemon reads the files from here on
+        inputsRead = true;
 
         JsonNode node = daemon.analyze(requestId, config, frame -> onStreamedFrame(indicator, frame));
         if ("error".equals(node.path("type").asText())) {
@@ -413,6 +434,7 @@ public final class MaddiAnalysisService implements Disposable {
     public void stopAnalysis() {
         if (!running.get()) return;
         stopRequested = true;
+        rerunWanted.set(false);
         daemon.kill();
         daemonBuild = "unknown";
     }

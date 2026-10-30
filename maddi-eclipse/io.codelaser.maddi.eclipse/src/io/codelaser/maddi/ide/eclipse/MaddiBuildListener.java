@@ -31,7 +31,7 @@ import java.util.Set;
 
 /**
  * Re-analyzes a Java project after Eclipse builds it, when the auto-analyze preference is on. Gated so it
- * costs nothing when off; the analysis itself is coalesced ({@link MaddiAnalysis}). Registered
+ * costs nothing when off; the analysis itself is coalesced and queued ({@link MaddiAnalysis}). Registered
  * programmatically by {@link MaddiEclipsePlugin} for {@code POST_BUILD} events.
  */
 public class MaddiBuildListener implements IResourceChangeListener {
@@ -40,8 +40,9 @@ public class MaddiBuildListener implements IResourceChangeListener {
     public void resourceChanged(IResourceChangeEvent event) {
         if (event.getType() != IResourceChangeEvent.POST_BUILD) return;
         if (!MaddiPreferences.autoAnalyzeOnBuild()) return;
-        // a run builds before it analyses; that build must not queue another run
-        if (MaddiAnalysis.isRunning()) return;
+        // a run builds before it analyses; that build must not queue another run. A build that ends once the run is
+        // reading the project does: MaddiAnalysis queues it.
+        if (MaddiAnalysis.isPreparing()) return;
         IResourceDelta delta = event.getDelta();
         if (delta == null) return;
 

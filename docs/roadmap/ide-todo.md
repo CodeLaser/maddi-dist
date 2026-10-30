@@ -133,6 +133,11 @@ Each of these is a GitHub issue (CodeLaser/maddi#24–CodeLaser/maddi#28); this 
 - **(CodeLaser/maddi#24) Coalesced triggers are dropped silently.** Both front-ends guard with a bare `AtomicBoolean`
   (`MaddiAnalysis.RUNNING`), so a build finishing while a run is in flight is simply never computed. Needs a
   pending flag and a re-run, not a second concurrent analysis.
+  ✅ **DONE (2026-10-30), CodeLaser/maddi-dist#1.** A trigger while a run is going asks for one more run when it
+  ends (Eclipse: a queue, per project), unless it came before the run sent its request: then the run reads that build
+  anyway. That rule also keeps the run's own build (Eclipse) and the manual action's double trigger (IntelliJ: its
+  make callback and the compilation listener) from queueing a pointless second run. A stop empties the queue.
+  VS Code has only the manual command, which says it is already analysing.
 - **(CodeLaser/maddi#25) Whole-workspace marker churn (Eclipse).** `MaddiMarkers.apply` deletes every maddi marker at
   `DEPTH_INFINITE` from the workspace root and recreates them all, on every run. Wasteful now; wrong once
   analysis is partial, since a partial result must not erase markers for files it did not look at.
