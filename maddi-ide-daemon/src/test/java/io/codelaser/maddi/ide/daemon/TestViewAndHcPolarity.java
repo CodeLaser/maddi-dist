@@ -31,7 +31,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Two verdicts the decorator learned after the tagger was written: {@code @UnmodifiableView} (maddi-mod#52) and
  * {@code @Modified(hc=true)}, a modification of the hidden content only (maddi-mod#25). Both are proven guarantees,
  * so both are POSITIVE; the second must not appear beside the tagger's own baseline {@code @Modified}, and the first
- * is left out where the result is immutable anyway. And {@code @FinalFields}, which used to read {@code @Mutable}.
+ * is left out where the result is immutable anyway. And {@code @FinalFields}, which used to read {@code @Mutable};
+ * on a type without instance fields it is the baseline.
  */
 public class TestViewAndHcPolarity {
 
@@ -57,6 +58,10 @@ public class TestViewAndHcPolarity {
                 // an immutable result: a view, but saying so adds nothing
                 public String joined() { return String.join(",", list); }
                 public void addString(String s) { list.add(s); }
+                // no instance fields: all final, vacuously
+                interface Sink {
+                    void put(String s);
+                }
             }
             """;
 
@@ -96,6 +101,9 @@ public class TestViewAndHcPolarity {
         assertTrue(starting(type, "@Mutable").isEmpty(), type.toString());
         // Item has a non-final field: plain @Mutable
         assertEquals(1, starting(typeAnnotations(r, "x.X.Item"), "@Mutable").size());
+        // an interface has no fields: its @FinalFields is the baseline, hidden by default as a class's @Mutable is
+        DaemonProtocol.Annotation sink = one(typeAnnotations(r, "x.X.Sink"), "@FinalFields");
+        assertTrue(sink.contextDefault(), sink.toString());
 
         // parameter: touchAll changes what the list holds, add changes the list
         DaemonProtocol.Annotation touched = one(annotationsFor(r, "PARAMETER", "X.touchAll"), "@Modified");

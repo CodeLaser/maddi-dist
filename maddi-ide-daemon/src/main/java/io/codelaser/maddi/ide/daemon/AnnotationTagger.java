@@ -175,8 +175,11 @@ public class AnnotationTagger {
             }
             case TypeInfo ti -> {
                 // a type's own @FinalFields is informative, as its @Immutable is; on a field or a method result it
-                // is the same kind of baseline the @Mutable it replaces was
-                mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_TYPE, false, out);
+                // is the same kind of baseline the @Mutable it replaces was. So it is on a type without instance
+                // fields, every interface: "all fields final" holds vacuously, and @FinalFields is where such a type
+                // bottoms out, as a class does at @Mutable
+                boolean noInstanceFields = ti.fields().stream().allMatch(FieldInfo::isStatic);
+                mutableOrFinalFields(a, PropertyImpl.IMMUTABLE_TYPE, noInstanceFields, out);
                 if (isDependent(a, PropertyImpl.INDEPENDENT_TYPE)) out.add(neg("@Dependent", true));
             }
             default -> {
