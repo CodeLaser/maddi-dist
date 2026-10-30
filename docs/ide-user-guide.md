@@ -3,7 +3,8 @@
 maddi analyses a whole Java (or Kotlin) project and shows what it concludes beside each declaration, written as
 the annotations you would otherwise write by hand: whether a type is immutable or a container, whether a method
 modifies its object, whether a parameter is changed by the call, what may be `null`. It also checks the
-annotations you *did* write, and reports a contract the code breaks.
+annotations you *did* write, and reports a contract the code breaks. In IntelliJ it can also translate Java to
+Kotlin, using those verdicts.
 
 This guide covers the IntelliJ IDEA and Eclipse plugins. They work the same way; where they differ, each has its
 own short section.
@@ -53,8 +54,8 @@ Closing the IDE stops the daemon too, also in the middle of a run.
 
 Hints are on by default. If you see none after an analysis:
 
-- *Settings → Editor → Inlay Hints → Other → Java → maddi analysis hints* must be ticked, and inlay hints must not be switched
-  off altogether.
+- *Settings → Editor → Inlay Hints → Other → Java → maddi analysis hints* must be ticked, and inlay hints must not
+  be switched off altogether.
 - *Settings → Tools → maddi → Inline hints* must not be *Off (gutter only)*.
 
 ### Eclipse
@@ -104,7 +105,8 @@ maddi shows its results on three surfaces:
 ### Which hints you see
 
 Many verdicts are the expected default in their context, and showing them all would bury the interesting ones:
-`@Mutable` on most classes, `@Modified` on a `void` setter. By default these *context defaults* are hidden.
+`@Mutable` on most classes, `@Modified` on a `void` setter, `@FinalFields` on an interface (it has no fields, so
+"all fields final" says nothing there). By default these *context defaults* are hidden.
 *Inline hints* in the settings chooses:
 
 - **Hide context defaults** (default): the informative verdicts only;
@@ -127,8 +129,9 @@ says which kind each is:
 - **Not in maddi's annotated API**: a library maddi has no description of; its verdicts are the analysis's
   defaults.
 
-Library hints appear once an analysis has finished in this IDE session. A decompiled class (no sources) shows
-none.
+Library hints appear once an analysis has finished in this IDE session; a library file opened during a run
+shows them when the run ends. A decompiled class (no sources) shows none. In Eclipse, the library's hints need
+code minings on, as the project's do (see *Turning the hints on*); its ruler icons do not.
 
 ## Writing your own contracts
 
@@ -143,8 +146,9 @@ type that would be `@Container` but for one method. Useful on code you are clean
 
 maddi translates Java to Kotlin with its own translator, which reads the analysis's verdicts: a `List` field or
 result becomes Kotlin's read-only `List` where nothing modifies it and `MutableList` where something does, a type
-gets `?` only where the analysis finds that `null` can occur, and a record becomes a `data class`. Right-click in the
-Project view or the editor:
+gets `?` only where the analysis finds that `null` can occur, and a record becomes a `data class`. This is not
+IntelliJ's own *Convert Java File to Kotlin File*, which has no such verdicts to go on. Right-click in the Project
+view or the editor, or use the *Refactor* menu:
 
 - **Translate to Kotlin with maddi (Preview)**, on one or more Java files: each translation opens beside its Java in
   the diff viewer. Nothing is written. A preview, because a single Kotlin file among Java ones may need interop
@@ -154,9 +158,14 @@ Project view or the editor:
   then offers **Replace the Java sources…**: each Java file becomes its Kotlin file, in place. The module must be set
   up to build Kotlin; Local History keeps the Java files (label *Before maddi Translate to Kotlin*).
 
-When the files changed since the last analysis, the project is built and analysed first. The report lists what the
-translator could not say the same way: *INFO* (said differently, same behaviour), *BEHAVIOUR_CHANGE*, *LOSS*
-(something of the Java's is not in the Kotlin) and *ERROR* (not translated: the file will not compile as is).
+The translation reads the last analysis. When the files changed since then, or there has been none, the project
+is built and analysed first, and the translation follows when the analysis ends (stopping the analysis cancels it).
+While an analysis is running the action waits: start it again when the run has finished.
+
+The report (and, for a preview, the notification) lists what the translator could not say the same way: *INFO*
+(said differently, same behaviour), *BEHAVIOUR_CHANGE* (can behave differently at run time), *LOSS* (something of
+the Java's is not in the Kotlin) and *ERROR* (not translated: the file will not compile as is). Read the
+*BEHAVIOUR_CHANGE* and *ERROR* lines before replacing the sources.
 
 ## Settings
 
@@ -190,6 +199,8 @@ points at a front end you downloaded by hand.
 - **"maddi needs a JDK 25 or later"**: add one to the IDE (see *Before you start*) or choose one in the settings.
 - **Results look incomplete**: some files did not parse, or the analysis stopped before it converged; the tool
   window says which. A partial result can show weaker verdicts than the code deserves.
+- **The translation says "a daemon from before the translate request"**: the daemon that answered is older than
+  the plugin. *Restart daemon* in the maddi tool window, then translate again.
 - **The analysis fails**: the tool window has the message. The daemon's own log is next to the IDE's
   (IntelliJ: *Help → Show Log in Finder/Explorer*; Eclipse: `.metadata/.plugins/io.codelaser.maddi.eclipse/
   maddi-daemon.log` in the workspace).
