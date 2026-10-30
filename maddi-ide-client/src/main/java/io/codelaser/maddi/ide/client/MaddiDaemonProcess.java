@@ -153,14 +153,28 @@ public final class MaddiDaemonProcess implements Closeable {
      * that a new run does not rebuild, since every run builds its own model.
      * <p>
      * Not synchronized, deliberately: a running analysis holds the monitor until its result arrives, which is exactly
-     * what is not to be waited for.
+     * what is not to be waited for. The process's exit is, briefly: a forcible destroy only asks the OS, and on a
+     * loaded machine the daemon could otherwise still be alive when this returns.
      */
     public void kill() {
         DaemonLauncher.Handle h = handle;
         if (h == null) return;
-        h.process().descendants().forEach(ProcessHandle::destroyForcibly);
+        List<ProcessHandle> descendants = h.process().descendants().toList();
+        descendants.forEach(ProcessHandle::destroyForcibly);
         h.process().destroyForcibly();
+        try {
+            h.process().waitFor(KILL_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            for (ProcessHandle descendant : descendants) {
+                descendant.onExit().get(KILL_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            // destroyed, but not yet reaped: nothing more this side can do
+        }
     }
+
+    private static final long KILL_WAIT_SECONDS = 10;
 
     /**
      * What the last analysis knows of these library types: a {@code libraryResult} frame, or an {@code error} one
