@@ -49,16 +49,53 @@ application {
     mainClass = "io.codelaser.maddi.mcp.McpMain"
 }
 
+// the version the server reports to the agent at initialize (McpMain.version)
+tasks.jar {
+    manifest { attributes("Implementation-Title" to "maddi-mcp", "Implementation-Version" to project.version) }
+}
+
 val daemonInstall = project(":maddi-ide-daemon").layout.buildDirectory.dir("install/maddi-ide-daemon")
 
 distributions {
     main {
         contents {
             // found by McpMain next to lib/, unless --daemon-install says otherwise
-            from(project(":maddi-ide-daemon").tasks.named("installDist")) { into("daemon") }
+            from(project(":maddi-ide-daemon").tasks.named("installDist")) {
+                into("daemon")
+                // the server runs daemon/bin/maddi-ide-daemon: the zip, unlike installDist, would drop its x bit
+                filesMatching("bin/*") { permissions { unix("rwxr-xr-x") } }
+            }
+            // the zip is published on the GitHub release (release-cli.sh): the licence and what it bundles
+            from(rootProject.layout.projectDirectory) { include("LICENSE", "NOTICE", "THIRD-PARTY.txt") }
         }
     }
 }
+
+// THIRD-PARTY.txt lists the libraries of the daemon (maddi-ide-daemon checks those) and of this server
+val checkThirdPartyNotices = tasks.register("checkThirdPartyNotices") {
+    description = "Checks that THIRD-PARTY.txt lists every third-party library the MCP server distribution bundles."
+    group = "verification"
+    val notices = rootProject.layout.projectDirectory.file("THIRD-PARTY.txt")
+    val runtime = configurations.runtimeClasspath
+    inputs.file(notices)
+    inputs.files(runtime)
+    doLast {
+        val listed = notices.asFile.readLines().map { it.substringBefore(' ').trim() }.filter { ':' in it }.toSet()
+        val bundled = runtime.get().incoming.artifacts.artifacts
+            .map { it.id.componentIdentifier }
+            .filterIsInstance<org.gradle.api.artifacts.component.ModuleComponentIdentifier>()
+            .filter { it.group != "io.codelaser" }
+            .map { "${it.group}:${it.module}" }
+            .toSortedSet()
+        val missing = bundled - listed
+        if (missing.isNotEmpty()) {
+            throw GradleException("THIRD-PARTY.txt does not list " + missing.joinToString(", ")
+                    + ": add each with its license before the MCP server ships it")
+        }
+    }
+}
+tasks.named("check") { dependsOn(checkThirdPartyNotices) }
+tasks.named("distZip") { dependsOn(checkThirdPartyNotices) }
 
 // The round-trip test drives the real daemon distribution on a JDK 25+, as maddi-ide-client's tests do.
 tasks.test {
