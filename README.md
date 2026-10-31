@@ -103,9 +103,10 @@ that maddi's Kotlin translation can be compared with it.
 `maddi-mcp` is an [MCP](https://modelcontextprotocol.io) server on stdin/stdout, for a coding agent to configure a
 project, analyse all or part of it, and ask for the verdicts. It drives the same daemon as the IDE plugins, bundled
 in its `daemon/` directory. It runs on a JDK 25 or later, as the daemon does: by default the daemon uses the same one,
-or the one `--jdk` names. Not released yet;
-build it with `./gradlew :maddi-mcp:installDist` and register `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`
-with the agent, for example `claude mcp add maddi -- <that path>`.
+or the one `--jdk` names. Download `maddi-mcp-<version>.zip` from the
+[GitHub release](https://github.com/CodeLaser/maddi/releases), unzip it, and register its `bin/maddi-mcp` with the
+agent, for example `claude mcp add maddi -- <dir>/maddi-mcp-<version>/bin/maddi-mcp`. From source:
+`./gradlew :maddi-mcp:installDist`, then `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`.
 
 | Tool | Does |
 |---|---|

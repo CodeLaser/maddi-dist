@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 #
-# Build the two self-contained maddi CLI distributions and publish them as assets on maddi's GitHub Release.
-# This is the "command-line tools" leg of the publishing strategy (see PUBLISHING.md, Package 1, item 3).
+# Build the two self-contained maddi CLI distributions and the MCP server, and publish them as assets on maddi's
+# GitHub Release. This is the "command-line tools" leg of the publishing strategy (see PUBLISHING.md, Package 1,
+# item 3).
 #
 #   maddi        (maddi-cli:distZip) — the openjdk (Java) runner
 #   maddi-kotlin (maddi-cli-kotlin:distZip) — the mixed Java+Kotlin runner; the K2 'for-ide' jars ride
 #                                              along in lib-k2/, so this bundle is how Kotlin support ships
+#   maddi-mcp    (maddi-mcp:distZip) — the MCP server for coding agents, with the IDE daemon in daemon/
 #
 # Each zip gets a <zip>.sha256 beside it. The IDE plugins download maddi-kotlin-<version>.zip from release
 # v<version> (KotlinFrontEndInstaller) and refuse it without a matching checksum, so the tag must be the
 # version in gradle.properties -- checked below.
 #
 # Each bundle is self-contained: the launcher (bin/maddi[-kotlin]) has the javac --add-exports baked in
-# and every runtime jar sits in lib/. No Maven resolution is involved on the consumer side.
+# and every runtime jar sits in lib/. No Maven resolution is involved on the consumer side. The MCP server's
+# bin/maddi-mcp starts the daemon from its own daemon/ directory.
 #
 # Usage:   ./release-cli.sh <tag>          e.g.  ./release-cli.sh v0.8.2
 # Requires: an authenticated `gh` CLI (github.com/cli/cli) and a JDK on PATH.
@@ -33,17 +36,19 @@ if [[ "$TAG" != "v$VERSION" ]]; then
     exit 2
 fi
 
-echo "==> Building the CLI distributions (version from gradle.properties)"
-./gradlew :maddi-cli:distZip :maddi-cli-kotlin:distZip
+echo "==> Building the CLI distributions and the MCP server (version from gradle.properties)"
+./gradlew :maddi-cli:distZip :maddi-cli-kotlin:distZip :maddi-mcp:distZip
 
 # Each zip lives in its own module's distributions dir, so these globs cannot cross-match.
 OPENJDK_ZIP=$(ls maddi-cli/build/distributions/maddi-*.zip)
 KOTLIN_ZIP=$(ls maddi-cli-kotlin/build/distributions/maddi-kotlin-*.zip)
+MCP_ZIP=$(ls maddi-mcp/build/distributions/maddi-mcp-*.zip)
 echo "    openjdk runner: $OPENJDK_ZIP"
 echo "    kotlin  runner: $KOTLIN_ZIP"
+echo "    MCP server:     $MCP_ZIP"
 
 # "<hex>  <file name>", the sha256sum format; shasum ships with macOS and perl alike
-for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP"; do
+for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP" "$MCP_ZIP"; do
     (cd "$(dirname "$zip")" && shasum -a 256 "$(basename "$zip")" > "$(basename "$zip").sha256")
 done
 
@@ -80,8 +85,9 @@ elif [[ $HAVE_NOTES == 1 ]]; then
     gh release create "$TAG" -R "$REPO" --verify-tag --title "maddi $TAG" --notes-file "$NOTES"
 else
     echo "==> Creating release $TAG on $REPO (no $NOTES_PATH in $MADDI_DIR at $TAG; using a one-line note)"
-    gh release create "$TAG" -R "$REPO" --verify-tag --title "$TAG" --notes "maddi $TAG — command-line distributions."
+    gh release create "$TAG" -R "$REPO" --verify-tag --title "$TAG" --notes "maddi $TAG — command-line distributions and MCP server."
 fi
 
-gh release upload "$TAG" -R "$REPO" "$OPENJDK_ZIP" "$OPENJDK_ZIP.sha256" "$KOTLIN_ZIP" "$KOTLIN_ZIP.sha256" --clobber
-echo "==> Done. Both CLI zips and their checksums attached to release $TAG on $REPO."
+gh release upload "$TAG" -R "$REPO" "$OPENJDK_ZIP" "$OPENJDK_ZIP.sha256" "$KOTLIN_ZIP" "$KOTLIN_ZIP.sha256" \
+    "$MCP_ZIP" "$MCP_ZIP.sha256" --clobber
+echo "==> Done. Both CLI zips, the MCP server's zip and their checksums attached to release $TAG on $REPO."
