@@ -25,6 +25,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
@@ -316,6 +317,9 @@ public class MaddiFindingsPanel extends SimpleToolWindowPanel implements Disposa
         group.add(new AnAction("Analyze with maddi", "Run a whole-project analysis", AllIcons.Actions.Execute) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
+                // the daemon reads the files on disk; unlike the menu action this button does not build, and so
+                // did not save: a new class still being typed was analysed as it was last saved (2026-10-31)
+                FileDocumentManager.getInstance().saveAllDocuments();
                 MaddiAnalysisService.getInstance(project).analyzeInBackground();
             }
 

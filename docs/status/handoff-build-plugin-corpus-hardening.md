@@ -33,7 +33,7 @@ has no tests at all.**
    checked-in one (fernflower's was stale by two fields, langchain4j's by three).
 2. **`--analysis-steps=none` is the verdict.** Exit code *and* error count — exit 0 with warnings is a
    different answer from exit 0 clean. Count with
-   `grep -c 'Error found in'`; the `ErrorReport` list is capped ("… and N more") and will understate.
+   `grep -c ': javac error, '`; the `ErrorReport` list is capped ("… and N more") and will understate.
 3. **Run the control before concluding.** Twice this session the obvious diagnosis was wrong and a
    control refuted it: the sibling-source path was *not* the cause of the multi-module failure
    (siblings-as-jars failed too), and the engine `AssertionError` was *downstream* of a missing
