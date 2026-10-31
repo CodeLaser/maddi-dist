@@ -130,6 +130,7 @@ public class MaddiFindingsView extends ViewPart {
         analyze = new Action("Analyze") {
             @Override
             public void run() {
+                PlatformUI.getWorkbench().saveAllEditors(false); // the daemon reads the files on disk
                 if (!MaddiAnalysis.rerun()) MaddiAnalysis.reportNoProject();
             }
         };

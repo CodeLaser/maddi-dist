@@ -27,6 +27,7 @@ import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 /**
@@ -49,6 +50,8 @@ public class AnalyzeMaddiHandler extends AbstractHandler {
             MaddiAnalysis.reportNoProject();
             return null;
         }
+        // the daemon reads the files on disk: an unsaved editor would be analysed as it was last saved
+        PlatformUI.getWorkbench().saveAllEditors(false);
         MaddiAnalysis.schedule(javaProject, true);
         return null;
     }
