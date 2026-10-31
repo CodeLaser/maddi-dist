@@ -10,6 +10,9 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 - Computed annotations as inline hints, on the line above a declaration or inline, and before a parameter's
   type, where you would write them. Defaults implied by their context are hidden unless you ask for all of them.
 - Gutter icons with the full set of annotations; a verdict that holds only after a mark has its own icon.
+- The gutter tooltip says why: the chain of statements behind a `@Modified`, `@Dependent`, `@Nullable` or
+  `@StaticSideEffects`; for a type below `@Immutable`, the rule it fails at the member that fails it; for a type at
+  most 2 parameters away from `@Container`, each parameter that is modified, under `not @Container:`.
 - Contracts you write are checked; a violation is marked in the code with the reasons that led to it. Near misses
   (one method away from `@Container`, …) on request.
 - A tool window (IntelliJ) or view (Eclipse) with the run's progress, the findings with their reasons, sources that
