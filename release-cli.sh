@@ -17,8 +17,12 @@
 # and every runtime jar sits in lib/. No Maven resolution is involved on the consumer side. The MCP server's
 # bin/maddi-mcp starts the daemon from its own daemon/ directory.
 #
+# Then the Homebrew formulas in CodeLaser/homebrew-tap (maddi, maddi-kotlin, maddi-mcp) are pointed at the new
+# zips and their checksums, committed and pushed. MADDI_HOMEBREW_TAP=none skips that; a trial run on another
+# repository (MADDI_RELEASE_REPO) skips it unless MADDI_HOMEBREW_TAP names a tap.
+#
 # Usage:   ./release-cli.sh <tag>          e.g.  ./release-cli.sh v0.8.2
-# Requires: an authenticated `gh` CLI (github.com/cli/cli) and a JDK on PATH.
+# Requires: an authenticated `gh` CLI (github.com/cli/cli) with push access to the tap, and a JDK on PATH.
 #
 set -euo pipefail
 
@@ -65,7 +69,8 @@ REPO="${MADDI_RELEASE_REPO:-CodeLaser/maddi}"
 MADDI_DIR="${MADDI_DIR:-../maddi}"
 NOTES_PATH="docs/project/release-notes-${TAG#v}.md"
 NOTES=$(mktemp)
-trap 'rm -f "$NOTES"' EXIT
+TAP_DIR=$(mktemp -d)
+trap 'rm -rf "$NOTES" "$TAP_DIR"' EXIT
 BLOB="https://github.com/CodeLaser/maddi/blob/$TAG"
 if git -C "$MADDI_DIR" show "$TAG:$NOTES_PATH" 2>/dev/null \
         | sed -E -e "s#\]\(\.\./\.\./#]($BLOB/#g" \
@@ -90,4 +95,35 @@ fi
 
 gh release upload "$TAG" -R "$REPO" "$OPENJDK_ZIP" "$OPENJDK_ZIP.sha256" "$KOTLIN_ZIP" "$KOTLIN_ZIP.sha256" \
     "$MCP_ZIP" "$MCP_ZIP.sha256" --clobber
-echo "==> Done. Both CLI zips, the MCP server's zip and their checksums attached to release $TAG on $REPO."
+echo "==> Both CLI zips, the MCP server's zip and their checksums attached to release $TAG on $REPO."
+
+if [[ "$REPO" == "CodeLaser/maddi" ]]; then TAP="${MADDI_HOMEBREW_TAP:-CodeLaser/homebrew-tap}"; else TAP="${MADDI_HOMEBREW_TAP:-none}"; fi
+if [[ "$TAP" == "none" ]]; then
+    echo "==> Homebrew tap not updated (MADDI_HOMEBREW_TAP=none, or a trial run)"
+    exit 0
+fi
+echo "==> Pointing the formulas in $TAP at release $TAG"
+gh repo clone "$TAP" "$TAP_DIR" -- --quiet
+# a formula's url and sha256 lines, each on a line of its own; Homebrew reads the version from the url
+point_formula() {
+    local formula="$TAP_DIR/Formula/$1.rb" zip="$2"
+    local url="https://github.com/$REPO/releases/download/$TAG/$(basename "$zip")"
+    local sha
+    sha=$(cut -d' ' -f1 "$zip.sha256")
+    sed -i.bak -E -e "s#^  url \".*\"\$#  url \"$url\"#" -e "s#^  sha256 \".*\"\$#  sha256 \"$sha\"#" "$formula"
+    rm -f "$formula.bak"
+    grep -q "^  url \"$url\"\$" "$formula" && grep -q "^  sha256 \"$sha\"\$" "$formula" \
+        || { echo "could not point $formula at $url" >&2; exit 1; }
+}
+point_formula maddi "$OPENJDK_ZIP"
+point_formula maddi-kotlin "$KOTLIN_ZIP"
+point_formula maddi-mcp "$MCP_ZIP"
+git -C "$TAP_DIR" add Formula
+if git -C "$TAP_DIR" diff --cached --quiet; then
+    echo "    the formulas already point at $TAG"
+else
+    git -C "$TAP_DIR" commit --quiet -m "maddi $VERSION"
+    git -C "$TAP_DIR" push --quiet
+    echo "    pushed: brew upgrade picks up $VERSION"
+fi
+echo "==> Done."
