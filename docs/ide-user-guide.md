@@ -90,9 +90,13 @@ maddi shows its results on three surfaces:
 - **Hints**: the computed annotations, on a line of their own above each type, method and field, and before
   each parameter, where you would write them. *Hint placement* in the settings puts them after the name instead.
 - **Gutter (IntelliJ) / ruler (Eclipse) icons**: on each analysed type, method and field. The tooltip has the
-  full set, each parameter's included, and for some verdicts the reason: the chain of statements that made a
-  method `@Modified`, from the method to the call that modifies. A verdict that holds only after a mark (see
-  `after=` below) has an icon of its own (Eclipse: a ring instead of a dot).
+  full set, each parameter's included, and the reasons: under each annotation that has one, the chain of
+  statements behind it, from the element to the statement that decides it (`⇐ line 9: calls store(..)`). A method,
+  field or parameter that is `@Modified`, `@Dependent` or `@Nullable`, and a method with `@StaticSideEffects`, says
+  why. A type below `@Immutable` says which rule it fails, at the member that fails it. A type that is not
+  `@Container`, but is at most 2 parameters away from it, says so under `not @Container:`, one line per parameter
+  that is modified. A verdict that holds only after a mark (see `after=` below) has an icon of its own (Eclipse: a
+  ring instead of a dot).
 - **Problems**: a contract you wrote that the code breaks, underlined, with the reasoning that led to it.
 
 ### What the annotations mean

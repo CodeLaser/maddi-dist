@@ -112,7 +112,7 @@ with the agent, for example `claude mcp add maddi -- <that path>`.
 | `configure_project`, `list_projects` | a Gradle build by its directory alone; or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
 | `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
-| `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, the findings with their why-chains |
+| `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, why they hold, the findings with their why-chains |
 | `element_at` | the element at a file and line, explained |
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
 | `library_annotations` | what the last run knows of JDK and library types |
@@ -140,6 +140,28 @@ files changed since.
 
 Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
 stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.
+
+`explain` says why a verdict holds, as a chain of statements (`whys`), the element's own first, then into what it
+calls: why a method, field or parameter is `@Modified`, why something is `@Dependent` or `@Nullable`, why a method has
+`@StaticSideEffects`. For a type, why it stops where it does on the way to `@Immutable` (`@Mutable`, `@FinalFields`,
+`@Immutable(hc=true)`): the first rule it fails, at the member that fails it. And why a type is *not* `@Container`
+(marked `"holds": false`): one step per parameter that is modified, at the statement that modifies it. The IDEs show
+that last one only for a type at most 2 parameters away from `@Container`; the server gives it for every type.
+
+The server runs until the agent closes its standard input, and its daemon exits with it. After an `installDist`,
+reconnect the agent to the server (`/mcp` in Claude Code) to run the new build. Options, each also an environment
+variable:
+
+| Option | Environment | Default |
+|---|---|---|
+| `--jdk` | `MADDI_JDK_HOME` | the JDK the server runs on; the daemon needs 25 or later |
+| `--daemon-install` | `MADDI_DAEMON_INSTALL` | the bundled `daemon/` directory |
+| `--xmx-mb` | `MADDI_DAEMON_XMX_MB` | the daemon's own default heap |
+| `--log` | `MADDI_DAEMON_LOG` | `maddi-mcp-daemon-<pid>.log` in the temporary directory |
+| `--store` | `MADDI_MCP_STORE` | `~/.maddi/mcp` |
+
+How the server is built on the daemon, and what comes next (asking what an edit would do to the verdicts, and
+whether it would break a contract, before making it): [`docs/roadmap/mcp-server.md`](docs/roadmap/mcp-server.md).
 
 ## Building
 
