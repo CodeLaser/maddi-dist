@@ -2,7 +2,7 @@
 
 This is one of three repositories split from maddi; **read `README.md` for the tier rule first**. The general
 notes live in the base repository and apply here unchanged: `../maddi/CLAUDE.md`, `../maddi/AGENTS.md`
-(commands, engine facts, working style) and `../maddi/ARCHITECTURE.md`.
+(commands, engine facts, working style) and `../maddi/docs/design/ARCHITECTURE.md`.
 
 The two rules that follow from the project being public hold here too: the customer behind the private proving
 corpus is never named (write `closed-core` / `com.example.*`; the commit hook in `.githooks` refuses the rest),
