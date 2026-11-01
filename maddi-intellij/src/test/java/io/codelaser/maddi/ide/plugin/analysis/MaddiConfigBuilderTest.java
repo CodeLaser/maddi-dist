@@ -26,6 +26,10 @@ import com.intellij.testFramework.LoggedErrorProcessor;
 import com.intellij.testFramework.PsiTestUtil;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import org.jetbrains.jps.model.java.JavaResourceRootType;
+import org.jetbrains.kotlin.config.ResourceKotlinRootType;
+import org.jetbrains.kotlin.config.SourceKotlinRootType;
+import org.jetbrains.kotlin.config.TestSourceKotlinRootType;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -146,6 +150,36 @@ public class MaddiConfigBuilderTest extends LightJavaCodeInsightFixtureTestCase 
                 config.sources().isEmpty());
         assertTrue("classpath must stay empty, or the project-wide union is back",
                 config.classpath().isEmpty());
+    }
+
+    /**
+     * The Kotlin plugin's Gradle import marks {@code src/main/kotlin} with its own root type, not Java's; asking
+     * for Java's alone sent a Kotlin project with no source set at all.
+     */
+    public void testKotlinSourceRootsAreSourceSets() throws Exception {
+        VirtualFile mainDir = myFixture.getTempDirFixture().findOrCreateDir("kmain");
+        VirtualFile testDir = myFixture.getTempDirFixture().findOrCreateDir("ktest");
+        PsiTestUtil.addSourceRoot(module(), mainDir, SourceKotlinRootType.INSTANCE);
+        PsiTestUtil.addSourceRoot(module(), testDir, TestSourceKotlinRootType.INSTANCE);
+
+        AnalysisModel.AnalyzeConfig config = build();
+        assertTrue("a kotlin-source root belongs in a main set", config.moduleSourceSets().stream()
+                .anyMatch(s -> !s.test() && s.sourceDirectories().contains(mainDir.getPath())));
+        assertTrue("a kotlin-test root belongs in a test set", config.moduleSourceSets().stream()
+                .anyMatch(s -> s.test() && s.sourceDirectories().contains(testDir.getPath())));
+    }
+
+    /** Resource roots, Java's or Kotlin's, hold no code and stay out of every set. */
+    public void testResourceRootsAreNotSourceDirectories() throws Exception {
+        VirtualFile javaRes = myFixture.getTempDirFixture().findOrCreateDir("jres");
+        VirtualFile kotlinRes = myFixture.getTempDirFixture().findOrCreateDir("kres");
+        PsiTestUtil.addSourceRoot(module(), javaRes, JavaResourceRootType.RESOURCE);
+        PsiTestUtil.addSourceRoot(module(), kotlinRes, ResourceKotlinRootType.INSTANCE);
+
+        List<String> dirs = build().moduleSourceSets().stream()
+                .flatMap(s -> s.sourceDirectories().stream()).toList();
+        assertFalse(dirs.contains(javaRes.getPath()));
+        assertFalse(dirs.contains(kotlinRes.getPath()));
     }
 
     /** A test source root becomes its own source set, with test=true. */

@@ -21,11 +21,13 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.CompilerModuleExtension;
+import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.OrderEnumerator;
+import com.intellij.openapi.roots.SourceFolder;
 import com.intellij.openapi.vfs.VirtualFile;
 import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.jps.model.java.JavaSourceRootType;
+import org.jetbrains.jps.model.java.JavaSourceRootProperties;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,8 +73,9 @@ public final class MaddiConfigBuilder {
         List<AnalysisModel.ModuleSourceSet> sets = new ArrayList<>();
         for (Module module : ModuleManager.getInstance(project).getModules()) {
             ModuleRootManager roots = ModuleRootManager.getInstance(module);
-            List<String> main = pathsOf(roots.getSourceRoots(JavaSourceRootType.SOURCE));
-            List<String> test = pathsOf(roots.getSourceRoots(JavaSourceRootType.TEST_SOURCE));
+            List<String> main = new ArrayList<>();
+            List<String> test = new ArrayList<>();
+            collectSourceRoots(roots, main, test);
             if (main.isEmpty() && test.isEmpty()) continue;   // a grouping module, or resources only
 
             // This module's OWN libraries, at every scope. No .recursively(): what a dependency exports is
@@ -134,10 +137,23 @@ public final class MaddiConfigBuilder {
         return module.getName() + "/test";
     }
 
-    private static List<String> pathsOf(List<VirtualFile> roots) {
-        List<String> paths = new ArrayList<>();
-        for (VirtualFile root : roots) paths.add(root.getPath());
-        return paths;
+    /**
+     * Every source root that holds code, whatever language plugin registered it. ⛔ NOT
+     * {@code getSourceRoots(JavaSourceRootType.SOURCE)}: the Kotlin plugin's Gradle import marks
+     * {@code src/main/kotlin} with its own root type ({@code kotlin-source}), so a Kotlin project came out with no
+     * source set at all, and the daemon was asked to analyse nothing. Both languages' code roots carry
+     * {@link JavaSourceRootProperties}; resource roots carry other properties and stay out.
+     */
+    private static void collectSourceRoots(ModuleRootManager roots, List<String> main, List<String> test) {
+        for (ContentEntry entry : roots.getContentEntries()) {
+            for (SourceFolder folder : entry.getSourceFolders()) {
+                if (!(folder.getJpsElement().getProperties() instanceof JavaSourceRootProperties)) continue;
+                VirtualFile file = folder.getFile();
+                if (file == null) continue; // declared by the build, not (yet) on disk
+                List<String> into = folder.getRootType().isForTests() ? test : main;
+                if (!into.contains(file.getPath())) into.add(file.getPath());
+            }
+        }
     }
 
     private static String pathOrNull(VirtualFile file) {

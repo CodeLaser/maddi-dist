@@ -190,6 +190,11 @@ public class WarmAnalysisService implements AnalyzeHandler {
 
         emit(status, requestId, "initialize", "building inspector", null, null);
         InputConfiguration inputConfiguration = assembler.build(request.config());
+        if (inputConfiguration.sourceSets().isEmpty()) {
+            // said here, in words: further down, an empty configuration ends in an NPE while loading the hints
+            throw new IllegalArgumentException("the IDE sent no source sets for " + request.config().workingDirectory()
+                                               + ": it found no source root in any module");
+        }
         List<String> initProblems = new ArrayList<>();
 
         DetectKotlinSources kotlinSources = DetectKotlinSources.in(inputConfiguration);
