@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>io.codelaser.maddi</id>
     <name>maddi</name>
-    <vendor url="https://codelaser.io">CodeLaser</vendor>
+    <vendor url="https://codelaser.io" email="info@codelaser.io">CodeLaser</vendor>
     <!-- The first 40 characters become the Marketplace preview card: plain words, no jargon. The change notes are
          filled in at build time from docs/ide-changelog.md (patchPluginXml). -->
     <description><![CDATA[
