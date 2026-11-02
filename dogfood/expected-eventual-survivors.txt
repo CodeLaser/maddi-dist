@@ -67,6 +67,12 @@
 # maddi-dist e9b6cba), then two runs (identical sets) on the Mac: 348 -> 351, 3 new and none lost, no keystone
 # below hc. All three are types added since: Value.Culprit and ValueImpl.CulpritImpl (maddi 52ccd46a8, the culprit
 # value) and AnalysisAccessRecorder.Slot (maddi b86740e70). ImportDetails survived in both runs and stays in the wobble.
+# 2026-11-02, the maddi slowTest gate 41393883829 on laser1 (maddi d694ee7da, maddi-mod 5a58178a, maddi-dist
+# bbaca1c) LOST Predefined and PredefinedWithoutParameterizedType. Rerun at the same commits, alone, with
+# EC_RETRACT_DEBUG=1: twice on laser1 and three times on the Mac (plus af6512c45, the last green gate, three times),
+# both types survived every run, with byte-identical survivor sets and no ECRETRACT line. So they flip at the same
+# revision: moved to eventual-survivor-wobble.txt, 351 -> 349. Predefined's eventual verdict was already marginal
+# (lost on 2026-09-25 when its only label went, back on 2026-10-24).
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -191,8 +197,6 @@ io.codelaser.maddi.cst.api.output.element.TypeName
 io.codelaser.maddi.cst.api.runtime.Eval
 io.codelaser.maddi.cst.api.runtime.Eval.$0
 io.codelaser.maddi.cst.api.runtime.Eval.$1
-io.codelaser.maddi.cst.api.runtime.Predefined
-io.codelaser.maddi.cst.api.runtime.PredefinedWithoutParameterizedType
 io.codelaser.maddi.cst.api.runtime.Runtime
 io.codelaser.maddi.cst.api.runtime.Types
 io.codelaser.maddi.cst.api.statement.AssertStatement

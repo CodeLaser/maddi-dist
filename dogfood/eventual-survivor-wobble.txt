@@ -13,3 +13,9 @@
 # It is absent from the current (24-type) baseline; the entry stands so that a run in which it does
 # form does not fail the ratchet.
 io.codelaser.maddi.cst.api.info.ImportComputer.ImportDetails
+#
+# Predefined and PredefinedWithoutParameterizedType: lost in the maddi slowTest gate 41393883829 on laser1 at maddi
+# d694ee7da, present in five reruns at the same commits (two on laser1, three on the Mac, each the ratchet alone).
+# The gate runs the whole slowTest battery around it; the flip is not traced (no ECRETRACT in any rerun).
+io.codelaser.maddi.cst.api.runtime.Predefined
+io.codelaser.maddi.cst.api.runtime.PredefinedWithoutParameterizedType
