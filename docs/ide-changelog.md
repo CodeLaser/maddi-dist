@@ -4,6 +4,9 @@ What changed in the IntelliJ and Eclipse plugins, per release. The IntelliJ plug
 Marketplace are built from the section of the release being built (`maddi-intellij`, `patchPluginXml`), so keep each
 section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the only markup.
 
+## 0.9.7
+
+
 ## 0.9.6
 
 - First release on JetBrains Marketplace and the Eclipse Marketplace.
@@ -21,3 +24,5 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 - Results appear while the analysis is still running, and say when they are not final.
 - IntelliJ: Kotlin sources too, with the Kotlin front end downloaded on demand.
 - Licensed under the Apache License 2.0.
+
+
