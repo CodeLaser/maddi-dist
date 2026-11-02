@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.3",
+  "name": "maddi-mcp",
+  "display_name": "maddi",
+  "version": "@VERSION@",
+  "description": "Modification and immutability analysis of Java and Kotlin projects: what each method modifies, which types are immutable, and which contracts the code breaks.",
+  "long_description": "maddi analyses a whole Java or Kotlin project in one go: which methods modify their object or the arguments they are given, which fields are modified after construction, how far each type gets towards immutable, and where the code breaks the contracts written on it (@Immutable, @Container, @NotModified, ...). Each verdict comes with the statements behind it. An agent can analyse the project, ask why a type is not immutable or what a method modifies, and after an edit compare the verdicts before and after.\n\nmaddi runs on a JDK 25 or later, which this bundle does not include: point it at one when you install. Analyse compiled projects: sources resolve against class files.",
+  "author": {
+    "name": "CodeLaser",
+    "url": "https://www.codelaser.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeLaser/maddi-dist"
+  },
+  "homepage": "https://github.com/CodeLaser/maddi",
+  "documentation": "https://github.com/CodeLaser/maddi-dist#coding-agents-mcp",
+  "support": "https://github.com/CodeLaser/maddi/issues",
+  "icon": "icon.png",
+  "icons": [
+    { "src": "icon.png", "size": "512x512", "theme": "light" },
+    { "src": "icon-dark.png", "size": "512x512", "theme": "dark" }
+  ],
+  "server": {
+    "type": "binary",
+    "entry_point": "bin/maddi-mcp",
+    "mcp_config": {
+      "command": "/bin/sh",
+      "args": ["${__dirname}/bin/maddi-mcp"],
+      "env": {
+        "JAVA_HOME": "${user_config.jdk_home}",
+        "MADDI_JDK_HOME": "${user_config.jdk_home}",
+        "MADDI_DAEMON_XMX_MB": "${user_config.daemon_xmx_mb}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "configure_project", "description": "Configure a project to analyse, from its build directory or a written input configuration; stored across restarts." },
+    { "name": "list_projects", "description": "The configured projects, their source sets, whether their build files still match, and their last run." },
+    { "name": "analyze", "description": "Start an analysis of a project, or of some of its source sets; returns a run id at once." },
+    { "name": "run_status", "description": "The state and progress of a run; can wait until it ends." },
+    { "name": "stop_run", "description": "Stop a run; what it streamed so far stays queryable." },
+    { "name": "overview", "description": "A project, package or type in one answer: types by immutability level, modifying methods, modified fields, findings." },
+    { "name": "verdicts", "description": "The analyzer's annotations on methods, fields, parameters and types." },
+    { "name": "explain", "description": "One element in full: its annotations, the properties behind them, and the statements that decide them." },
+    { "name": "element_at", "description": "The element at a position in a source file, explained in full." },
+    { "name": "diff_runs", "description": "What changed between two runs: annotations added and removed, findings new and gone." },
+    { "name": "findings", "description": "Contract violations, near misses and parse problems, with their why-chains." },
+    { "name": "library_annotations", "description": "What the analysis knows of library types (JDK, jars), and where it comes from." }
+  ],
+  "user_config": {
+    "jdk_home": {
+      "type": "directory",
+      "title": "JDK 25 or later",
+      "description": "The home directory of a JDK 25 or later, which runs maddi. On macOS, for example /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home; with Homebrew, $(brew --prefix openjdk@25)/libexec/openjdk.jdk/Contents/Home.",
+      "required": true
+    },
+    "daemon_xmx_mb": {
+      "type": "string",
+      "title": "Analysis heap (MB)",
+      "description": "The maximum heap of the analysis, in megabytes, for example 8192 for a large project. Empty: the JVM's default.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux"]
+  },
+  "keywords": ["java", "kotlin", "static-analysis", "immutability", "modification", "code-quality"],
+  "license": "Apache-2.0"
+}

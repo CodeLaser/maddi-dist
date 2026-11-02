@@ -97,6 +97,25 @@ val checkThirdPartyNotices = tasks.register("checkThirdPartyNotices") {
 tasks.named("check") { dependsOn(checkThirdPartyNotices) }
 tasks.named("distZip") { dependsOn(checkThirdPartyNotices) }
 
+// The same distribution as an MCP bundle (MCPB: github.com/modelcontextprotocol/mcpb), for Claude Desktop and the MCP
+// Registry: a zip with mcpb/manifest.json and its icons at the top, the install beside them. The bundle carries no JDK;
+// the manifest asks the user for one. release-cli.sh publishes it on the GitHub release.
+tasks.register<Zip>("mcpb") {
+    description = "Builds the MCP server as an MCP bundle (.mcpb)."
+    group = "distribution"
+    archiveFileName = "maddi-mcp-${project.version}.mcpb"
+    destinationDirectory = layout.buildDirectory.dir("distributions")
+    from(tasks.installDist)
+    val version = project.version.toString()
+    inputs.property("version", version)
+    from("mcpb") {
+        filesMatching("manifest.json") { filter { it.replace("@VERSION@", version) } }
+    }
+    // the manifest runs bin/maddi-mcp through /bin/sh, but the server runs daemon/bin/maddi-ide-daemon itself
+    filesMatching(listOf("bin/*", "daemon/bin/*")) { permissions { unix("rwxr-xr-x") } }
+    dependsOn(checkThirdPartyNotices)
+}
+
 // The round-trip test drives the real daemon distribution on a JDK 25+, as maddi-ide-client's tests do.
 tasks.test {
     dependsOn(":maddi-ide-daemon:installDist")
