@@ -20,6 +20,7 @@ package io.codelaser.maddi.mcp;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import io.codelaser.maddi.project.config.BuildFileCheck;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,17 +49,17 @@ public class BuildFileCheckTest {
                 List.of());
         assertEquals(List.of("a/build.gradle.kts", "settings.gradle.kts"), List.copyOf(recorded.sha256().keySet()));
 
-        assertEquals(BuildFileCheck.State.FRESH, BuildFileCheck.check(recorded, config(root)).state());
+        assertEquals(BuildFileCheck.State.FRESH, ProjectConfigs.freshness(recorded, config(root)).state());
 
         Files.writeString(a.resolve("build.gradle.kts"), "plugins { java; `java-library` }\n");
         Files.writeString(a.resolve("build/build.gradle.kts"), "still output\n");
-        assertEquals(List.of("a/build.gradle.kts (changed)"), BuildFileCheck.check(recorded, config(root)).changed());
+        assertEquals(List.of("a/build.gradle.kts (changed)"), ProjectConfigs.freshness(recorded, config(root)).changed());
 
         Files.createDirectories(root.resolve("b"));
         Files.writeString(root.resolve("b/build.gradle.kts"), "plugins { java }\n");
         Files.delete(root.resolve("settings.gradle.kts"));
         Files.writeString(sources.resolve("module-info.java"), "module a {}\n");
-        BuildFileCheck.Freshness freshness = BuildFileCheck.check(recorded, config(root));
+        BuildFileCheck.Freshness freshness = ProjectConfigs.freshness(recorded, config(root));
         assertEquals(BuildFileCheck.State.STALE, freshness.state());
         assertEquals(List.of("a/build.gradle.kts (changed)", "settings.gradle.kts (gone)", "b/build.gradle.kts (new)",
                 "a/src/main/java/module-info.java (new)"), freshness.changed());
@@ -66,7 +67,7 @@ public class BuildFileCheckTest {
 
     @Test
     public void nothingRecordedNothingChecked(@TempDir Path root) {
-        assertEquals(BuildFileCheck.State.UNCHECKED, BuildFileCheck.check(null, config(root)).state());
+        assertEquals(BuildFileCheck.State.UNCHECKED, ProjectConfigs.freshness(null, config(root)).state());
     }
 
     @Test

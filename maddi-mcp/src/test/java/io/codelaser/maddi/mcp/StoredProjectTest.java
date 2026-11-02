@@ -130,7 +130,7 @@ public class StoredProjectTest {
         Path store = dir.resolve("store");
         try (MaddiService service = new MaddiService(settings(dir), store)) {
             service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    BuildFileCheck.capture(config), "then", config));
+                    ProjectConfigs.buildFilesOf(config), "then", config));
             assertNull(service.projects().getFirst().get("daemonJdk"));
 
             assertThrows(IllegalArgumentException.class, () -> service.setDaemonJdk("p", dir.toString()),
@@ -139,7 +139,7 @@ public class StoredProjectTest {
 
             // configured again without one: the JDK the project needs stays
             service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    BuildFileCheck.capture(config), "again", config));
+                    ProjectConfigs.buildFilesOf(config), "again", config));
             AnalysisRun run = service.await(service.analyze("p", List.of(), List.of(), false).id(), 300, null);
             assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
         }
@@ -159,7 +159,7 @@ public class StoredProjectTest {
 
         try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
             service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    BuildFileCheck.capture(config), "then", config));
+                    ProjectConfigs.buildFilesOf(config), "then", config));
             Files.writeString(project.resolve("pom.xml"), "<project><!-- a dependency more --></project>\n");
 
             AnalysisRun refused = finish(service, service.analyze("p", List.of(), List.of(), false));

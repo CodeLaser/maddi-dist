@@ -115,7 +115,7 @@ Claude Desktop, `maddi-mcp-<version>.mcpb` on the same release is the server as 
 
 | Tool | Does |
 |---|---|
-| `configure_project`, `list_projects` | a Gradle build by its directory alone; or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
+| `configure_project`, `list_projects` | a Gradle or Maven build by its directory alone; any other build by a command whose output shows javac's command lines, or a log of it (`build` `compileLog`); or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
 | `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, why they hold, the findings with their why-chains |
@@ -123,10 +123,16 @@ Claude Desktop, `maddi-mcp-<version>.mcpb` on the same release is the server as 
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
 | `library_annotations` | what the last run knows of JDK and library types |
 
-A Gradle build needs no maddi plugin: given its directory, the server compiles every Java source set with javac's
-arguments logged (an init script, run with the build's own wrapper) and has the daemon turn that log into the
-configuration, as the CLI's `--compile-log` does, with the build files hashed at that moment. The first `analyze`
-does this (or `analyze` with `configureOnly`); it takes a full compile.
+A Gradle or Maven build needs no maddi plugin: given its directory, the server compiles every Java source set with
+javac's arguments logged (Gradle: an init script and `--debug`, with the build's own wrapper; Maven:
+`clean compile test-compile -X`, with `mvnw` when there is one) and turns that log into the configuration, as the
+CLI's `--compile-log` does, with the build files hashed at that moment. Any other build works the same way with
+`build` `compileLog`: a `compileCommand` whose output shows javac's command lines (or a `compileLog` already
+written), a `javacPattern` when the lines look different, and the `buildFileGlobs` to hash. The build's output is
+streamed, not kept: the server's store keeps the javac lines (`compile.log`) and what a failure needs, without the
+debug chatter (`build.log`). The first `analyze` does this (or `analyze` with `configureOnly`); it takes a full
+compile. The captures, the freshness check and the regeneration are the `maddi-project-config` library, which
+other tools can use with a project store of their own.
 
 A configured project is stored (in `~/.maddi/mcp`, or `--store`), with the hashes of the build files that shaped
 it, and survives a restart. Every run first hashes those files again. When one changed, the configuration is

@@ -69,7 +69,8 @@ dependencies {
     runtimeOnly("io.codelaser:maddi-aapi-archive:$maddiVersion")
 
     implementation("io.codelaser:maddi-run-config:$maddiVersion")               // ErrorReport, JsonStreaming reuse
-    implementation("io.codelaser:maddi-run-openjdk:$maddiVersion")              // ParseJavacList: a compile log's configuration
+    implementation("io.codelaser:maddi-run-openjdk:$maddiVersion")
+    implementation(project(":maddi-project-config"))                            // a compile log's configuration
 
     implementation("ch.qos.logback:logback-classic")
     implementation("com.fasterxml.jackson.core:jackson-databind")

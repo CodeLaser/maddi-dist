@@ -81,7 +81,7 @@ public class GradleCaptureTest {
         try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
             service.configure(new ProjectStore.StoredProject("demo", ProjectStore.StoredProject.GRADLE,
                     service.inputConfigurationOf("demo").toString(),
-                    ProjectStore.Regenerate.builtin(GradleCapture.BUILTIN, root.toString()), null, "now", null));
+                    ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString()), null, "now", null));
             assertTrue(service.projects().getFirst().get("configuration").toString().startsWith("not made yet"));
 
             AnalysisRun made = service.await(service.analyze("demo", List.of(), List.of(), false, true).id(), 600, null);

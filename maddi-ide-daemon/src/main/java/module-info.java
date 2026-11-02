@@ -14,9 +14,10 @@ module io.codelaser.maddi.ide.daemon {
     requires io.codelaser.maddi.kotlin.api;
     requires io.codelaser.maddi.kotlin.realm;
     requires io.codelaser.maddi.support;
-    // a compile log turned into a configuration, as the CLI's --compile-log does (writeInputConfiguration)
     requires io.codelaser.maddi.run.config;
     requires io.codelaser.maddi.run.openjdkmain;
+    // a compile log turned into a configuration, as the CLI's --compile-log does (writeInputConfiguration)
+    requires io.codelaser.maddi.project.config;
 
     requires com.fasterxml.jackson.databind;
     requires java.management; // the heap and GC share on the progress line (HeapSampler)

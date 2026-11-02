@@ -20,6 +20,10 @@ package io.codelaser.maddi.mcp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.CompileLogCapture;
+import io.codelaser.maddi.project.config.ConfiguredBy;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,29 +41,46 @@ public final class ProjectStore {
 
     /**
      * How to compute the configuration again: run {@code command} in {@code directory}, which rewrites the
-     * project's {@code sourceFile}; or, when {@code builtin} names one ({@link GradleCapture#BUILTIN}), let this
-     * server make it from the build in {@code directory}.
+     * project's {@code sourceFile}; or capture the build's javac invocations ({@code capture}, maddi-project-config)
+     * and make it from them. {@code builtin} {@link #GRADLE} is how a Gradle capture was stored before captures had
+     * a spec of their own: the build in {@code directory}.
      */
-    public record Regenerate(List<String> command, String directory, String builtin) {
+    public record Regenerate(List<String> command, String directory, String builtin, CaptureSpec capture) {
+        /** The stored name of a Gradle capture without a spec. */
+        public static final String GRADLE = "gradle";
+
         public Regenerate(List<String> command, String directory) {
-            this(command, directory, null);
+            this(command, directory, null, null);
         }
 
         public static Regenerate builtin(String builtin, String directory) {
-            return new Regenerate(List.of(), directory, builtin);
+            return new Regenerate(List.of(), directory, builtin, null);
+        }
+
+        public static Regenerate capture(CaptureSpec spec) {
+            return new Regenerate(List.of(), spec.root().toString(), null, spec);
+        }
+
+        /** The capture this regeneration runs; null for a command. */
+        public CaptureSpec captureSpec() {
+            if (capture != null) return capture;
+            return GRADLE.equals(builtin) ? CaptureSpec.gradle(Path.of(directory)) : null;
         }
 
         public String describe() {
-            return builtin != null ? builtin + " build in " + directory + ", every Java source set compiled"
-                    : String.join(" ", command);
+            if (GRADLE.equals(builtin) || capture != null && capture.kind() == ConfiguredBy.GRADLE_CAPTURE) {
+                return "gradle build in " + directory + ", every Java source set compiled";
+            }
+            return capture != null ? capture.describe() : String.join(" ", command);
         }
     }
 
     /**
      * @param kind       {@code inputConfiguration} (read from {@code sourceFile}, which a build tool wrote),
-     *                   {@code directories} (named by hand: nothing can recompute it), or {@code gradle} (made by
-     *                   this server from the build, into {@code sourceFile} in the store)
-     * @param config     null until a {@code gradle} project's configuration is first made
+     *                   {@code directories} (named by hand: nothing can recompute it), or {@code gradle},
+     *                   {@code maven} or {@code compileLog} (made by this server by capturing the build's javac
+     *                   invocations, into {@code sourceFile} in the store)
+     * @param config     null until a captured project's configuration is first made
      * @param daemonJdk  the JDK the daemon runs on for this project; null for the server's. What a project needs can
      *                   differ: an annotation processor (Lombok) runs inside the daemon's javac, and may not support
      *                   the newest JDK
@@ -72,6 +93,8 @@ public final class ProjectStore {
         public static final String INPUT_CONFIGURATION = "inputConfiguration";
         public static final String DIRECTORIES = "directories";
         public static final String GRADLE = "gradle";
+        public static final String MAVEN = "maven";
+        public static final String COMPILE_LOG = "compileLog";
 
         public StoredProject(String name, String kind, String sourceFile, Regenerate regenerate, BuildFiles buildFiles,
                              String configuredAt, AnalysisModel.AnalyzeConfig config) {
@@ -81,6 +104,12 @@ public final class ProjectStore {
         public StoredProject with(AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
             return new StoredProject(name, kind, sourceFile, regenerate, newBuildFiles,
                     java.time.Instant.now().toString(), newConfig, daemonJdk);
+        }
+
+        /** Made again, by a capture that wrote it to {@code file}. */
+        public StoredProject with(String file, AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
+            return new StoredProject(name, kind, file, regenerate, newBuildFiles, java.time.Instant.now().toString(),
+                    newConfig, daemonJdk);
         }
 
         public StoredProject withDaemonJdk(String jdk) {
@@ -185,19 +214,22 @@ public final class ProjectStore {
         return directory.resolve("runs").resolve(safe(project));
     }
 
-    /** Where a project's configuration goes when this server makes it. */
-    public Path inputConfigurationOf(String name) {
-        return directory.resolve(safe(name) + ".inputConfiguration.json");
+    /**
+     * Where this server writes for a project when it captures its build: the compile and build logs, and the
+     * configuration it makes from them ({@link #inputConfigurationOf}).
+     */
+    public Path workDirectoryOf(String name) {
+        return directory.resolve("work").resolve(safe(name));
     }
 
-    /** Where the javac invocations of a project's build go. */
-    public Path compileLogOf(String name) {
-        return directory.resolve(safe(name) + ".compile.log");
+    /** Where a project's configuration goes when this server makes it. */
+    public Path inputConfigurationOf(String name) {
+        return workDirectoryOf(name).resolve(CompileLogCapture.INPUT_CONFIGURATION);
     }
 
     /** Where the output of a project's regeneration goes. */
     public Path logOf(String name) {
-        return directory.resolve(safe(name) + ".regenerate.log");
+        return workDirectoryOf(name).resolve(ProjectConfigurator.REGENERATE_LOG);
     }
 
     private Path fileOf(String name) {

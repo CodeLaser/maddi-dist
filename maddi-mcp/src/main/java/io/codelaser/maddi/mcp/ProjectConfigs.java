@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.Regenerate;
 
 import java.io.IOException;
 import java.net.URI;
@@ -106,40 +108,39 @@ public final class ProjectConfigs {
     }
 
     /** The Gradle plugin's task that writes {@code build/inputConfiguration.json}. */
-    public static final String GRADLE_TASK = "maddi-write-input-configuration";
+    public static final String GRADLE_TASK = Regenerate.GRADLE_TASK;
     /** The Maven plugin's goal that writes {@code target/inputConfiguration.json}. */
-    public static final String MAVEN_GOAL = "maddi:write-input-configuration";
+    public static final String MAVEN_GOAL = Regenerate.MAVEN_GOAL;
 
     /**
-     * How to write {@code file} again, from who wrote it: the Gradle plugin's task or the Maven plugin's goal, run
-     * in the project whose build directory holds the file, with the build's wrapper when there is one. Null for any
-     * other producer (a compile log, say): then only a command given at configuration can.
+     * How to write {@code file} again, from who wrote it: the plugin's task or goal ({@link Regenerate#defaultFor}).
+     * Null for any other producer (a compile log, say): then only a command given at configuration can.
      */
     public static ProjectStore.Regenerate defaultRegenerate(BuildFiles buildFiles, Path file) {
-        if (buildFiles == null) return null;
-        Path parent = file.toAbsolutePath().normalize().getParent();
-        Path projectDir = parent == null ? null : parent.getParent();
-        if (projectDir == null) return null;
-        Path stop = buildFiles.root() == null ? projectDir : Path.of(buildFiles.root());
-        return switch (buildFiles.declaredBy()) {
-            case BuildFiles.GRADLE_PLUGIN -> !"build".equals(parent.getFileName().toString()) ? null
-                    : new ProjectStore.Regenerate(List.of(wrapper(projectDir, stop, "gradlew", "gradle"), "-q", "-p",
-                    projectDir.toString(), GRADLE_TASK), projectDir.toString());
-            case BuildFiles.MAVEN_PLUGIN -> !"target".equals(parent.getFileName().toString()) ? null
-                    : new ProjectStore.Regenerate(List.of(wrapper(projectDir, stop, "mvnw", "mvn"), "-q", "-f",
-                    projectDir.resolve("pom.xml").toString(), MAVEN_GOAL), projectDir.toString());
-            default -> null;
-        };
+        Regenerate regenerate = Regenerate.defaultFor(buildFiles, file);
+        return regenerate == null ? null
+                : new ProjectStore.Regenerate(regenerate.command(), regenerate.directory().toString());
     }
 
-    /* the wrapper script nearest above the project, up to the build's root; else the tool on the PATH */
-    private static String wrapper(Path from, Path root, String script, String tool) {
-        Path stop = root.toAbsolutePath().normalize();
-        for (Path dir = from; dir != null; dir = dir.getParent()) {
-            if (Files.isExecutable(dir.resolve(script))) return dir.resolve(script).toString();
-            if (dir.equals(stop)) break;
+    /** Whether the build files recorded with a configuration still hash as they did. */
+    public static BuildFileCheck.Freshness freshness(BuildFiles recorded, AnalysisModel.AnalyzeConfig config) {
+        return BuildFileCheck.check(recorded, config == null ? List.of() : sourceDirectories(config));
+    }
+
+    /**
+     * What to record for a configuration that no build tool wrote: the Gradle and Maven files under its working
+     * directory and its module-infos, so a change to the build is noticed even though it cannot be redone.
+     */
+    public static BuildFiles buildFilesOf(AnalysisModel.AnalyzeConfig config) {
+        return BuildFileCheck.hashDefault(Path.of(config.workingDirectory()), sourceDirectories(config));
+    }
+
+    private static List<Path> sourceDirectories(AnalysisModel.AnalyzeConfig config) {
+        List<Path> out = new ArrayList<>();
+        for (AnalysisModel.ModuleSourceSet set : config.moduleSourceSets()) {
+            for (String dir : set.sourceDirectories()) out.add(Path.of(dir));
         }
-        return tool;
+        return out;
     }
 
     /**

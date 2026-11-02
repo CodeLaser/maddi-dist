@@ -22,6 +22,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.CaptureListener;
+import io.codelaser.maddi.project.config.CaptureResult;
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.CompileLogCapture;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -96,7 +101,7 @@ public final class MaddiService implements Closeable {
         if (complete.config() != null) ProjectConfigs.check(complete.config());
         store.save(complete);
         projects.put(complete.name(), complete);
-        return describeProject(complete, BuildFileCheck.check(complete.buildFiles(), complete.config()));
+        return describeProject(complete, ProjectConfigs.freshness(complete.buildFiles(), complete.config()));
     }
 
     /** Run this project's daemon on another JDK (null: the server's), keeping its configuration. */
@@ -107,7 +112,7 @@ public final class MaddiService implements Closeable {
         ProjectStore.StoredProject changed = project.withDaemonJdk(jdk);
         store.save(changed);
         projects.put(name, changed);
-        return describeProject(changed, BuildFileCheck.check(changed.buildFiles(), changed.config()));
+        return describeProject(changed, ProjectConfigs.freshness(changed.buildFiles(), changed.config()));
     }
 
     /** The JDK the daemon runs on for this project. */
@@ -138,7 +143,7 @@ public final class MaddiService implements Closeable {
         List<Map<String, Object>> out = new ArrayList<>();
         for (ProjectStore.StoredProject project : projects.values()) {
             Map<String, Object> m = describeProject(project,
-                    BuildFileCheck.check(project.buildFiles(), project.config()));
+                    ProjectConfigs.freshness(project.buildFiles(), project.config()));
             AnalysisRun run = lastRuns.get(project.name());
             if (run != null) {
                 m.put("lastRun", run.id() + " " + run.state() + " " + run.certainty()
@@ -360,7 +365,7 @@ public final class MaddiService implements Closeable {
             return regenerate(run, project, "made, for the first time");
         }
         run.phase("configure", "checking the build files");
-        BuildFileCheck.Freshness freshness = BuildFileCheck.check(project.buildFiles(), project.config());
+        BuildFileCheck.Freshness freshness = ProjectConfigs.freshness(project.buildFiles(), project.config());
         if (freshness.state() != BuildFileCheck.State.STALE) {
             run.configuration(freshness.state() == BuildFileCheck.State.FRESH ? "stored, build files unchanged"
                     : "stored; no build files recorded, so not checked");
@@ -384,14 +389,16 @@ public final class MaddiService implements Closeable {
     private ProjectStore.StoredProject regenerate(AnalysisRun run, ProjectStore.StoredProject project, String why)
             throws IOException {
         ProjectStore.Regenerate regenerate = project.regenerate();
-        Path log = store.logOf(project.name());
-        if (GradleCapture.BUILTIN.equals(regenerate.builtin())) {
-            if (!captureGradle(run, project, log)) return null;
-        } else if (!runCommand(run, regenerate, log)) {
-            return null;
+        CaptureSpec capture = regenerate.captureSpec();
+        Path file;
+        if (capture != null) {
+            file = capture(run, project, capture);
+            if (file == null) return null;
+        } else {
+            if (!runCommand(run, regenerate, store.logOf(project.name()))) return null;
+            file = Path.of(project.sourceFile());
         }
-        Path file = Path.of(project.sourceFile());
-        ProjectStore.StoredProject fresh = project.with(
+        ProjectStore.StoredProject fresh = project.with(file.toString(),
                 withJdkModules(ProjectConfigs.fromInputConfiguration(file, mapper), project.daemonJdk()),
                 ProjectConfigs.buildFilesOf(file, mapper));
         ProjectConfigs.check(fresh.config());
@@ -399,44 +406,46 @@ public final class MaddiService implements Closeable {
             store.save(fresh);
             projects.put(fresh.name(), fresh);
         }
-        BuildFileCheck.Freshness after = BuildFileCheck.check(fresh.buildFiles(), fresh.config());
+        BuildFileCheck.Freshness after = ProjectConfigs.freshness(fresh.buildFiles(), fresh.config());
         run.configuration(why + (after.state() == BuildFileCheck.State.STALE
                 ? "; its build files still differ from the recorded ones (" + after.changed().size()
                   + "), so it will be regenerated on every run until the producer records them" : ""));
         return fresh;
     }
 
-    /* the Gradle build compiled with javac's arguments logged, and the log made a configuration by the daemon */
-    private boolean captureGradle(AnalysisRun run, ProjectStore.StoredProject project, Path log) throws IOException {
-        Path root = Path.of(project.regenerate().directory());
-        Path compileLog = store.compileLogOf(project.name());
-        run.phase("configure", "compiling every Java source set of the Gradle build in " + root);
+    /* the build compiled with javac's arguments logged, and the log made a configuration; null when the run failed */
+    private Path capture(AnalysisRun run, ProjectStore.StoredProject project, CaptureSpec spec) throws IOException {
+        run.phase("configure", "compiling every Java source set of the build in " + spec.root());
+        CaptureListener listener = new CaptureListener() {
+            @Override
+            public void progress(String message) {
+                run.phase("configure", "compiling the build: " + message);
+            }
+
+            @Override
+            public void process(Process process) {
+                run.attach(process);
+            }
+        };
+        CaptureResult result;
         try {
-            GradleCapture.compile(root, compileLog, log,
-                    p -> run.phase("configure", "compiling the Gradle build: " + p), run::attach);
+            result = CompileLogCapture.capture(spec, store.workDirectoryOf(project.name()), List.of(), listener);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            run.fail("interrupted while compiling the Gradle build");
-            return false;
-        } catch (IOException e) {
+            run.fail("interrupted while compiling the build");
+            return null;
+        } catch (IOException | RuntimeException e) {
             if (run.state() == AnalysisRun.State.RUNNING) run.fail(e.getMessage());
-            return false;
+            return null;
         }
-        if (run.state() != AnalysisRun.State.RUNNING) return false; // stopped
-        run.phase("configure", "making the configuration from the compile log");
-        daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), settings.logFile());
-        com.fasterxml.jackson.databind.JsonNode written = daemon.writeInputConfiguration("cfg-" + run.id(),
-                compileLog, root, GradleCapture.buildFileGlobs(), List.of(), Path.of(project.sourceFile()));
-        if (!AnalysisModel.INPUT_CONFIGURATION_WRITTEN.equals(written.path("type").asText())) {
-            run.fail("the daemon could not make the configuration: " + written.path("message").asText(written.toString()));
-            return false;
-        }
-        return true;
+        if (run.state() != AnalysisRun.State.RUNNING) return null; // stopped
+        return result.inputConfiguration();
     }
 
     /* the project's own command; false when the run failed */
     private boolean runCommand(AnalysisRun run, ProjectStore.Regenerate regenerate, Path log) throws IOException {
         run.phase("configure", "regenerating the configuration: " + regenerate.describe());
+        java.nio.file.Files.createDirectories(log.getParent());
         Process process = new ProcessBuilder(regenerate.command())
                 .directory(regenerate.directory() == null ? null : Path.of(regenerate.directory()).toFile())
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();

@@ -20,6 +20,7 @@ package io.codelaser.maddi.mcp;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.CaptureSpec;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
@@ -75,15 +76,22 @@ public final class McpTools {
                         'regenerate' command given here (needed for a CLI-written file). Or name the directories \
                         yourself (any build): workingDirectory, sourceDirectories, classPath (jars and class \
                         directories), optional test directories; a change to its Gradle or Maven files is then noticed \
-                        but cannot be redone. Compile the project first. Or, for a Gradle build without the maddi \
-                        plugin: workingDirectory alone (or with build 'gradle'). The configuration is then made by \
-                        compiling every Java source set with javac's arguments logged, at the next analyze (or \
-                        analyze with configureOnly), and made again whenever the build files change.""",
+                        but cannot be redone. Compile the project first. Or, for a Gradle or Maven build without the \
+                        maddi plugin: workingDirectory alone (or with build 'gradle' or 'maven'). The configuration is \
+                        then made by compiling every Java source set with javac's arguments logged, at the next \
+                        analyze (or analyze with configureOnly), and made again whenever the build files change. Any \
+                        other build: build 'compileLog' with compileCommand (a command whose output shows javac's \
+                        command lines) or compileLog (a log already written), optionally javacPattern, and the \
+                        buildFileGlobs whose change makes the configuration stale (without them it is never checked).""",
                 """
                         {"type":"object","properties":{
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
                           "daemonJdk":{"type":"string","description":"a JDK 25+ to run the daemon on for this project, when the server's does not suit it (an annotation processor such as Lombok that does not support it). Given with project alone: changes only that, keeping the configuration"},
-                          "build":{"type":"string","enum":["gradle"],"description":"make the configuration from this build; default when only workingDirectory is given and it holds a Gradle build"},
+                          "build":{"type":"string","enum":["gradle","maven","compileLog"],"description":"make the configuration by capturing this build's javac invocations; default when only workingDirectory is given and it holds a Gradle (else a Maven) build"},
+                          "compileCommand":{"type":"array","items":{"type":"string"},"description":"build compileLog: the command that compiles, run in workingDirectory; its output must show javac's command lines"},
+                          "compileLog":{"type":"string","description":"build compileLog: a log already written, instead of compileCommand"},
+                          "javacPattern":{"type":"string","description":"build compileLog: a regular expression matching a whole line that is a javac invocation, group 1 its arguments; default: a javac command line ('javac <args>', '/path/javac <args>', argument files expanded)"},
+                          "buildFileGlobs":{"type":"array","items":{"type":"string"},"description":"build compileLog: the files, relative to workingDirectory, whose change makes the configuration stale"},
                           "inputConfiguration":{"type":"string","description":"path of an inputConfiguration.json"},
                           "regenerate":{"type":"array","items":{"type":"string"},"description":"a command that writes the inputConfiguration file again; default: the plugin's task or goal"},
                           "regenerateDirectory":{"type":"string","description":"where to run it; default: the build's root"},
@@ -273,21 +281,38 @@ public final class McpTools {
         }
         String build = a.string("build");
         String workingDirectoryArg = a.string("workingDirectory");
-        if (build == null && workingDirectoryArg != null && a.strings("sourceDirectories").isEmpty()
-            && GradleCapture.isGradleBuild(Path.of(workingDirectoryArg))) {
-            build = GradleCapture.BUILTIN;
+        if (build == null && workingDirectoryArg != null && a.strings("sourceDirectories").isEmpty()) {
+            Path dir = Path.of(workingDirectoryArg);
+            if (CaptureSpec.isGradleBuild(dir)) build = ProjectStore.StoredProject.GRADLE;
+            else if (CaptureSpec.isMavenBuild(dir)) build = ProjectStore.StoredProject.MAVEN;
         }
         if (build != null) {
-            if (!GradleCapture.BUILTIN.equals(build)) throw new IllegalArgumentException("unknown build '" + build + "'");
-            if (workingDirectoryArg == null) throw new IllegalArgumentException("a gradle project needs workingDirectory");
+            if (workingDirectoryArg == null) throw new IllegalArgumentException("a " + build + " project needs workingDirectory");
             Path root = Path.of(workingDirectoryArg).toAbsolutePath().normalize();
-            if (!GradleCapture.isGradleBuild(root)) {
-                throw new IllegalArgumentException(root + " holds no settings.gradle(.kts) or build.gradle(.kts)");
-            }
-            return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.GRADLE,
-                    service.inputConfigurationOf(project).toString(),
-                    ProjectStore.Regenerate.builtin(GradleCapture.BUILTIN, root.toString()), null, now, null,
-                    daemonJdk));
+            ProjectStore.Regenerate regenerate = switch (build) {
+                case ProjectStore.StoredProject.GRADLE -> {
+                    if (!CaptureSpec.isGradleBuild(root)) {
+                        throw new IllegalArgumentException(root + " holds no settings.gradle(.kts) or build.gradle(.kts)");
+                    }
+                    yield ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString());
+                }
+                case ProjectStore.StoredProject.MAVEN -> {
+                    if (!CaptureSpec.isMavenBuild(root)) throw new IllegalArgumentException(root + " holds no pom.xml");
+                    yield ProjectStore.Regenerate.capture(CaptureSpec.maven(root));
+                }
+                case ProjectStore.StoredProject.COMPILE_LOG -> {
+                    String log = a.string("compileLog");
+                    List<String> command = a.strings("compileCommand");
+                    if (command.isEmpty() == (log == null)) {
+                        throw new IllegalArgumentException("build compileLog needs compileCommand or compileLog, not both");
+                    }
+                    yield ProjectStore.Regenerate.capture(CaptureSpec.compileLog(root, command,
+                            log == null ? null : root.resolve(log), a.string("javacPattern"), a.strings("buildFileGlobs")));
+                }
+                default -> throw new IllegalArgumentException("unknown build '" + build + "'");
+            };
+            return service.configure(new ProjectStore.StoredProject(project, build,
+                    service.inputConfigurationOf(project).toString(), regenerate, null, now, null, daemonJdk));
         }
         AnalysisModel.AnalyzeConfig config;
         {
@@ -301,7 +326,7 @@ public final class McpTools {
                     a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
         }
         return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.DIRECTORIES,
-                null, null, BuildFileCheck.capture(config), now, config, daemonJdk));
+                null, null, ProjectConfigs.buildFilesOf(config), now, config, daemonJdk));
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
