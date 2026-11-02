@@ -106,7 +106,11 @@ in its `daemon/` directory. It runs on a JDK 25 or later, as the daemon does: by
 or the one `--jdk` names. On macOS and Linux, `brew install codelaser/tap/maddi-mcp` installs it with
 its JDK (`MADDI_JDK_HOME` names another, Temurin for example), and `claude mcp add maddi -- $(brew --prefix)/bin/maddi-mcp` registers it with Claude Code. Or download
 `maddi-mcp-<version>.zip` from the [GitHub release](https://github.com/CodeLaser/maddi/releases), unzip it, and
-register its `bin/maddi-mcp` with the agent: `claude mcp add maddi -- <dir>/maddi-mcp-<version>/bin/maddi-mcp`. From source:
+register its `bin/maddi-mcp` with the agent: `claude mcp add maddi -- <dir>/maddi-mcp-<version>/bin/maddi-mcp`. For
+Claude Desktop, `maddi-mcp-<version>.mcpb` on the same release is the server as an
+[MCP bundle](https://github.com/modelcontextprotocol/mcpb): open it, and name a JDK 25 or later when it asks
+(`./gradlew :maddi-mcp:mcpb` builds it). The [MCP Registry](https://registry.modelcontextprotocol.io) lists it as
+`io.github.codelaser/maddi-mcp`. From source:
 `./gradlew :maddi-mcp:installDist`, then `maddi-mcp/build/install/maddi-mcp/bin/maddi-mcp`.
 
 | Tool | Does |

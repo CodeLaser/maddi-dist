@@ -8,6 +8,8 @@
 #   maddi-kotlin (maddi-cli-kotlin:distZip) — the mixed Java+Kotlin runner; the K2 'for-ide' jars ride
 #                                              along in lib-k2/, so this bundle is how Kotlin support ships
 #   maddi-mcp    (maddi-mcp:distZip) — the MCP server for coding agents, with the IDE daemon in daemon/
+#                (maddi-mcp:mcpb)    — the same as an MCP bundle, maddi-mcp-<version>.mcpb, for Claude Desktop
+#                                      and the MCP Registry
 #
 # Each zip gets a <zip>.sha256 beside it. The IDE plugins download maddi-kotlin-<version>.zip from release
 # v<version> (KotlinFrontEndInstaller) and refuse it without a matching checksum, so the tag must be the
@@ -16,6 +18,11 @@
 # Each bundle is self-contained: the launcher (bin/maddi[-kotlin]) has the javac --add-exports baked in
 # and every runtime jar sits in lib/. No Maven resolution is involved on the consumer side. The MCP server's
 # bin/maddi-mcp starts the daemon from its own daemon/ directory.
+#
+# Then the MCP Registry learns of the new bundle: maddi-mcp/server.json, with the version and the bundle's checksum
+# filled in, is published with mcp-publisher (github.com/modelcontextprotocol/registry), which must be logged in
+# once with `mcp-publisher login github` by a member of CodeLaser. MADDI_MCP_REGISTRY=none skips that, as does a
+# trial run unless MADDI_MCP_REGISTRY=publish; a failed publish warns and leaves the rest of the release standing.
 #
 # Then the Homebrew formulas in CodeLaser/homebrew-tap (maddi, maddi-kotlin, maddi-mcp) are pointed at the new
 # zips and their checksums, committed and pushed. MADDI_HOMEBREW_TAP=none skips that; a trial run on another
@@ -41,18 +48,20 @@ if [[ "$TAG" != "v$VERSION" ]]; then
 fi
 
 echo "==> Building the CLI distributions and the MCP server (version from gradle.properties)"
-./gradlew :maddi-cli:distZip :maddi-cli-kotlin:distZip :maddi-mcp:distZip
+./gradlew :maddi-cli:distZip :maddi-cli-kotlin:distZip :maddi-mcp:distZip :maddi-mcp:mcpb
 
 # Each zip lives in its own module's distributions dir, so these globs cannot cross-match.
 OPENJDK_ZIP=$(ls maddi-cli/build/distributions/maddi-*.zip)
 KOTLIN_ZIP=$(ls maddi-cli-kotlin/build/distributions/maddi-kotlin-*.zip)
 MCP_ZIP=$(ls maddi-mcp/build/distributions/maddi-mcp-*.zip)
+MCPB="maddi-mcp/build/distributions/maddi-mcp-$VERSION.mcpb"
 echo "    openjdk runner: $OPENJDK_ZIP"
 echo "    kotlin  runner: $KOTLIN_ZIP"
 echo "    MCP server:     $MCP_ZIP"
+echo "    MCP bundle:     $MCPB"
 
 # "<hex>  <file name>", the sha256sum format; shasum ships with macOS and perl alike
-for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP" "$MCP_ZIP"; do
+for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP" "$MCP_ZIP" "$MCPB"; do
     (cd "$(dirname "$zip")" && shasum -a 256 "$(basename "$zip")" > "$(basename "$zip").sha256")
 done
 
@@ -70,7 +79,8 @@ MADDI_DIR="${MADDI_DIR:-../maddi}"
 NOTES_PATH="docs/project/release-notes-${TAG#v}.md"
 NOTES=$(mktemp)
 TAP_DIR=$(mktemp -d)
-trap 'rm -rf "$NOTES" "$TAP_DIR"' EXIT
+REGISTRY_DIR=$(mktemp -d)
+trap 'rm -rf "$NOTES" "$TAP_DIR" "$REGISTRY_DIR"' EXIT
 BLOB="https://github.com/CodeLaser/maddi/blob/$TAG"
 if git -C "$MADDI_DIR" show "$TAG:$NOTES_PATH" 2>/dev/null \
         | sed -E -e "s#\]\(\.\./\.\./#]($BLOB/#g" \
@@ -94,8 +104,24 @@ else
 fi
 
 gh release upload "$TAG" -R "$REPO" "$OPENJDK_ZIP" "$OPENJDK_ZIP.sha256" "$KOTLIN_ZIP" "$KOTLIN_ZIP.sha256" \
-    "$MCP_ZIP" "$MCP_ZIP.sha256" --clobber
-echo "==> Both CLI zips, the MCP server's zip and their checksums attached to release $TAG on $REPO."
+    "$MCP_ZIP" "$MCP_ZIP.sha256" "$MCPB" "$MCPB.sha256" --clobber
+echo "==> Both CLI zips, the MCP server's zip and bundle, and their checksums attached to release $TAG on $REPO."
+
+if [[ "$REPO" == "CodeLaser/maddi" ]]; then REGISTRY="${MADDI_MCP_REGISTRY:-publish}"; else REGISTRY="${MADDI_MCP_REGISTRY:-none}"; fi
+if [[ "$REGISTRY" == "none" ]]; then
+    echo "==> MCP Registry not updated (MADDI_MCP_REGISTRY=none, or a trial run)"
+elif ! command -v mcp-publisher >/dev/null; then
+    echo "==> MCP Registry not updated: no mcp-publisher on PATH (brew install mcp-publisher)" >&2
+else
+    echo "==> Publishing maddi-mcp $VERSION on the MCP Registry"
+    sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHA256@/$(cut -d' ' -f1 "$MCPB.sha256")/" maddi-mcp/server.json \
+        > "$REGISTRY_DIR/server.json"
+    if ! (cd "$REGISTRY_DIR" && mcp-publisher publish); then
+        cp "$REGISTRY_DIR/server.json" maddi-mcp/build/server.json
+        echo "    the MCP Registry refused it: after mcp-publisher login github, run mcp-publisher publish" \
+             "in maddi-mcp/build" >&2
+    fi
+fi
 
 if [[ "$REPO" == "CodeLaser/maddi" ]]; then TAP="${MADDI_HOMEBREW_TAP:-CodeLaser/homebrew-tap}"; else TAP="${MADDI_HOMEBREW_TAP:-none}"; fi
 if [[ "$TAP" == "none" ]]; then

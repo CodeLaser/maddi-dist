@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.codelaser/maddi-mcp",
+  "title": "maddi",
+  "description": "Modification and immutability analysis for Java and Kotlin projects",
+  "repository": {
+    "url": "https://github.com/CodeLaser/maddi-dist",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/CodeLaser/maddi",
+  "version": "@VERSION@",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/CodeLaser/maddi/releases/download/v@VERSION@/maddi-mcp-@VERSION@.mcpb",
+      "fileSha256": "@SHA256@",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "MADDI_JDK_HOME",
+          "description": "The home directory of a JDK 25 or later, which runs maddi",
+          "isRequired": true
+        },
+        {
+          "name": "MADDI_DAEMON_XMX_MB",
+          "description": "The maximum heap of the analysis, in megabytes; default: the JVM's default"
+        }
+      ]
+    }
+  ]
+}
