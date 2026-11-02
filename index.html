@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>maddi in the IDE</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1f2328; --bg: #fff; --muted: #59636e; --line: #d1d9e0; --code: #f6f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6edf3; --bg: #0d1117; --muted: #9198a1; --line: #3d444d; --code: #151b23; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1, h2, h3 { line-height: 1.25; margin: 1.6em 0 0.6em; }
+  h1 { font-size: 2em; margin-top: 0; padding-bottom: 0.3em; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--line); }
+  a { color: #0969da; }
+  @media (prefers-color-scheme: dark) { a { color: #4493f8; } }
+  code { font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code);
+         padding: 0.2em 0.4em; border-radius: 6px; }
+  table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1em 0; }
+  th, td { border: 1px solid var(--line); padding: 6px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--code); }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.9em; border-top: 1px solid var(--line);
+           padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>maddi in the IDE — user guide</h1>
+<p>maddi analyses a whole Java (or Kotlin) project and shows what it concludes beside each declaration, written as<br>
+the annotations you would otherwise write by hand: whether a type is immutable or a container, whether a method<br>
+modifies its object, whether a parameter is changed by the call, what may be <code class="notranslate">null</code>. It also checks the<br>
+annotations you <em>did</em> write, and reports a contract the code breaks. In IntelliJ it can also translate Java to<br>
+Kotlin, using those verdicts.</p>
+<p>This guide covers the IntelliJ IDEA and Eclipse plugins. They work the same way; where they differ, each has its<br>
+own short section.</p>
+<h2>Before you start</h2>
+<ul>
+<li><strong>A JDK 25 or later.</strong> The analysis runs in a separate process (the <em>daemon</em>, bundled with the plugin), and that<br>
+process needs JDK 25+. The IDE itself can keep running on whatever it runs on. The plugin picks a JDK 25+ the<br>
+IDE already knows about; if there is none, add one (IntelliJ: <em>File → Project Structure → SDKs</em>; Eclipse:<br>
+<em>Preferences → Java → Installed JREs</em>) or choose one in the maddi settings.</li>
+<li><strong>A project that compiles.</strong> maddi reads your sources and the compiled classes next to them. The plugin builds<br>
+the project before each analysis. Files that do not parse are left out and the result says so; the rest is<br>
+still analysed.</li>
+</ul>
+<h2>Installing</h2>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>IDE</th>
+<th>Requires</th>
+<th>Install</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IntelliJ IDEA</td>
+<td>2025.3 or later</td>
+<td><em>Settings → Plugins → Marketplace</em>, search for <strong>maddi</strong></td>
+</tr>
+<tr>
+<td>Eclipse</td>
+<td>2025-09 or later</td>
+<td><em>Help → Install New Software… → Add…</em>, location <code class="notranslate">https://codelaser.github.io/maddi-dist/eclipse/</code></td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<h2>Try it on a demo project</h2>
+<p>Two small public projects show every kind of hint, one class or two per annotation, each class's documentation<br>
+saying what to look for:</p>
+<ul>
+<li><a href="https://github.com/CodeLaser/maddi-java-demo"><strong>maddi-java-demo</strong></a>: a Maven project in Java;</li>
+<li><a href="https://github.com/CodeLaser/maddi-kotlin-demo"><strong>maddi-kotlin-demo</strong></a>: the same classes in Kotlin, as a Gradle project (IntelliJ).</li>
+</ul>
+<p>Each has an <code class="notranslate">EXPECTED-HINTS.md</code> listing, per declaration, what the analysis computes, so you can tell a missing<br>
+hint from a broken setup, and a package <code class="notranslate">demo.guard</code> whose contracts are wrong on purpose, to see a violation and<br>
+its reasoning. Clone one and open it: IntelliJ, <em>File → Open</em> on the directory; Eclipse (Java demo), <em>File →<br>
+Import… → Maven → Existing Maven Projects</em>. Then run the analysis as below.</p>
+<h2>Your first analysis</h2>
+<ul>
+<li>IntelliJ: <em>Tools → Analyze with maddi</em>. The <strong>maddi</strong> tool window (bottom) shows the run.</li>
+<li>Eclipse: <em>Project → Analyze with maddi</em>, or right-click a Java project. <em>Window → Show View → Other… → maddi →<br>
+maddi Findings</em> shows the run.</li>
+</ul>
+<p>The first run starts the daemon and loads maddi's knowledge of the JDK and common libraries; later runs reuse<br>
+the daemon. Hints appear in open editors while the analysis is still running and fill in as it goes. A large<br>
+project can take minutes: the tool window shows the phase, the pass and the elapsed time.</p>
+<h3>Stopping a run</h3>
+<p>Any of these stops a running analysis at once:</p>
+<ul>
+<li>the <strong>Stop</strong> button in the maddi tool window (IntelliJ) or the maddi Findings view (Eclipse);</li>
+<li><em>Tools → Stop maddi Analysis</em> (IntelliJ), <em>Project → Stop maddi Analysis</em> (Eclipse);</li>
+<li>the cancel button on the progress bar (IntelliJ) or in the Progress view (Eclipse).</li>
+</ul>
+<p>What the run had shown so far stays in the editor. The next analysis starts from scratch.</p>
+<p>Closing the IDE stops the daemon too, also in the middle of a run.</p>
+<h2>Turning the hints on</h2>
+<h3>IntelliJ IDEA</h3>
+<p>Hints are on by default. If you see none after an analysis:</p>
+<ul>
+<li><em>Settings → Editor → Inlay Hints → Other → Java → maddi analysis hints</em> must be ticked, and inlay hints must not<br>
+be switched off altogether.</li>
+<li><em>Settings → Tools → maddi → Inline hints</em> must not be <em>Off (gutter only)</em>.</li>
+</ul>
+<h3>Eclipse</h3>
+<p>Eclipse draws maddi's hints as <strong>code minings</strong>, and code minings are <strong>off by default</strong> in Eclipse. Turn them on<br>
+once:</p>
+<ol>
+<li><em>Preferences → Java → Editor → Code Minings</em>;</li>
+<li>tick <strong>Enable code minings</strong>;</li>
+<li>reopen the editors that were already open.</li>
+</ol>
+<p>Without this, the analysis runs and the ruler icons and problems appear, but no hints. <em>Preferences → maddi →<br>
+Show hints in the editor</em> must be ticked too (it is by default).</p>
+<h2>Reading the results</h2>
+<p>maddi shows its results on three surfaces:</p>
+<ul>
+<li><strong>Hints</strong>: the computed annotations, on a line of their own above each type, method and field, and before<br>
+each parameter, where you would write them. <em>Hint placement</em> in the settings puts them after the name instead.</li>
+<li><strong>Gutter (IntelliJ) / ruler (Eclipse) icons</strong>: on each analysed type, method and field. The tooltip has the<br>
+full set, each parameter's included, and the reasons: under each annotation that has one, the chain of<br>
+statements behind it, from the element to the statement that decides it (<code class="notranslate">⇐ line 9: calls store(..)</code>). A method,<br>
+field or parameter that is <code class="notranslate">@Modified</code>, <code class="notranslate">@Dependent</code> or <code class="notranslate">@Nullable</code>, and a method with <code class="notranslate">@StaticSideEffects</code>, says<br>
+why. A type below <code class="notranslate">@Immutable</code> says which rule it fails, at the member that fails it. A type that is not<br>
+<code class="notranslate">@Container</code>, but is at most 2 parameters away from it, says so under <code class="notranslate">not @Container:</code>, one line per parameter<br>
+that is modified. A verdict that holds only after a mark (see <code class="notranslate">after=</code> below) has an icon of its own (Eclipse: a<br>
+ring instead of a dot).</li>
+<li><strong>Problems</strong>: a contract you wrote that the code breaks, underlined, with the reasoning that led to it.</li>
+</ul>
+<h3>What the annotations mean</h3>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>Annotation</th>
+<th>On</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="notranslate">@NotModified</code> / <code class="notranslate">@Modified</code></td>
+<td>method</td>
+<td>does not / does change the object it is called on</td>
+</tr>
+<tr>
+<td><code class="notranslate">@NotModified</code> / <code class="notranslate">@Modified</code></td>
+<td>parameter, field</td>
+<td>the object is not / is changed through it</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Modified(hc=true)</code></td>
+<td>parameter, method</td>
+<td>only what the object <em>holds</em> is changed (the elements of a list), not the object itself</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Immutable</code></td>
+<td>type</td>
+<td>an instance never changes, nor does anything it holds</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Immutable(hc=true)</code></td>
+<td>type</td>
+<td>as <code class="notranslate">@Immutable</code>, except for content it holds without knowing its type (a type parameter, an interface): that content may change</td>
+</tr>
+<tr>
+<td><code class="notranslate">@FinalFields</code></td>
+<td>type</td>
+<td>all fields are final, yet the object is not immutable: what they point to changes</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Mutable</code></td>
+<td>type</td>
+<td>none of the above</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Container</code></td>
+<td>type</td>
+<td>its methods do not change the arguments you pass them</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Independent</code></td>
+<td>method, parameter, type</td>
+<td>no mutable state is shared with the caller: changing the result (or the argument) cannot change this object</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Independent(hc=true)</code> / <code class="notranslate">@Dependent</code></td>
+<td>method, parameter, type</td>
+<td>only content of unknown type is shared / mutable state is shared</td>
+</tr>
+<tr>
+<td><code class="notranslate">@UnmodifiableView</code></td>
+<td>method</td>
+<td>the result is a read-only view of mutable state</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Identity</code>, <code class="notranslate">@Fluent</code></td>
+<td>method</td>
+<td>returns its first argument / returns <code class="notranslate">this</code></td>
+</tr>
+<tr>
+<td><code class="notranslate">@StaticSideEffects</code></td>
+<td>method</td>
+<td>changes static state</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Nullable</code> / <code class="notranslate">@NotNull</code></td>
+<td>field, parameter, method</td>
+<td>may be / is never <code class="notranslate">null</code></td>
+</tr>
+<tr>
+<td><code class="notranslate">…(after="m")</code></td>
+<td>type, method</td>
+<td>the property holds once the mark <code class="notranslate">m</code> has been set, e.g. after a <code class="notranslate">freeze()</code></td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<h3>Which hints you see</h3>
+<p>Many verdicts are the expected default in their context, and showing them all would bury the interesting ones:<br>
+<code class="notranslate">@Mutable</code> on most classes, <code class="notranslate">@Modified</code> on a <code class="notranslate">void</code> setter, <code class="notranslate">@FinalFields</code> on an interface (it has no fields, so<br>
+"all fields final" says nothing there). By default these <em>context defaults</em> are hidden.<br>
+<em>Inline hints</em> in the settings chooses:</p>
+<ul>
+<li><strong>Hide context defaults</strong> (default): the informative verdicts only;</li>
+<li><strong>Show all</strong>: everything the analysis concluded;</li>
+<li><strong>Positive only</strong>: the guarantees (<code class="notranslate">@NotModified</code>, <code class="notranslate">@Immutable</code>, …);</li>
+<li><strong>Negative only</strong>: the warnings (<code class="notranslate">@Modified</code>, <code class="notranslate">@Mutable</code>, …);</li>
+<li><strong>Off (gutter only)</strong>: no hints; the icons keep everything.</li>
+</ul>
+<h2>Library code</h2>
+<p>Follow a call into the JDK or a library (<code class="notranslate">Set.add</code>, <code class="notranslate">List.of</code>) after an analysis, and the library's source shows<br>
+the hints and icons too, provided the IDE has the library's sources (the JDK's <code class="notranslate">src.zip</code>, a sources jar).<br>
+These verdicts come from maddi's own description of the library, its <em>annotated API</em>, and the icon's tooltip<br>
+says which kind each is:</p>
+<ul>
+<li><strong>Manually annotated, in maddi's annotated API</strong>: written down by the maddi authors after reading the<br>
+library;</li>
+<li><strong>No annotation in maddi's annotated API: <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/Modified/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/Modified">@Modified</a> is the default</strong>: nothing was written down, so maddi<br>
+assumes the safe answer: the method may modify;</li>
+<li><strong>Not in maddi's annotated API</strong>: a library maddi has no description of; its verdicts are the analysis's<br>
+defaults.</li>
+</ul>
+<p>Library hints appear once an analysis has finished in this IDE session; a library file opened during a run<br>
+shows them when the run ends. A decompiled class (no sources) shows none. In Eclipse, the library's hints need<br>
+code minings on, as the project's do (see <em>Turning the hints on</em>); its ruler icons do not.</p>
+<h2>Writing your own contracts</h2>
+<p>Annotate your code with maddi's annotations (<code class="notranslate">io.codelaser:maddi-annotation</code>) to state what a type or method<br>
+must be: <code class="notranslate">@Container</code> on an interface, <code class="notranslate">@NotModified</code> on a method, <code class="notranslate">@Immutable</code> on a type. maddi then checks every<br>
+implementation against it and reports a violation as a problem, with the reasoning. The demos' <code class="notranslate">demo.guard</code> package<br>
+has two such violations, and <code class="notranslate">demo.immutable.Shape</code> a contract on an interface that its implementation keeps.</p>
+<p><em>Warn about near misses</em> (off by default) also reports types and methods that narrowly miss a property, e.g. a<br>
+type that would be <code class="notranslate">@Container</code> but for one method. Useful on code you are cleaning up; noisy elsewhere.</p>
+<h2>Translating Java to Kotlin (IntelliJ)</h2>
+<p>maddi translates Java to Kotlin with its own translator, which reads the analysis's verdicts: a <code class="notranslate">List</code> field or<br>
+result becomes Kotlin's read-only <code class="notranslate">List</code> where nothing modifies it and <code class="notranslate">MutableList</code> where something does, a type<br>
+gets <code class="notranslate">?</code> only where the analysis finds that <code class="notranslate">null</code> can occur, and a record becomes a <code class="notranslate">data class</code>. This is not<br>
+IntelliJ's own <em>Convert Java File to Kotlin File</em>, which has no such verdicts to go on. Right-click in the Project<br>
+view or the editor, or use the <em>Refactor</em> menu:</p>
+<ul>
+<li><strong>Translate to Kotlin with maddi (Preview)</strong>, on one or more Java files: each translation opens beside its Java in<br>
+the diff viewer. Nothing is written. A preview, because a single Kotlin file among Java ones may need interop<br>
+details (<code class="notranslate">@JvmStatic</code>, getter names) the translator does not write yet.</li>
+<li><strong>Translate Module to Kotlin with maddi</strong>, on a module: its main sources are translated together, as one Kotlin<br>
+code base, into <code class="notranslate">build/maddi-kotlin/</code> of the module, with <code class="notranslate">translation-report.txt</code> beside them. The notification<br>
+then offers <strong>Replace the Java sources…</strong>: each Java file becomes its Kotlin file, in place. The module must be set<br>
+up to build Kotlin; Local History keeps the Java files (label <em>Before maddi Translate to Kotlin</em>).</li>
+</ul>
+<p>The <a href="https://github.com/CodeLaser/maddi-java-demo">Java demo</a> is a good first module to translate: its classes are small and each shows one verdict, so<br>
+the effect of the analysis on the Kotlin is easy to see; the <a href="https://github.com/CodeLaser/maddi-kotlin-demo">Kotlin demo</a> holds the same classes written by<br>
+hand, to compare with.</p>
+<p>The translation reads the last analysis. When the files changed since then, or there has been none, the project<br>
+is built and analysed first, and the translation follows when the analysis ends (stopping the analysis cancels it).<br>
+While an analysis is running the action waits: start it again when the run has finished.</p>
+<p>The report (and, for a preview, the notification) lists what the translator could not say the same way: <em>INFO</em><br>
+(said differently, same behaviour), <em>BEHAVIOUR_CHANGE</em> (can behave differently at run time), <em>LOSS</em> (something of<br>
+the Java's is not in the Kotlin) and <em>ERROR</em> (not translated: the file will not compile as is). Read the<br>
+<em>BEHAVIOUR_CHANGE</em> and <em>ERROR</em> lines before replacing the sources.</p>
+<h2>Settings</h2>
+<p>IntelliJ: <em>Settings → Tools → maddi</em>. Eclipse: <em>Preferences → maddi</em>.</p>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>maddi JDK</td>
+<td>the IDE's newest JDK 25+</td>
+<td>the JDK the daemon runs on</td>
+</tr>
+<tr>
+<td>Daemon max heap (MB)</td>
+<td>4096</td>
+<td>raise it for a large project that runs out of memory</td>
+</tr>
+<tr>
+<td>Re-analyze automatically after a build</td>
+<td>IntelliJ on, Eclipse off</td>
+<td>Eclipse builds on every save</td>
+</tr>
+<tr>
+<td>Inline hints</td>
+<td>Hide context defaults</td>
+<td>see <em>Which hints you see</em></td>
+</tr>
+<tr>
+<td>Hint placement</td>
+<td>Above the declaration</td>
+<td>or inline, after the name</td>
+</tr>
+<tr>
+<td>Show gutter / ruler icons</td>
+<td>on</td>
+<td></td>
+</tr>
+<tr>
+<td>Mark guard contract violations</td>
+<td>on</td>
+<td>the problems for violated contracts</td>
+</tr>
+<tr>
+<td>Warn about near misses</td>
+<td>off</td>
+<td></td>
+</tr>
+<tr>
+<td>Daemon install override</td>
+<td>empty</td>
+<td>a daemon built from source, for developing maddi itself</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<p>IntelliJ also has the Kotlin settings below.</p>
+<h2>Kotlin (IntelliJ)</h2>
+<p>For a project with Kotlin sources, maddi needs its Kotlin front end, a separate download (the<br>
+<a href="https://github.com/CodeLaser/maddi-kotlin-demo">Kotlin demo</a> is a quick way to see it at work). The first analysis<br>
+of such a project offers it in a notification (<em>Download Kotlin support</em>); until then the Java sources are<br>
+analysed and the result says the Kotlin ones were not. <em>Settings → Tools → maddi → Kotlin front end override</em><br>
+points at a front end you downloaded by hand.</p>
+<h2>When something is wrong</h2>
+<ul>
+<li><strong>No hints at all</strong>: see <em>Turning the hints on</em>. Then check that the analysis finished: the maddi tool window<br>
+(IntelliJ) or the maddi Findings view (Eclipse) says how the last run ended.</li>
+<li><strong>"maddi needs a JDK 25 or later"</strong>: add one to the IDE (see <em>Before you start</em>) or choose one in the settings.</li>
+<li><strong>Results look incomplete</strong>: some files did not parse, or the analysis stopped before it converged; the tool<br>
+window says which. A partial result can show weaker verdicts than the code deserves.</li>
+<li><strong>The translation says "a daemon from before the translate request"</strong>: the daemon that answered is older than<br>
+the plugin. <em>Restart daemon</em> in the maddi tool window, then translate again.</li>
+<li><strong>The analysis fails</strong>: the tool window has the message. The daemon's own log is next to the IDE's<br>
+(IntelliJ: <em>Help → Show Log in Finder/Explorer</em>; Eclipse: <code class="notranslate">.metadata/.plugins/io.codelaser.maddi.eclipse/ maddi-daemon.log</code> in the workspace).</li>
+</ul>
+<p>Questions and bug reports: <a href="https://github.com/CodeLaser/maddi/issues">https://github.com/CodeLaser/maddi/issues</a>.</p>
+<footer>maddi 0.9.6 · Eclipse update site: <a href="eclipse/">https://codelaser.github.io/maddi-dist/eclipse/</a> ·
+<a href="https://github.com/CodeLaser/maddi">source</a></footer>
+</main>
+</body>
+</html>
