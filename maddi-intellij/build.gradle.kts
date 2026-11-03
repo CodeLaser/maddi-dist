@@ -39,6 +39,11 @@ group = "io.codelaser"
 // This is the user-visible version on JetBrains Marketplace, which rejects a version it has already
 // seen, so it must move with every published build -- and it dates the daemon it bundles, which IS
 // maddi. It used to say 0.1.0 while the project was at 0.9.1.
+// A plugin-only rebuild of a released version gets a fourth number: intellijPluginPatch=1 in gradle.properties makes
+// 0.9.6 into 0.9.6.1. The daemon it bundles, and with it the Kotlin front end it downloads, stay at the release.
+// Clear it when the version moves.
+val intellijPluginPatch = providers.gradleProperty("intellijPluginPatch").orNull
+if (!intellijPluginPatch.isNullOrBlank()) version = "${rootProject.version}.$intellijPluginPatch"
 
 // Target the IDE's runtime (JBR 21). Compile with the Gradle daemon JDK (26) but emit 21 bytecode.
 java {
@@ -79,7 +84,12 @@ intellijPlatform {
     }
     pluginConfiguration {
         // the section of docs/ide-changelog.md for the version being built; required content on Marketplace
-        changeNotes = provider { changeNotesFor(project.version.toString()) }
+        // (a patch adds its own section in front of the release's)
+        changeNotes = provider {
+            val release = rootProject.version.toString()
+            val notes = changeNotesFor(release)
+            if (project.version.toString() == release) notes else changeNotesFor(project.version.toString()) + notes
+        }
         ideaVersion {
             sinceBuild = "253" // 2025.3
             untilBuild = provider { null } // open-ended
@@ -93,22 +103,18 @@ intellijPlatform {
         ides {
             recommended()
         }
-        // What must fail the build. Deliberately NOT the default set, which fails on any internal-API
-        // usage: the plugin knowingly carries one, and there is no public equivalent (2026-08-26 run,
-        // IU-253/261/262, all three "Compatible"):
-        //   INTERNAL     DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp() -- declarative
-        //                inlays cache on a modification stamp that DaemonCodeAnalyzer.restart() does not
-        //                invalidate, so without it a result appears only on some later pass. The whole
-        //                com.intellij.codeInsight.hints.declarative package (non-impl) has no reset.
+        // What must fail the build: the default set minus experimental and deprecated usage. INTERNAL API fails
+        // it: the Marketplace review refuses a plugin that uses any (0.9.6, 2026-11-03, for
+        // DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp(); scheduleRecompute is the public
+        // way to recompute inlays, see MaddiAnalysisService.recomputeHints). Still accepted:
         //   EXPERIMENTAL AboveLineIndentedPosition -- the above-line hint placement; no stable counterpart.
         //   DEPRECATED   ReadAction.compute(ThrowableComputable), deprecated in 2026.1. Replacing it means
         //                NonBlockingReadAction and different cancellation semantics -- a real change, not
         //                an import swap, so it is deliberately still open.
-        // ⚠ The consequence is that a NEW internal usage would not fail the build either. The verifier
-        // always prints its counts; read them (build/reports/pluginVerifier/<IDE>) rather than the exit code.
         failureLevel = listOf(
             FailureLevel.COMPATIBILITY_PROBLEMS,
             FailureLevel.COMPATIBILITY_WARNINGS,
+            FailureLevel.INTERNAL_API_USAGES,
             FailureLevel.INVALID_PLUGIN,
             FailureLevel.MISSING_DEPENDENCIES,
             FailureLevel.PLUGIN_STRUCTURE_WARNINGS,

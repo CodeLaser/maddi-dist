@@ -7,6 +7,11 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 ## 0.9.7
 
 
+## 0.9.6.1
+
+- IntelliJ: the hints refresh after a run through public platform API only. The analysis and the daemon are those of
+  0.9.6.
+
 ## 0.9.6
 
 - First release on JetBrains Marketplace and the Eclipse Marketplace.
