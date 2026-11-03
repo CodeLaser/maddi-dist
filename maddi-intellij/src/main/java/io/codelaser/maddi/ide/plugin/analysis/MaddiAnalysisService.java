@@ -30,6 +30,8 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.options.ShowSettingsUtil;
@@ -321,11 +323,7 @@ public final class MaddiAnalysisService implements Disposable {
         index(result);
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
-            // Declarative inlay hints cache on a modification stamp that restart() alone does not invalidate,
-            // so the first result would only show up on a later pass. Reset it so inlays recompute now.
-            DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp();
-            // restart() with no argument is deprecated; the reason shows up in the daemon's own logging.
-            DaemonCodeAnalyzer.getInstance(project).restart("maddi analysis result");
+            recomputeHints("maddi analysis result");
             project.getMessageBus().syncPublisher(MaddiResultListener.TOPIC).resultUpdated(result);
         });
     }
@@ -430,9 +428,25 @@ public final class MaddiAnalysisService implements Disposable {
         libraryByType.putAll(answer);
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
-            DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp();
-            DaemonCodeAnalyzer.getInstance(project).restart("maddi library annotations");
+            recomputeHints("maddi library annotations");
         });
+    }
+
+    /**
+     * Re-run the highlighting passes, inlay hints included. Declarative inlay hints cache on a modification stamp
+     * per editor that restart() alone does not invalidate, so a result would only show up after the next edit.
+     * scheduleRecompute clears it for one editor and restarts; resetModificationStamp() did all editors at once,
+     * but it is internal API, which the Marketplace refuses.
+     */
+    private void recomputeHints(String reason) {
+        for (Editor editor : EditorFactory.getInstance().getAllEditors()) {
+            if (project.equals(editor.getProject())) {
+                DeclarativeInlayHintsPassFactory.Companion.scheduleRecompute(editor, project);
+            }
+        }
+        // restart() with no argument is deprecated; the reason shows up in the daemon's own logging. Also covers
+        // the gutter icons and findings when no editor is open.
+        DaemonCodeAnalyzer.getInstance(project).restart(reason);
     }
 
     public AnalysisModel.Result latestResult() {
