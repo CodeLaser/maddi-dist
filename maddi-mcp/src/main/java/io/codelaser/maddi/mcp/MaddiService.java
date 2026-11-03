@@ -382,7 +382,7 @@ public final class MaddiService implements Closeable {
                      + " has no command to compute its configuration again: configure it again, or pass allowStale");
             return null;
         }
-        return regenerate(run, project, "regenerated, as " + changed + " changed");
+        return regenerate(run, project, "regenerated, as the build changed: " + changed);
     }
 
     /* the configuration made again, by the project's command or by this server; null when the run failed */

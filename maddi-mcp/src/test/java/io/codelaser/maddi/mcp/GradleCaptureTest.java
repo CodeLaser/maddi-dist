@@ -102,7 +102,7 @@ public class GradleCaptureTest {
             Files.writeString(root.resolve("a/build.gradle.kts"), "plugins { java }\n// a change\n");
             AnalysisRun again = service.await(service.analyze("demo", List.of(), List.of(), false).id(), 600, null);
             assertEquals(AnalysisRun.State.FINISHED, again.state(), () -> again.describe().toString());
-            assertEquals("regenerated, as a/build.gradle.kts (changed) changed", again.describe().get("configuration"));
+            assertEquals("regenerated, as the build changed: a/build.gradle.kts (changed)", again.describe().get("configuration"));
             assertEquals("FRESH", service.projects().getFirst().get("buildFiles"));
         }
     }

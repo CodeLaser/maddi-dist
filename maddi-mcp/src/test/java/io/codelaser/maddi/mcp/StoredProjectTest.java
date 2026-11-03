@@ -108,8 +108,8 @@ public class StoredProjectTest {
             writeInputConfiguration(project, next);
             AnalysisRun run = finish(service, service.analyze("p", List.of(), List.of(), false));
             assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
-            assertTrue(run.describe().get("configuration").toString().startsWith("regenerated, as build.gradle.kts"
-                                                                                 + " (changed) changed"),
+            assertTrue(run.describe().get("configuration").toString().startsWith("regenerated, as the build changed:"
+                                                                                 + " build.gradle.kts (changed)"),
                     () -> run.describe().toString());
             assertEquals("FRESH", service.projects().getFirst().get("buildFiles"), "and stored as such");
             assertEquals("run-2", run.id(), "ids go on from the stored runs");

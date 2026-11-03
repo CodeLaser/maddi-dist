@@ -26,6 +26,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -88,6 +89,7 @@ public final class McpTools {
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
                           "daemonJdk":{"type":"string","description":"a JDK 25+ to run the daemon on for this project, when the server's does not suit it (an annotation processor such as Lombok that does not support it). Given with project alone: changes only that, keeping the configuration"},
                           "build":{"type":"string","enum":["gradle","maven","compileLog"],"description":"make the configuration by capturing this build's javac invocations; default when only workingDirectory is given and it holds a Gradle (else a Maven) build"},
+                          "buildJdk":{"type":"string","description":"build gradle or maven: the JDK the build runs on (Gradle's -Dorg.gradle.java.home, Maven's JAVA_HOME), when the default one is newer than the build supports; default: the build tool's own choice"},
                           "compileCommand":{"type":"array","items":{"type":"string"},"description":"build compileLog: the command that compiles, run in workingDirectory; its output must show javac's command lines"},
                           "compileLog":{"type":"string","description":"build compileLog: a log already written, instead of compileCommand"},
                           "javacPattern":{"type":"string","description":"build compileLog: a regular expression matching a whole line that is a javac invocation, group 1 its arguments; default: a javac command line ('javac <args>', '/path/javac <args>', argument files expanded)"},
@@ -289,18 +291,26 @@ public final class McpTools {
         if (build != null) {
             if (workingDirectoryArg == null) throw new IllegalArgumentException("a " + build + " project needs workingDirectory");
             Path root = Path.of(workingDirectoryArg).toAbsolutePath().normalize();
+            String buildJdkArg = a.string("buildJdk");
+            Path buildJdk = buildJdkArg == null ? null : Path.of(buildJdkArg).toAbsolutePath().normalize();
+            if (buildJdk != null && !Files.isExecutable(buildJdk.resolve("bin/java"))) {
+                throw new IllegalArgumentException("buildJdk " + buildJdk + " holds no bin/java");
+            }
             ProjectStore.Regenerate regenerate = switch (build) {
                 case ProjectStore.StoredProject.GRADLE -> {
                     if (!CaptureSpec.isGradleBuild(root)) {
                         throw new IllegalArgumentException(root + " holds no settings.gradle(.kts) or build.gradle(.kts)");
                     }
-                    yield ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString());
+                    yield buildJdk == null ? ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString())
+                            : ProjectStore.Regenerate.capture(CaptureSpec.gradle(root, buildJdk));
                 }
                 case ProjectStore.StoredProject.MAVEN -> {
                     if (!CaptureSpec.isMavenBuild(root)) throw new IllegalArgumentException(root + " holds no pom.xml");
-                    yield ProjectStore.Regenerate.capture(CaptureSpec.maven(root));
+                    yield ProjectStore.Regenerate.capture(CaptureSpec.maven(root, buildJdk));
                 }
                 case ProjectStore.StoredProject.COMPILE_LOG -> {
+                    if (buildJdk != null) throw new IllegalArgumentException("buildJdk is for build gradle or maven;"
+                                                                             + " a compileCommand sets its own");
                     String log = a.string("compileLog");
                     List<String> command = a.strings("compileCommand");
                     if (command.isEmpty() == (log == null)) {

@@ -126,7 +126,9 @@ Claude Desktop, `maddi-mcp-<version>.mcpb` on the same release is the server as 
 A Gradle or Maven build needs no maddi plugin: given its directory, the server compiles every Java source set with
 javac's arguments logged (Gradle: an init script and `--debug`, with the build's own wrapper; Maven:
 `clean compile test-compile -X`, with `mvnw` when there is one) and turns that log into the configuration, as the
-CLI's `--compile-log` does, with the build files hashed at that moment. Any other build works the same way with
+CLI's `--compile-log` does, with the build files hashed at that moment. `buildJdk` names the JDK the build runs on,
+when the default one is newer than the build's Gradle or Maven supports (Gradle then fails as soon as an edited
+`settings.gradle` must be compiled again). Any other build works the same way with
 `build` `compileLog`: a `compileCommand` whose output shows javac's command lines (or a `compileLog` already
 written), a `javacPattern` when the lines look different, and the `buildFileGlobs` to hash. The build's output is
 streamed, not kept: the server's store keeps the javac lines (`compile.log`) and what a failure needs, without the

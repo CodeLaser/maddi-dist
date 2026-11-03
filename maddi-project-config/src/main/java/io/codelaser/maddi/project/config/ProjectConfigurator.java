@@ -62,7 +62,7 @@ public final class ProjectConfigurator {
         private final List<String> changed;
 
         public StaleException(String name, List<String> changed) {
-            super("the configuration of " + name + " is stale (" + summary(changed) + " changed) and there is no way"
+            super("the configuration of " + name + " is stale, as " + because(changed) + ", and there is no way"
                   + " to make it again: configure it again, or allow a stale configuration");
             this.changed = List.copyOf(changed);
         }
@@ -164,7 +164,7 @@ public final class ProjectConfigurator {
         ProjectRecord fresh = record.withInputConfiguration(file, Instant.now());
         store.save(fresh);
         BuildFileCheck.Freshness after = BuildFileCheck.check(file);
-        return new Opened(fresh, before, after, "regenerated, as " + summary(before.changed()) + " changed");
+        return new Opened(fresh, before, after, "regenerated, as " + because(before.changed()));
     }
 
     private static void runCommand(Regenerate regenerate, Path log, CaptureListener listener)
@@ -195,9 +195,10 @@ public final class ProjectConfigurator {
         }
     }
 
-    private static String summary(List<String> changed) {
-        if (changed.isEmpty()) return "the build";
-        return changed.size() <= 3 ? String.join(", ", changed)
-                : String.join(", ", changed.subList(0, 3)) + " and " + (changed.size() - 3) + " more";
+    /* each entry says how it changed already: "settings.gradle (changed)", "pom.xml (gone)" */
+    static String because(List<String> changed) {
+        if (changed.isEmpty()) return "the build changed";
+        return "the build changed: " + (changed.size() <= 3 ? String.join(", ", changed)
+                : String.join(", ", changed.subList(0, 3)) + " and " + (changed.size() - 3) + " more");
     }
 }

@@ -67,8 +67,20 @@ public record CaptureSpec(ConfiguredBy kind, Path root, List<String> command, Pa
      * that each compile task logs javac's arguments. The command is the build's wrapper, else {@code gradle}.
      */
     public static CaptureSpec gradle(Path root) {
-        return new CaptureSpec(ConfiguredBy.GRADLE_CAPTURE, root, List.of(tool(root, "gradlew", "gradle")), null, null,
-                BuildFiles.GRADLE_GLOBS);
+        return gradle(root, null);
+    }
+
+    /**
+     * Gradle, as {@link #gradle(Path)}, with the Gradle daemon on {@code javaHome} ({@code -Dorg.gradle.java.home}):
+     * the default JDK may be newer than the build's Gradle supports, which then fails as soon as it must compile a
+     * build script again (an edited {@code settings.gradle}: "Unsupported class file major version").
+     *
+     * @param javaHome null: Gradle's own choice (its {@code JAVA_HOME}, else the {@code java} on the PATH)
+     */
+    public static CaptureSpec gradle(Path root, Path javaHome) {
+        List<String> command = new ArrayList<>(List.of(tool(root, "gradlew", "gradle")));
+        if (javaHome != null) command.add("-Dorg.gradle.java.home=" + javaHome);
+        return new CaptureSpec(ConfiguredBy.GRADLE_CAPTURE, root, command, null, null, BuildFiles.GRADLE_GLOBS);
     }
 
     /**
@@ -76,8 +88,19 @@ public record CaptureSpec(ConfiguredBy kind, Path root, List<String> command, Pa
      * compiler plugin skips a module that is up to date, and a skipped module logs nothing.
      */
     public static CaptureSpec maven(Path root) {
-        return new CaptureSpec(ConfiguredBy.MAVEN_CAPTURE, root, List.of(tool(root, "mvnw", "mvn"), "-B", "-X", "clean",
-                "compile", "test-compile"), null, null, BuildFiles.MAVEN_GLOBS);
+        return maven(root, null);
+    }
+
+    /**
+     * Maven, as {@link #maven(Path)}, run on {@code javaHome}: the command starts with {@code env JAVA_HOME=...}.
+     *
+     * @param javaHome null: Maven's own choice (its {@code JAVA_HOME}, else the {@code java} on the PATH)
+     */
+    public static CaptureSpec maven(Path root, Path javaHome) {
+        List<String> command = new ArrayList<>();
+        if (javaHome != null) command.addAll(List.of("env", "JAVA_HOME=" + javaHome));
+        command.addAll(List.of(tool(root, "mvnw", "mvn"), "-B", "-X", "clean", "compile", "test-compile"));
+        return new CaptureSpec(ConfiguredBy.MAVEN_CAPTURE, root, command, null, null, BuildFiles.MAVEN_GLOBS);
     }
 
     /**

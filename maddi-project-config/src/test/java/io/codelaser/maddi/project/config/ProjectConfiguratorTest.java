@@ -84,7 +84,7 @@ public class ProjectConfiguratorTest {
 
         Files.writeString(root.resolve("build.txt"), "version 2\n");
         ProjectConfigurator.Opened regenerated = configurator.open("p", false, CaptureListener.NONE);
-        assertEquals("regenerated, as build.txt (changed) changed", regenerated.action());
+        assertEquals("regenerated, as the build changed: build.txt (changed)", regenerated.action());
         assertEquals(BuildFileCheck.State.STALE, regenerated.before().state());
         assertEquals(BuildFileCheck.State.FRESH, regenerated.after().state(), "checked again, not carried over");
         assertTrue(regenerated.record().configuredAt().isAfter(record.configuredAt())
@@ -93,7 +93,7 @@ public class ProjectConfiguratorTest {
 
         ProjectConfigurator.Opened refreshed = configurator.refresh("p", List.of(Path.of("build.txt")),
                 CaptureListener.NONE);
-        assertEquals("regenerated, as build.txt (changed) changed", refreshed.action(),
+        assertEquals("regenerated, as the build changed: build.txt (changed)", refreshed.action(),
                 "the caller said what it touched: no hashing first");
         assertEquals(BuildFileCheck.State.FRESH, refreshed.after().state());
     }
@@ -140,7 +140,7 @@ public class ProjectConfiguratorTest {
         Files.writeString(root.resolve("build.txt"), "version 2\n");
         // the copy still records the old hash: regenerated, but still stale afterwards, and said so
         ProjectConfigurator.Opened opened = configurator.open("f", false, CaptureListener.NONE);
-        assertEquals("regenerated, as build.txt (changed) changed", opened.action());
+        assertEquals("regenerated, as the build changed: build.txt (changed)", opened.action());
         assertEquals(BuildFileCheck.State.STALE, opened.after().state());
 
         Regenerate failing = Regenerate.command(List.of("sh", "-c", "echo broken; exit 2"), root);
@@ -166,6 +166,13 @@ public class ProjectConfiguratorTest {
         assertEquals(List.of("gradle", "-q", "-p", dir.resolve("a").toString(), Regenerate.GRADLE_TASK), r.command());
         assertNull(Regenerate.defaultFor(gradle, dir.resolve("a/x.json")), "not in a build directory");
         assertEquals(ConfiguredBy.MAVEN_CAPTURE, ConfiguredBy.ofKey("maven-capture"));
+        assertEquals(List.of("gradle", "-Dorg.gradle.java.home=/jdk/21"), CaptureSpec.gradle(dir, Path.of("/jdk/21")).command());
+        assertEquals(List.of("gradle"), CaptureSpec.gradle(dir, null).command());
+        assertEquals(List.of("env", "JAVA_HOME=/jdk/21", "mvn", "-B", "-X", "clean", "compile", "test-compile"),
+                CaptureSpec.maven(dir, Path.of("/jdk/21")).command());
+        assertEquals("the build changed", ProjectConfigurator.because(List.of()));
+        assertEquals("the build changed: a (changed), b (gone), c (changed) and 1 more",
+                ProjectConfigurator.because(List.of("a (changed)", "b (gone)", "c (changed)", "d (changed)")));
         assertThrows(IllegalArgumentException.class, () -> ConfiguredBy.ofKey("bazel"));
     }
 }

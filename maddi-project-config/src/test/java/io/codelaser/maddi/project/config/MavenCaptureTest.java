@@ -71,7 +71,7 @@ public class MavenCaptureTest {
 
         Files.writeString(root.resolve("pom.xml"), Files.readString(root.resolve("pom.xml")) + "<!-- changed -->\n");
         ProjectConfigurator.Opened opened = configurator.open("demo", false, CaptureListener.NONE);
-        assertEquals("regenerated, as pom.xml (changed) changed", opened.action());
+        assertEquals("regenerated, as the build changed: pom.xml (changed)", opened.action());
         assertEquals(BuildFileCheck.State.FRESH, opened.after().state());
     }
 
