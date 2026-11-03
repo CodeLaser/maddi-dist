@@ -4,6 +4,11 @@ What changed in the IntelliJ and Eclipse plugins, per release. The IntelliJ plug
 Marketplace are built from the section of the release being built (`maddi-intellij`, `patchPluginXml`), so keep each
 section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the only markup.
 
+## 0.9.6.1
+
+- IntelliJ: the hints refresh after a run through public platform API only. The analysis and the daemon are those of
+  0.9.6.
+
 ## 0.9.6
 
 - First release on JetBrains Marketplace and the Eclipse Marketplace.

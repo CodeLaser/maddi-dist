@@ -39,6 +39,11 @@ group = "io.codelaser"
 // This is the user-visible version on JetBrains Marketplace, which rejects a version it has already
 // seen, so it must move with every published build -- and it dates the daemon it bundles, which IS
 // maddi. It used to say 0.1.0 while the project was at 0.9.1.
+// A plugin-only rebuild of a released version gets a fourth number: intellijPluginPatch=1 in gradle.properties makes
+// 0.9.6 into 0.9.6.1. The daemon it bundles, and with it the Kotlin front end it downloads, stay at the release.
+// Clear it when the version moves.
+val intellijPluginPatch = providers.gradleProperty("intellijPluginPatch").orNull
+if (!intellijPluginPatch.isNullOrBlank()) version = "${rootProject.version}.$intellijPluginPatch"
 
 // Target the IDE's runtime (JBR 21). Compile with the Gradle daemon JDK (26) but emit 21 bytecode.
 java {
@@ -79,7 +84,12 @@ intellijPlatform {
     }
     pluginConfiguration {
         // the section of docs/ide-changelog.md for the version being built; required content on Marketplace
-        changeNotes = provider { changeNotesFor(project.version.toString()) }
+        // (a patch adds its own section in front of the release's)
+        changeNotes = provider {
+            val release = rootProject.version.toString()
+            val notes = changeNotesFor(release)
+            if (project.version.toString() == release) notes else changeNotesFor(project.version.toString()) + notes
+        }
         ideaVersion {
             sinceBuild = "253" // 2025.3
             untilBuild = provider { null } // open-ended
