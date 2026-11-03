@@ -133,7 +133,7 @@ when the default one is newer than the build's Gradle or Maven supports (Gradle 
 written), a `javacPattern` when the lines look different, and the `buildFileGlobs` to hash. The build's output is
 streamed, not kept: the server's store keeps the javac lines (`compile.log`) and what a failure needs, without the
 debug chatter (`build.log`). The first `analyze` does this (or `analyze` with `configureOnly`); it takes a full
-compile. The captures, the freshness check and the regeneration are the `maddi-project-config` library, which
+compile. The captures, the freshness check and the regeneration are the `maddi-project-config` library (in maddi), which
 other tools can use with a project store of their own.
 
 A configured project is stored (in `~/.maddi/mcp`, or `--store`), with the hashes of the build files that shaped

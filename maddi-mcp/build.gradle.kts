@@ -37,7 +37,7 @@ val mcpSdkVersion = "2.1.0"
 
 dependencies {
     implementation(project(":maddi-ide-client"))
-    implementation(project(":maddi-project-config")) // freshness, the captures of a build's javac invocations
+    implementation("io.codelaser:maddi-project-config:$maddiVersion") // freshness, the captures of a build's javac invocations
     implementation("io.codelaser:maddi-inspection-resource:$maddiVersion") // BuildFilesCapture
     implementation("io.modelcontextprotocol.sdk:mcp-core:$mcpSdkVersion")
     implementation("io.modelcontextprotocol.sdk:mcp-json-jackson2:$mcpSdkVersion")
