@@ -21,12 +21,15 @@ import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
 import io.codelaser.maddi.analysis.api.AnalysisProblem;
 import io.codelaser.maddi.analysis.api.ModificationOptions;
+import io.codelaser.maddi.analysis.api.ModificationOutcome;
 import io.codelaser.maddi.analysis.api.ModificationRequest;
 import io.codelaser.maddi.analysis.api.NullabilityTarget;
 import io.codelaser.maddi.analysis.api.PrepOutcome;
 import io.codelaser.maddi.analysis.api.PrepRequest;
 import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
+import io.codelaser.maddi.callgraph.CallGraphContributions;
 import io.codelaser.maddi.callgraph.ComputeCallGraph;
+import io.codelaser.maddi.callgraph.PrimaryTypeUseGraph;
 import io.codelaser.maddi.cst.api.analysis.Message;
 import io.codelaser.maddi.cst.api.element.ModuleInfo;
 import io.codelaser.maddi.cst.api.element.SourceSet;
@@ -37,6 +40,7 @@ import io.codelaser.maddi.cst.impl.analysis.NullabilityFacts;
 import io.codelaser.maddi.cst.print.kotlin.KotlinPrintOptions;
 import io.codelaser.maddi.cst.print.kotlin.KotlinTranslator;
 import io.codelaser.maddi.cst.print.kotlin.KotlinWorld;
+import io.codelaser.maddi.graph.G;
 import io.codelaser.maddi.inspection.api.integration.JavaInspector;
 import io.codelaser.maddi.inspection.api.parser.ParseResult;
 import io.codelaser.maddi.inspection.api.parser.Summary;
@@ -57,6 +61,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,21 +81,39 @@ import java.util.stream.Stream;
  * {@code RunMixedPrepAnalyzer} — when the Kotlin front end can be installed ({@link K2Realm}: the compiler's
  * jars are not on this JVM's classpath but found through {@code -Dmaddi.k2.home} / {@code -Dmaddi.k2.classpath});
  * otherwise it falls back to the Java half, and says so.
+ * <p>
+ * With {@code -Dmaddi.daemon.warm=true} (experimental, off by default) the inspector and the run's model stay for the
+ * next request instead (docs/design/incremental-and-overlay.md §3). A request with the same configuration then asks
+ * the inspector which source files changed: none, and the previous result is returned at once; some, and they are
+ * re-parsed, their dependents rewired, prep and the call graph redone for those types only, and the analysis seeded
+ * with them. Such a result is {@link DaemonProtocol#OUTCOME_INCREMENTAL}: a seeded analysis does not run MODREACH and
+ * the eventual pass, so it is best available, never certified. A cold run is the fallback for anything else: the
+ * first request, another configuration, Kotlin sources, a partial parse, a file added or removed, any exception.
  */
 public class WarmAnalysisService implements AnalyzeHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(WarmAnalysisService.class);
 
+    /** Keep the model between requests and re-analyse incrementally; see the class comment. */
+    static final boolean WARM = Boolean.getBoolean("maddi.daemon.warm");
+
     private final InputConfigurationAssembler assembler = new InputConfigurationAssembler();
+    private final boolean warm;
     /** The static-side-effect analysis for this service's runs; null keeps the analyzer's default. */
     private final Boolean staticSideEffects;
 
     public WarmAnalysisService() {
-        this(null);
+        this(null, WARM);
     }
 
     /** For tests: switch the static-side-effect analysis on or off for every run of this service. */
     WarmAnalysisService(Boolean staticSideEffects) {
+        this(staticSideEffects, WARM);
+    }
+
+    /** For tests: also whether the model stays for an incremental re-analysis. */
+    WarmAnalysisService(Boolean staticSideEffects, boolean warm) {
         this.staticSideEffects = staticSideEffects;
+        this.warm = warm;
     }
 
     /** What either parse path hands to the shared tail. */
@@ -100,8 +124,35 @@ public class WarmAnalysisService implements AnalyzeHandler {
                           Collection<ModuleInfo> moduleInfos,
                           Summary summary,
                           boolean partial,
-                          int hints) {
+                          int hints,
+                          JavaInspector.ParseOptions parseOptions) { // null: the mixed parse, which cannot re-parse
     }
+
+    /*
+     -Dmaddi.daemon.warm: what an incremental re-analysis starts from, as the last run left it. The inspector, its
+     parse and the analysis values on its objects; the call graph, and its per-type contributions for the next prep;
+     the findings, each with the element it is about, since a seeded analysis only reports on what it analysed; and
+     the last result, returned as it is when nothing changed. Dropped as any run starts, and only set again by a run
+     that ends well.
+     */
+    private record WarmState(DaemonProtocol.AnalyzeConfig config,
+                             InputConfiguration inputConfiguration,
+                             JavaInspector inspector,
+                             JavaInspector.ParseOptions parseOptions,
+                             SourceSet sourceSet,
+                             ParseResult parseResult,
+                             Collection<ModuleInfo> moduleInfos,
+                             G<Info> graph,
+                             CallGraphContributions contributions,
+                             List<KeptFinding> findings,
+                             DaemonProtocol.Result result) {
+    }
+
+    /** A finding from the analysis, and the element it is about (null when it names none). */
+    private record KeptFinding(Info info, DaemonProtocol.Finding finding) {
+    }
+
+    private WarmState warmState;
 
     /*
      The last run's model, kept for the library types the editor asks about (libraryAnnotations), and dropped as the
@@ -184,6 +235,17 @@ public class WarmAnalysisService implements AnalyzeHandler {
     @Override
     public DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception {
         long start = System.currentTimeMillis();
+        if (warm && warmState != null) {
+            WarmState state = warmState;
+            warmState = null; // whatever happens below, a failed attempt leaves nothing behind
+            try {
+                DaemonProtocol.Result result = analyzeIncrementally(state, request, status, start);
+                if (result != null) return result;
+            } catch (Exception | AssertionError e) {
+                LOGGER.warn("incremental re-analysis failed, analysing from scratch", e);
+            }
+        }
+        warmState = null;
         lastRun = null;
         String requestId = request.requestId();
         boolean parallel = request.config().parallel();
@@ -225,37 +287,18 @@ public class WarmAnalysisService implements AnalyzeHandler {
         // Fault-tolerant like RunAnalyzer's: on a partial parse a type whose supertype did not resolve is far
         // likelier to trip prep, and one such type must not abort the run for everything else. The isolated
         // failures are reported through the prep outcome's problems below.
+        // warm: the call graph keeps each type's contribution, so that the next prep walks the re-parsed types only
+        boolean keep = warm && parsed.parseOptions() != null && !parsed.partial();
+        CallGraphContributions contributions = keep ? new CallGraphContributions() : null;
         PrepOutcome prep = engine.prep(new PrepRequest(parsed.runtime(), Set.copyOf(parsed.primaryTypes()),
-                parsed.moduleInfos(), typeInfo -> false, parallel, true));
+                parsed.moduleInfos(), typeInfo -> false, parallel, true, contributions));
         ComputeCallGraph ccg = prep.callGraph();
 
         emit(status, requestId, "order", "analysis order", null, parsed.primaryTypes().size());
         List<Info> order = new ComputeAnalysisOrder().go(ccg.graph(), parallel);
 
         emit(status, requestId, "analyze", "modification analysis", 0, order.size());
-        ModificationOptions modOptions = new ModificationOptions(
-                // as the CLI: a safety net, not a budget. MODREACH re-derives after each of its rounds and adds this
-                // many iterations each time; langchain4j-core's first fixpoint alone takes 15
-                30,
-                // NOT the CLI's plateau early exit: under MODREACH's re-derivations it stopped both demo projects at
-                // PLATEAU with the same verdicts the certified run reaches, and the IDE shows the outcome
-                null,
-                false,  // track object creations: switched on by MODREACH and by nullability, which need it
-                // the reachability pass (MODREACH), the CLI's default: the authority over the three modification
-                // properties, and what the eventual layer needs to see the honest post-cutover state
-                true,
-                true,   // fault tolerant: isolate a crash on one element into a finding; don't abort the run
-                // advisory "you are one member away from @Container/@Immutable/..." warnings; opt-in, as in
-                // RunAnalyzer, because they are noisy on a codebase that has not been curated for them
-                request.config().warnNearMisses(),
-                false,  // environment gates: the CLI's, not the daemon's
-                false,  // store fingerprints
-                staticSideEffects,
-                null)   // eventual cluster: the analyzer's default
-                // the nullability pass after the fixpoint, writing NULLABILITY_* for the @NotNull/@Nullable hints
-                .withNullability(true)
-                // beside a verdict, the first statement responsible for it, for the "why?" in the gutter tooltip
-                .withCulprits(true);
+        ModificationOptions modOptions = modificationOptions(request.config());
         // Stream what each pass established, so the IDE can annotate the file on screen long before the run
         // ends: the first pass decides most of the output, and the tail is long but decides little.
         StreamingValueFeed valueFeed = new StreamingValueFeed(status, requestId, collector);
@@ -273,7 +316,10 @@ public class WarmAnalysisService implements AnalyzeHandler {
         });
 
         emit(status, requestId, "collect", "collecting results", null, null);
-        List<DaemonProtocol.Finding> findings = collector.collectFindings(messages, summary);
+        List<KeptFinding> analysisFindings = keptFindings(collector, messages);
+        List<DaemonProtocol.Finding> findings = new ArrayList<>(analysisFindings.stream().map(KeptFinding::finding)
+                .toList());
+        findings.addAll(collector.parseFindings(summary));
         List<DaemonProtocol.ElementAnnotation> elementAnnotations =
                 collector.collectElementAnnotations(parsed.primaryTypes());
 
@@ -291,9 +337,192 @@ public class WarmAnalysisService implements AnalyzeHandler {
         int parseErrors = summary == null ? 0 : summary.parseExceptions().size();
         lastRun = new LastRun(parsed.runtime(), parsed.sourceSetOfRequest(), collector, engine, order,
                 parsed.primaryTypes());
-        return new DaemonProtocol.Result(requestId, findings, elementAnnotations, initProblems,
+        DaemonProtocol.Result result = new DaemonProtocol.Result(requestId, findings, elementAnnotations, initProblems,
                 parseErrors, parsed.hints(), elapsed, outcome);
+        if (keep) {
+            warmState = new WarmState(request.config(), inputConfiguration, parsed.inspector(), parsed.parseOptions(),
+                    parsed.sourceSetOfRequest(), summary.parseResult(), parsed.moduleInfos(), ccg.graph(),
+                    contributions, analysisFindings, result);
+        }
+        return result;
     }
+
+    /*
+     -Dmaddi.daemon.warm: the re-analysis after an edit, on the state the previous run left; null when it must be a
+     cold run instead. On the parse, prep and call graph, this is RunRewireTests' re-parse (maddi-run-rewire); its oracle
+     is what tests that a warm parse and prep equal a cold one.
+     */
+    private DaemonProtocol.Result analyzeIncrementally(WarmState state, DaemonProtocol.AnalyzeProject request,
+                                                       StatusSink status, long start) throws IOException {
+        String requestId = request.requestId();
+        if (!state.config().equals(request.config())) {
+            LOGGER.info("incremental: the configuration changed, analysing from scratch");
+            return null;
+        }
+        JavaInspector inspector = state.inspector();
+        emit(status, requestId, "reload", "looking for changed sources", null, null);
+        Set<java.net.URI> filesBefore = sourceFileUris(inspector);
+        JavaInspector.ReloadResult reload = inspector.reloadSources(state.inputConfiguration(), Map.of());
+        Set<java.net.URI> filesAfter = sourceFileUris(inspector);
+        if (!filesAfter.equals(filesBefore)) {
+            // the reload names changed types only; a new file has none yet, a removed one leaves its types behind
+            LOGGER.info("incremental: source files were added or removed, analysing from scratch");
+            return null;
+        }
+        Set<TypeInfo> changed = reload.sourceHasChanged();
+        if (changed.isEmpty()) {
+            long elapsed = System.currentTimeMillis() - start;
+            LOGGER.info("incremental: no source changed, the previous result stands ({} ms)", elapsed);
+            DaemonProtocol.Result previous = state.result();
+            warmState = state;
+            return new DaemonProtocol.Result(requestId, previous.findings(), previous.elementAnnotations(),
+                    previous.initializationProblems(), previous.parseErrorCount(), previous.hintsLoaded(), elapsed,
+                    previous.outcome());
+        }
+
+        // the changed types are re-parsed, the types that depend on them rewired, the others kept as they are
+        Set<TypeInfo> dependents = new PrimaryTypeUseGraph(state.graph()).dependentsOf(changed);
+        JavaInspector.Invalidated invalidated = t -> changed.contains(t) ? JavaInspector.InvalidationState.INVALID
+                : dependents.contains(t) ? JavaInspector.InvalidationState.REWIRE
+                : JavaInspector.InvalidationState.UNCHANGED;
+        LOGGER.info("incremental: {} type(s) changed, {} dependent type(s) to rewire", changed.size(),
+                dependents.size());
+        emit(status, requestId, "parse", "re-parsing " + changed.size() + " changed type(s)", null, null);
+        JavaInspector.ParseOptions base = state.parseOptions();
+        Summary summary = inspector.parse(new JavaInspector.ParseOptions(base.failFast(), base.detailedSources(),
+                invalidated, base.parallel(), base.lombok(), base.ignoreModule(), base.parameterNames(),
+                base.syntheticListField()));
+        if (summary.haveErrors()) {
+            LOGGER.info("incremental: the re-parse has {} error(s), analysing from scratch",
+                    summary.parseExceptions().size());
+            return null;
+        }
+        ParseResult parseResult = summary.parseResult();
+        Runtime runtime = inspector.runtime();
+        boolean parallel = request.config().parallel();
+
+        AnalysisEngine engine = AnalysisEngines.require("the IDE daemon's modification analysis");
+        emit(status, requestId, "prep", "call graph", null, parseResult.primaryTypes().size());
+        // every type that arrived prepped is skipped, and the call graph walks only the types it holds no part of
+        PrepOutcome prep = engine.prep(new PrepRequest(runtime, Set.copyOf(parseResult.primaryTypes()),
+                state.moduleInfos(), typeInfo -> false, parallel, true, state.contributions()));
+        G<Info> graph = prep.callGraph().graph();
+        List<Info> order = new ComputeAnalysisOrder().go(graph, parallel);
+
+        // the seed: every element of the re-parsed and the rewired types, as their new objects; the rewired ones
+        // carry no analysis values (docs/design/incremental-and-overlay.md), so they are analysed again
+        Set<TypeInfo> seedTypes = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<String> seedNames = new HashSet<>();
+        for (TypeInfo t : changed) seedNames.add(t.fullyQualifiedName());
+        for (TypeInfo t : dependents) seedNames.add(t.fullyQualifiedName());
+        for (String name : seedNames) {
+            TypeInfo t = parseResult.findType(name);
+            if (t != null) seedTypes.add(t);
+        }
+        Set<Info> seed = new HashSet<>();
+        for (Info info : order) {
+            if (info instanceof ModuleInfo) continue; // asking a module descriptor for its type throws
+            TypeInfo type = info instanceof TypeInfo ti ? ti : info.typeInfo();
+            if (type != null && seedTypes.contains(type.primaryType())) seed.add(info);
+        }
+
+        ResultCollector collector = new ResultCollector(engine, runtime, state.sourceSet(),
+                request.config().containerWhyMaxSlotsOrDefault());
+        emit(status, requestId, "analyze", "modification analysis, seeded with " + seedTypes.size() + " type(s)",
+                0, order.size());
+        StreamingValueFeed valueFeed = new StreamingValueFeed(status, requestId, collector);
+        ModificationRequest modRequest = new ModificationRequest(inspector, order, graph, parseResult.primaryTypes(),
+                modificationOptions(request.config()), valueFeed, seed);
+        ModificationOutcome outcome = runWithHeartbeat(status, valueFeed, () -> {
+            try {
+                return engine.modification(modRequest);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+
+        emit(status, requestId, "collect", "collecting results", null, null);
+        // The passes spoke about their scope only, the contract check after them (contracts, near misses) about the
+        // whole order again. So an earlier finding stands unless it is about a re-parsed or rewired type (those are new
+        // objects now) or an element the passes went over again, or the contract check gave it once more.
+        Set<Info> scope = outcome.scope() == null ? Set.of() : outcome.scope();
+        List<KeptFinding> fresh = keptFindings(collector, outcome.messages());
+        Set<DaemonProtocol.Finding> freshFindings = new HashSet<>(fresh.stream().map(KeptFinding::finding).toList());
+        List<KeptFinding> analysisFindings = new ArrayList<>();
+        for (KeptFinding kept : state.findings()) {
+            if (kept.info() == null || scope.contains(kept.info()) || freshFindings.contains(kept.finding())) continue;
+            TypeInfo type = kept.info() instanceof TypeInfo ti ? ti : kept.info().typeInfo();
+            if (type == null || seedNames.contains(type.primaryType().fullyQualifiedName())) continue;
+            analysisFindings.add(kept);
+        }
+        analysisFindings.addAll(fresh);
+        List<DaemonProtocol.Finding> findings = new ArrayList<>(analysisFindings.stream().map(KeptFinding::finding)
+                .toList());
+        findings.addAll(collector.parseFindings(summary));
+        List<DaemonProtocol.ElementAnnotation> elementAnnotations =
+                collector.collectElementAnnotations(parseResult.primaryTypes());
+
+        long elapsed = System.currentTimeMillis() - start;
+        LOGGER.info("incremental analysis complete in {} ms: {} type(s) seeded, {} element(s) analysed, {} findings,"
+                    + " {} element annotations", elapsed, seedTypes.size(), scope.size(), findings.size(),
+                elementAnnotations.size());
+        DaemonProtocol.Result previous = state.result();
+        DaemonProtocol.Result result = new DaemonProtocol.Result(requestId, findings, elementAnnotations,
+                previous.initializationProblems(), summary.parseExceptions().size(), previous.hintsLoaded(), elapsed,
+                DaemonProtocol.OUTCOME_INCREMENTAL);
+        lastRun = new LastRun(runtime, state.sourceSet(), collector, engine, order, parseResult.primaryTypes());
+        warmState = new WarmState(state.config(), state.inputConfiguration(), inspector, base, state.sourceSet(),
+                parseResult, state.moduleInfos(), graph, state.contributions(), analysisFindings, result);
+        return result;
+    }
+
+    /* the project's source files: on disk, so not the in-memory preload unit the hints loader parses (mem:) */
+    private static Set<java.net.URI> sourceFileUris(JavaInspector inspector) {
+        Set<java.net.URI> uris = new HashSet<>();
+        inspector.sourceFiles().forEach(sf -> {
+            if ("file".equals(sf.uri().getScheme())) uris.add(sf.uri());
+        });
+        return uris;
+    }
+
+    /* the analysis' messages as findings, each with the element it is about */
+    private static List<KeptFinding> keptFindings(ResultCollector collector, List<Message> messages) {
+        List<KeptFinding> kept = new ArrayList<>();
+        if (messages == null) return kept;
+        for (Message m : messages) {
+            for (DaemonProtocol.Finding f : collector.collectFindings(List.of(m), null)) {
+                kept.add(new KeptFinding(m.info(), f));
+            }
+        }
+        return kept;
+    }
+
+    private ModificationOptions modificationOptions(DaemonProtocol.AnalyzeConfig config) {
+        return new ModificationOptions(
+                // as the CLI: a safety net, not a budget. MODREACH re-derives after each of its rounds and adds this
+                // many iterations each time; langchain4j-core's first fixpoint alone takes 15
+                30,
+                // NOT the CLI's plateau early exit: under MODREACH's re-derivations it stopped both demo projects at
+                // PLATEAU with the same verdicts the certified run reaches, and the IDE shows the outcome
+                null,
+                false,  // track object creations: switched on by MODREACH and by nullability, which need it
+                // the reachability pass (MODREACH), the CLI's default: the authority over the three modification
+                // properties, and what the eventual layer needs to see the honest post-cutover state
+                true,
+                true,   // fault tolerant: isolate a crash on one element into a finding; don't abort the run
+                // advisory "you are one member away from @Container/@Immutable/..." warnings; opt-in, as in
+                // RunAnalyzer, because they are noisy on a codebase that has not been curated for them
+                config.warnNearMisses(),
+                false,  // environment gates: the CLI's, not the daemon's
+                false,  // store fingerprints
+                staticSideEffects,
+                null)   // eventual cluster: the analyzer's default
+                // the nullability pass after the fixpoint, writing NULLABILITY_* for the @NotNull/@Nullable hints
+                .withNullability(true)
+                // beside a verdict, the first statement responsible for it, for the "why?" in the gutter tooltip
+                .withCulprits(true);
+    }
+
 
     /** The Java-only parse: the openjdk inspector, hints loaded before the parse. */
     private static Parsed parseJava(InputConfiguration inputConfiguration, boolean parallel, String requestId,
@@ -339,7 +568,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
         }
         ParseResult parseResult = partialParse ? summary.parseResultIgnoringErrors() : summary.parseResult();
         return new Parsed(inspector, inspector.runtime(), sourceSet, parseResult.primaryTypes(),
-                parseResult.sourceSetToModuleInfoMap().values(), summary, partialParse, hints);
+                parseResult.sourceSetToModuleInfoMap().values(), summary, partialParse, hints, parseOptions);
     }
 
     /**
@@ -389,7 +618,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
         LOGGER.info("mixed parse: {} Kotlin and {} Java type(s), {} primary", result.getKotlinTypes().size(),
                 result.getJavaTypes().size(), primaryTypes.size());
         return new Parsed(result.getJavaInspector(), runtime, sourceSetOfRequest, primaryTypes, List.of(), summary,
-                partialParse || census.getTotal() > 0, hints);
+                partialParse || census.getTotal() > 0, hints, null);
     }
 
     /**

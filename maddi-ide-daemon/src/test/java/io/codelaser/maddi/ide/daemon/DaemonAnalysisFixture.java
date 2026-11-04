@@ -85,6 +85,16 @@ public final class DaemonAnalysisFixture {
      */
     public static DaemonProtocol.Result analyzeAll(Path projectDir, Map<String, String> sourcesByRelativePath)
             throws Exception {
+        return analyzeAll(projectDir, sourcesByRelativePath, new WarmAnalysisService(), false);
+    }
+
+    /**
+     * As above, run by the given service, which may keep its state from an earlier call (-Dmaddi.daemon.warm). Files
+     * already in the project stay as they are unless {@code sourcesByRelativePath} names them.
+     */
+    public static DaemonProtocol.Result analyzeAll(Path projectDir, Map<String, String> sourcesByRelativePath,
+                                                   WarmAnalysisService service, boolean warnNearMisses)
+            throws Exception {
         for (Map.Entry<String, String> entry : sourcesByRelativePath.entrySet()) {
             Path file = projectDir.resolve("src").resolve(entry.getKey());
             Files.createDirectories(file.getParent());
@@ -99,9 +109,8 @@ public final class DaemonAnalysisFixture {
                 List.of(),
                 List.of(),
                 false,
-                false);
-        return new WarmAnalysisService().analyze(new DaemonProtocol.AnalyzeProject("test", config),
-                status -> { });
+                warnNearMisses);
+        return service.analyze(new DaemonProtocol.AnalyzeProject("test", config), status -> { });
     }
 
     /** The display annotations computed for the first element of {@code kind} whose fqn contains {@code fqnPart}. */

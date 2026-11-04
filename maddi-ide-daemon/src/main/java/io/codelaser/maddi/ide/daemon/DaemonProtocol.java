@@ -287,12 +287,15 @@ public final class DaemonProtocol {
      *   <li>{@code MAX_ITERATIONS} — stopped at the iteration cap: best available, not certified.</li>
      *   <li>{@code PLATEAU} — stopped on the oscillation plateau: best available, not certified.</li>
      *   <li>{@code UNKNOWN} — the run produced no terminal phase (e.g. it ended at parse errors).</li>
+     *   <li>{@code INCREMENTAL} — a re-analysis of what an edit reached, on the previous run's values
+     *   ({@code -Dmaddi.daemon.warm}): best available, not certified, as it skips the whole-project terminal passes.</li>
      * </ul>
      * Worth surfacing rather than assuming: a value that stopped at the cap looks exactly like a certified
      * one, and only this says otherwise.
      */
     public static final String OUTCOME_CERTIFIED = "CERTIFIED";
     public static final String OUTCOME_UNKNOWN = "UNKNOWN";
+    public static final String OUTCOME_INCREMENTAL = "INCREMENTAL";
 
     public record Result(String requestId,
                          List<Finding> findings,

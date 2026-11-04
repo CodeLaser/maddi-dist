@@ -9,6 +9,13 @@ Ordered by what a user on a large project would feel first.
 
 ## 1. Partial re-analysis, once rewiring is finished
 
+**Status (2026-11-04): a first version behind `-Dmaddi.daemon.warm=true`**, Java-only, with no protocol change: the
+daemon keeps the inspector and the model, and finds the changed files itself (`WarmAnalysisService`,
+`TestIncrementalReanalysis`; the design is in maddi's `docs/design/incremental-and-overlay.md` §3 item 2). Not yet: the
+IDEs' own changed-file lists, the analysis carry onto rewired types (so the seed is the whole dependent cone), and the
+terminal passes, so an incremental result is never certified. Set it through the start script's environment:
+`MADDI_IDE_DAEMON_OPTS=-Dmaddi.daemon.warm=true`.
+
 **Why:** on larger projects the analysis is slow, and today *every* trigger re-analyses the whole project
 from scratch. A one-line edit costs a full run. This is the single biggest win available.
 
