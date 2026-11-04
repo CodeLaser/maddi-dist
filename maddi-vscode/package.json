@@ -66,6 +66,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Report types and methods that narrowly miss a property, e.g. one modifying method away from `@Container`. Advisory; expect noise on code not curated for it."
+        },
+        "maddi.incrementalReanalysis": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "**Incremental re-analysis (experimental).** After an edit, re-analyze only the changed types and what depends on them, on the state the previous run left. Faster, but never certified; turn off for a full run. A change restarts the daemon."
         }
       }
     }

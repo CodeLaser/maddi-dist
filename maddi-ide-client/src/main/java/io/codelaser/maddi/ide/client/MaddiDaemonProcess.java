@@ -37,6 +37,15 @@ public final class MaddiDaemonProcess implements Closeable {
      */
     public static final int PROTOCOL_VERSION = 2;
 
+    /**
+     * The JVM arguments of a daemon that keeps the last run's state and re-analyses only what an edit changed and
+     * what depends on it ({@code -Dmaddi.daemon.warm}, WarmAnalysisService). Experimental: such a re-analysis is
+     * never certified. Empty when off.
+     */
+    public static List<String> incrementalJvmArgs(boolean incremental) {
+        return incremental ? List.of("-Dmaddi.daemon.warm=true") : List.of();
+    }
+
     /** What a running daemon was launched WITH; a request that differs needs a new process, not this one. */
     private record Launch(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome, List<String> jvmArgs) {
     }

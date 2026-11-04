@@ -6,6 +6,9 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 
 ## 0.9.7
 
+- **Incremental re-analysis (experimental)**, a new setting in IntelliJ, Eclipse and VS Code, off by default. After an
+  edit, the daemon re-analyses only the changed types and what depends on them, on the state the previous run left.
+  Java only. Such a result is never certified; turn the setting off for a full run. Changing it restarts the daemon.
 
 ## 0.9.6.1
 
