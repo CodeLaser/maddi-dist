@@ -16,10 +16,11 @@
  */
 package io.codelaser.maddi.ide.plugin.kotlin;
 
-import com.intellij.psi.PsiElement;
-import io.codelaser.maddi.ide.plugin.ui.MaddiLineMarkerProvider;
-
 import java.util.List;
+
+import com.intellij.psi.PsiElement;
+
+import io.codelaser.maddi.ide.plugin.ui.MaddiLineMarkerProvider;
 
 /** {@link MaddiLineMarkerProvider} on Kotlin sources; registered only when the Kotlin plugin is (maddi-kotlin.xml). */
 public class MaddiKotlinLineMarkerProvider extends MaddiLineMarkerProvider {

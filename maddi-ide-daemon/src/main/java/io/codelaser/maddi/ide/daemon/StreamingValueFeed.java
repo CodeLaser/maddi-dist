@@ -17,15 +17,16 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import io.codelaser.maddi.ide.daemon.AnalyzeHandler.StatusSink;
-import io.codelaser.maddi.analysis.api.AnalysisValueFeed;
-import io.codelaser.maddi.cst.api.info.Info;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.codelaser.maddi.analysis.api.AnalysisValueFeed;
+import io.codelaser.maddi.cst.api.info.Info;
+import io.codelaser.maddi.ide.daemon.AnalyzeHandler.StatusSink;
 
 /**
  * Turns the analyzer's {@link AnalysisValueFeed} into {@code partialResult} frames, so the IDE can show

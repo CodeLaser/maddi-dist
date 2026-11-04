@@ -17,20 +17,21 @@
 
 package io.codelaser.maddi.gradleplugin;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * One gate over everything on disk that NAMES a maddi version.
@@ -106,7 +107,7 @@ public class TestVersionSkew {
         Map<String, String> expected = expectedVersionPerModule();
         List<String> stale = ours.stream().filter(n -> {
             String module = expected.keySet().stream().filter(m -> n.startsWith(m + "-"))
-                    .max(java.util.Comparator.comparingInt(String::length)).orElse(null);
+                    .max(Comparator.comparingInt(String::length)).orElse(null);
             return module == null || !n.equals(module + "-" + expected.get(module) + ".jar");
         }).toList();
         assertTrue(stale.isEmpty(), "the daemon distribution is stale: expected every maddi jar at its repository's"

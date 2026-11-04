@@ -17,14 +17,16 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.RangeMarker;
 import com.intellij.openapi.util.TextRange;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Where a finding is in the document now. A finding sits on a statement, which has no name to be found again by as a

@@ -17,11 +17,6 @@
 
 package io.codelaser.maddi.ide.client;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
@@ -32,6 +27,12 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Loopback NDJSON client for the maddi daemon. Plain JDK + Jackson only (no IntelliJ or maddi types),
@@ -65,7 +66,7 @@ public final class DaemonClient implements Closeable {
      * terminal {@code result} (or {@code error}) frame, which is returned. {@code config} is any
      * Jackson-serializable object matching the daemon's {@code AnalyzeConfig} shape.
      */
-    public JsonNode analyze(String requestId, Object config, java.util.function.Consumer<JsonNode> onStatus)
+    public JsonNode analyze(String requestId, Object config, Consumer<JsonNode> onStatus)
             throws IOException {
         return analyze(requestId, config, false, onStatus);
     }
@@ -75,7 +76,7 @@ public final class DaemonClient implements Closeable {
      * re-analyse only what changed. An incremental result is never certified; a cold one can be.
      */
     public JsonNode analyze(String requestId, Object config, boolean cold,
-                            java.util.function.Consumer<JsonNode> onStatus) throws IOException {
+                            Consumer<JsonNode> onStatus) throws IOException {
         ObjectNode msg = mapper.createObjectNode();
         msg.put("type", "analyzeProject");
         msg.put("requestId", requestId);
@@ -103,7 +104,7 @@ public final class DaemonClient implements Closeable {
      * {@code error}). Intermediate lines (e.g. {@code status}) are delivered to {@code onIntermediate}.
      */
     public JsonNode requestUntil(Map<String, Object> message, String finalType,
-                                 java.util.function.Consumer<JsonNode> onIntermediate) throws IOException {
+                                 Consumer<JsonNode> onIntermediate) throws IOException {
         writeLine(message);
         while (true) {
             JsonNode node = readLine();

@@ -17,13 +17,14 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Questions about one analysis result, answered in the MCP process: the daemon sends every element's annotations
@@ -217,7 +218,7 @@ public final class Verdicts {
             out.add(e);
         }
         // outermost first: a larger range first, then the earlier start
-        out.sort(java.util.Comparator
+        out.sort(Comparator
                 .comparingInt((AnalysisModel.ElementAnnotation e) -> -(e.endLine() - e.beginLine()))
                 .thenComparingInt(e -> e.beginLine())
                 .thenComparingInt(e -> e.beginCol() == null ? 0 : e.beginCol())

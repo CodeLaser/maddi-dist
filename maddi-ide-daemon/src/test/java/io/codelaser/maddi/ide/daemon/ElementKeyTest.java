@@ -17,14 +17,14 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Path;
 
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * A project element carries its name as a library element does (declaring type, signature), so an editor can put its

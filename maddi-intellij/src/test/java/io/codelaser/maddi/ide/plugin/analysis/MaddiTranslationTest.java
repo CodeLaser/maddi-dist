@@ -17,11 +17,12 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.List;
+
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
-import io.codelaser.maddi.ide.client.AnalysisModel;
 
-import java.util.List;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /* What a selection asks the daemon to translate, and how the translator's answer is summed up. */
 public class MaddiTranslationTest extends LightJavaCodeInsightFixtureTestCase {

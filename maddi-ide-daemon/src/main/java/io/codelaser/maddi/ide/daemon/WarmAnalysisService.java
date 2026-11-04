@@ -17,6 +17,28 @@
 
 package io.codelaser.maddi.ide.daemon;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
 import io.codelaser.maddi.analysis.api.AnalysisProblem;
@@ -26,8 +48,8 @@ import io.codelaser.maddi.analysis.api.ModificationRequest;
 import io.codelaser.maddi.analysis.api.NullabilityTarget;
 import io.codelaser.maddi.analysis.api.PrepOutcome;
 import io.codelaser.maddi.analysis.api.PrepRequest;
-import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
 import io.codelaser.maddi.callgraph.CallGraphContributions;
+import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
 import io.codelaser.maddi.callgraph.ComputeCallGraph;
 import io.codelaser.maddi.callgraph.PrimaryTypeUseGraph;
 import io.codelaser.maddi.cst.api.analysis.Message;
@@ -46,28 +68,10 @@ import io.codelaser.maddi.inspection.api.parser.ParseResult;
 import io.codelaser.maddi.inspection.api.parser.Summary;
 import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 import io.codelaser.maddi.inspection.mixed.MixedProjectInspector;
-import io.codelaser.maddi.inspection.resource.DetectKotlinSources;
 import io.codelaser.maddi.inspection.openjdk.JavaInspectorImpl;
+import io.codelaser.maddi.inspection.resource.DetectKotlinSources;
 import io.codelaser.maddi.kotlin.api.PlaceholderCensus;
 import io.codelaser.maddi.kotlin.realm.K2Realm;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Runs a whole-project maddi analysis per request, on a warm JVM. A <b>fresh</b> inspector is built each
@@ -363,9 +367,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
         }
         JavaInspector inspector = state.inspector();
         emit(status, requestId, "reload", "looking for changed sources", null, null);
-        Set<java.net.URI> filesBefore = sourceFileUris(inspector);
+        Set<URI> filesBefore = sourceFileUris(inspector);
         JavaInspector.ReloadResult reload = inspector.reloadSources(state.inputConfiguration(), Map.of());
-        Set<java.net.URI> filesAfter = sourceFileUris(inspector);
+        Set<URI> filesAfter = sourceFileUris(inspector);
         if (!filesAfter.equals(filesBefore)) {
             // the reload names changed types only; a new file has none yet, a removed one leaves its types behind
             LOGGER.info("incremental: source files were added or removed, analysing from scratch");
@@ -413,7 +417,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
 
         // the seed: every element of the re-parsed and the rewired types, as their new objects; the rewired ones
         // carry no analysis values (docs/design/incremental-and-overlay.md), so they are analysed again
-        Set<TypeInfo> seedTypes = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<TypeInfo> seedTypes = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<String> seedNames = new HashSet<>();
         for (TypeInfo t : changed) seedNames.add(t.fullyQualifiedName());
         for (TypeInfo t : dependents) seedNames.add(t.fullyQualifiedName());
@@ -479,8 +483,8 @@ public class WarmAnalysisService implements AnalyzeHandler {
     }
 
     /* the project's source files: on disk, so not the in-memory preload unit the hints loader parses (mem:) */
-    private static Set<java.net.URI> sourceFileUris(JavaInspector inspector) {
-        Set<java.net.URI> uris = new HashSet<>();
+    private static Set<URI> sourceFileUris(JavaInspector inspector) {
+        Set<URI> uris = new HashSet<>();
         inspector.sourceFiles().forEach(sf -> {
             if ("file".equals(sf.uri().getScheme())) uris.add(sf.uri());
         });
@@ -659,7 +663,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
      * frames (socket I/O, never touches maddi state) so the client's read doesn't time out on a large project.
      */
     private static <T> T runWithHeartbeat(StatusSink status, StreamingValueFeed progress,
-                                          java.util.function.Supplier<T> analysis) {
+                                          Supplier<T> analysis) {
         Thread heartbeat = new Thread(() -> {
             HeapSampler heap = new HeapSampler();
             try {

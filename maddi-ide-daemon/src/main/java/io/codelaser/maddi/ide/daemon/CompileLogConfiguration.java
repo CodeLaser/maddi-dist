@@ -17,15 +17,16 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.project.config.CompileLogCapture;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.project.config.CompileLogCapture;
 
 /**
  * A compile log turned into an {@code inputConfiguration.json}, with its build files hashed now: the CLI's

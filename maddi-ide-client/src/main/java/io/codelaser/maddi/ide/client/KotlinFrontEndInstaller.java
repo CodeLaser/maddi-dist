@@ -17,11 +17,15 @@
 
 package io.codelaser.maddi.ide.client;
 
+import java.io.FileNotFoundException;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -143,7 +147,7 @@ public final class KotlinFrontEndInstaller {
             deleteRecursively(home);
             Files.move(staging, home, StandardCopyOption.ATOMIC_MOVE);
             return home;
-        } catch (java.io.FileNotFoundException e) {
+        } catch (FileNotFoundException e) {
             throw new IOException("no maddi " + version + " Kotlin distribution at " + zip, e);
         } finally {
             deleteRecursively(staging);
@@ -155,8 +159,8 @@ public final class KotlinFrontEndInstaller {
         URI checksum = URI.create(zip + ".sha256");
         String content;
         try (InputStream in = open(checksum)) {
-            content = new String(in.readNBytes(4096), java.nio.charset.StandardCharsets.US_ASCII).trim();
-        } catch (java.io.FileNotFoundException e) {
+            content = new String(in.readNBytes(4096), StandardCharsets.US_ASCII).trim();
+        } catch (FileNotFoundException e) {
             throw new IOException("no maddi " + version + " Kotlin distribution at " + zip
                                   + " (or no checksum published beside it)", e);
         }
@@ -202,7 +206,7 @@ public final class KotlinFrontEndInstaller {
             if (!Files.isDirectory(dir)) continue;
             try (Stream<Path> paths = Files.walk(dir)) {
                 if (paths.anyMatch(p -> p.getFileName().toString().endsWith(".kt"))) return true;
-            } catch (IOException | java.io.UncheckedIOException e) {
+            } catch (IOException | UncheckedIOException e) {
                 // an unreadable directory says nothing either way
             }
         }
@@ -226,7 +230,7 @@ public final class KotlinFrontEndInstaller {
         });
     }
 
-    private static final class CountingInputStream extends java.io.FilterInputStream {
+    private static final class CountingInputStream extends FilterInputStream {
         private final LongConsumer bytesRead;
         private long count;
 

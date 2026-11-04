@@ -17,9 +17,14 @@
 
 package io.codelaser.maddi.ide.client;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Plain-JSON DTOs mirroring the daemon's {@code DaemonProtocol} payloads, on the plugin side.
@@ -184,7 +189,7 @@ public final class AnalysisModel {
         return annotationText.substring(0, at) + "after=" + marks + annotationText.substring(to + 1);
     }
 
-    private static final java.util.regex.Pattern DOWNCAST_TO = java.util.regex.Pattern.compile(
+    private static final Pattern DOWNCAST_TO = Pattern.compile(
             "downcast\\s*=\\s*true\\s*,\\s*downcastTo\\s*=\\s*\\{([^}]*)}");
 
     /**
@@ -195,9 +200,9 @@ public final class AnalysisModel {
      */
     private static String abbreviateDowncast(String annotationText) {
         if (annotationText == null) return null;
-        java.util.regex.Matcher m = DOWNCAST_TO.matcher(annotationText);
+        Matcher m = DOWNCAST_TO.matcher(annotationText);
         if (!m.find()) return annotationText;
-        List<String> targets = java.util.Arrays.stream(m.group(1).split(","))
+        List<String> targets = Arrays.stream(m.group(1).split(","))
                 .map(t -> t.strip().replace("\"", "")).filter(t -> !t.isEmpty()).toList();
         if (targets.isEmpty()) return annotationText;
         String to = targets.size() == 1
@@ -249,7 +254,7 @@ public final class AnalysisModel {
                 .filter(a -> "PARAMETER".equals(a.kind()) && a.fqn() != null && a.fqn().startsWith(prefix)
                              && a.fqn().indexOf(':', prefix.length()) > prefix.length()
                              && a.displayAnnotations() != null && !a.displayAnnotations().isEmpty())
-                .sorted(java.util.Comparator.comparingInt(a -> parameterIndex(a.fqn(), prefix.length())))
+                .sorted(Comparator.comparingInt(a -> parameterIndex(a.fqn(), prefix.length())))
                 .toList();
     }
 
@@ -486,7 +491,7 @@ public final class AnalysisModel {
         if (ORIGIN_DEFAULT.equals(element.origin())) {
             String which = element.assumed() == null ? "" : element.assumed().stream()
                     .map(AnalysisModel::annotationOfAssumed).distinct()
-                    .collect(java.util.stream.Collectors.joining(", "));
+                    .collect(Collectors.joining(", "));
             return "No annotation in maddi's annotated API" + (which.isEmpty() ? "" : ": " + which + " is the default");
         }
         return "Not in maddi's annotated API: the analysis's defaults for a library";

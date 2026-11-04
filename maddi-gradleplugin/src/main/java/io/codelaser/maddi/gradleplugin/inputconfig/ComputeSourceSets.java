@@ -17,11 +17,14 @@
 
 package io.codelaser.maddi.gradleplugin.inputconfig;
 
-import io.codelaser.maddi.gradleplugin.AnalyzerExtension;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.inspection.resource.SourceSetImpl;
-import io.codelaser.maddi.run.config.util.PluginSourceSets;
-import io.codelaser.maddi.run.main.PluginOptions;
+import java.io.File;
+import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.ArtifactView;
@@ -43,15 +46,10 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-import java.util.jar.JarFile;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.gradleplugin.AnalyzerExtension;
+import io.codelaser.maddi.run.config.util.PluginSourceSets;
+import io.codelaser.maddi.run.main.PluginOptions;
 
 /**
  * targets for sources:

@@ -17,11 +17,12 @@
 
 package io.codelaser.maddi.ide.plugin.settings;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /** Pure logic: the inline-hints mode decides per annotation what to show. No IntelliJ platform needed. */
 public class InlineHintsModeTest {

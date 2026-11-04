@@ -17,20 +17,23 @@
 
 package io.codelaser.maddi.mcp;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.codelaser.maddi.project.config.CaptureSpec;
 import io.codelaser.maddi.project.config.CompileLogCapture;
 import io.codelaser.maddi.project.config.ConfiguredBy;
 import io.codelaser.maddi.project.config.ProjectConfigurator;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * The configured projects, one JSON file each, so that a configuration outlives the server, and the build file that
@@ -103,12 +106,12 @@ public final class ProjectStore {
 
         public StoredProject with(AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
             return new StoredProject(name, kind, sourceFile, regenerate, newBuildFiles,
-                    java.time.Instant.now().toString(), newConfig, daemonJdk);
+                    Instant.now().toString(), newConfig, daemonJdk);
         }
 
         /** Made again, by a capture that wrote it to {@code file}. */
         public StoredProject with(String file, AnalysisModel.AnalyzeConfig newConfig, BuildFiles newBuildFiles) {
-            return new StoredProject(name, kind, file, regenerate, newBuildFiles, java.time.Instant.now().toString(),
+            return new StoredProject(name, kind, file, regenerate, newBuildFiles, Instant.now().toString(),
                     newConfig, daemonJdk);
         }
 
@@ -185,7 +188,7 @@ public final class ProjectStore {
         } catch (IOException e) {
             problems.add(runs + ": " + e.getMessage());
         }
-        out.sort(java.util.Comparator.comparing(r -> r.finishedAt() == null ? "" : r.finishedAt()));
+        out.sort(Comparator.comparing(r -> r.finishedAt() == null ? "" : r.finishedAt()));
         return out;
     }
 
@@ -193,7 +196,7 @@ public final class ProjectStore {
     private static List<Path> runFiles(Path dir) throws IOException {
         try (var files = Files.list(dir)) {
             return files.filter(f -> f.getFileName().toString().matches("run-\\d+\\.json"))
-                    .sorted(java.util.Comparator.comparingLong(ProjectStore::runNumber)).toList();
+                    .sorted(Comparator.comparingLong(ProjectStore::runNumber)).toList();
         }
     }
 

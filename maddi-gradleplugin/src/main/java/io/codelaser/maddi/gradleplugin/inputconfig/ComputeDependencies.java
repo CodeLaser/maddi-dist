@@ -17,14 +17,15 @@
 
 package io.codelaser.maddi.gradleplugin.inputconfig;
 
-import io.codelaser.maddi.run.config.util.JavaModules;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.graph.G;
-import io.codelaser.maddi.graph.ImmutableGraph;
+import java.util.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.graph.G;
+import io.codelaser.maddi.graph.ImmutableGraph;
+import io.codelaser.maddi.run.config.util.JavaModules;
 
 /**
  * The dependency graph over a GRADLE project's source sets and libraries.

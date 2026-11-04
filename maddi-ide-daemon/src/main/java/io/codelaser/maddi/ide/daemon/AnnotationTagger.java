@@ -17,6 +17,12 @@
 
 package io.codelaser.maddi.ide.daemon;
 
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.cst.api.analysis.Property;
 import io.codelaser.maddi.cst.api.analysis.PropertyValueMap;
@@ -33,11 +39,6 @@ import io.codelaser.maddi.cst.api.runtime.Runtime;
 import io.codelaser.maddi.cst.api.type.ParameterizedType;
 import io.codelaser.maddi.cst.impl.analysis.PropertyImpl;
 import io.codelaser.maddi.cst.impl.analysis.ValueImpl;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Renders the full set of annotations for one element and tags each with polarity and context-default-ness,
@@ -327,7 +328,7 @@ public class AnnotationTagger {
         if (owner == null) return false;
         TypeInfo primary = owner.primaryType();
         if (primary.compilationUnitOrEnclosingType().isRight()) return false;
-        java.net.URI uri = primary.compilationUnit().uri();
+        URI uri = primary.compilationUnit().uri();
         return uri != null && uri.getPath() != null && uri.getPath().endsWith(".kt");
     }
 

@@ -17,9 +17,19 @@
 
 package io.codelaser.maddi.ide.daemon;
 
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
-import io.codelaser.maddi.cst.api.analysis.Property;
 import io.codelaser.maddi.cst.api.analysis.Message;
+import io.codelaser.maddi.cst.api.analysis.Property;
 import io.codelaser.maddi.cst.api.element.Source;
 import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.info.FieldInfo;
@@ -32,13 +42,6 @@ import io.codelaser.maddi.cst.api.type.ParameterizedType;
 import io.codelaser.maddi.cst.impl.analysis.PropertyImpl;
 import io.codelaser.maddi.cst.impl.analysis.ValueImpl;
 import io.codelaser.maddi.inspection.api.parser.Summary;
-
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Turns the two maddi output channels — {@code List<Message>} (findings) and the computed properties
@@ -53,7 +56,7 @@ public class ResultCollector {
     private static final int MAX_CAUSE_DEPTH = 12;
 
     private final AnnotationTagger tagger;
-    private final java.util.Set<Property> bookkeeping;
+    private final Set<Property> bookkeeping;
     private final int containerWhyMaxSlots;
 
     public ResultCollector(AnalysisEngine engine, Runtime runtime, SourceSet sourceSetOfRequest) {
@@ -255,7 +258,7 @@ public class ResultCollector {
                     String name = typeInfo == null ? "java.lang.Object" : typeInfo.fullyQualifiedName();
                     return name + "[]".repeat(erased.arrays());
                 })
-                .collect(java.util.stream.Collectors.joining(",", "(", ")"));
+                .collect(Collectors.joining(",", "(", ")"));
     }
 
     /*
@@ -280,7 +283,7 @@ public class ResultCollector {
     }
 
     private List<DaemonProtocol.Why> whys(Info info, List<String> displayAnnotations) {
-        List<DaemonProtocol.Why> whys = new java.util.ArrayList<>();
+        List<DaemonProtocol.Why> whys = new ArrayList<>();
         CULPRITS.forEach((property, annotation) -> {
             ValueImpl.CulpritImpl culprit = info.analysis().getOrNull(property, ValueImpl.CulpritImpl.class);
             boolean shown = displayAnnotations.stream()
@@ -294,7 +297,7 @@ public class ResultCollector {
         ValueImpl.CulpritImpl immutable = info.analysis().getOrNull(PropertyImpl.IMMUTABLE_CULPRIT,
                 ValueImpl.CulpritImpl.class);
         if (immutable != null && !immutable.steps().isEmpty()) {
-            displayAnnotations.stream().map(ResultCollector::immutabilityLevel).filter(java.util.Objects::nonNull)
+            displayAnnotations.stream().map(ResultCollector::immutabilityLevel).filter(Objects::nonNull)
                     .findFirst()
                     .ifPresent(annotation -> whys.add(new DaemonProtocol.Why(annotation, immutable.steps().stream()
                             .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList())));

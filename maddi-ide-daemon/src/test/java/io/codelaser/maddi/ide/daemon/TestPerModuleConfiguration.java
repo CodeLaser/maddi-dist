@@ -17,19 +17,20 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 
 /**
  * The per-module configuration must give each source set ITS OWN class path, not the project-wide union.

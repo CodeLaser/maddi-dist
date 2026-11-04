@@ -17,24 +17,26 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.project.config.BuildFileCheck;
-import io.codelaser.maddi.project.config.Regenerate;
-
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.Regenerate;
 
 /**
  * The daemon's per-module {@link AnalysisModel.AnalyzeConfig}, built without an IDE: from the
@@ -60,7 +62,7 @@ public final class ProjectConfigs {
 
         Map<String, String> libraryPaths = new HashMap<>();
         Set<String> jdkModules = new LinkedHashSet<>();
-        Set<String> runtimeOnly = new java.util.HashSet<>();
+        Set<String> runtimeOnly = new HashSet<>();
         for (JsonNode part : root.path("classPathParts")) {
             String name = text(part, "name");
             if (name == null) continue;
@@ -72,7 +74,7 @@ public final class ProjectConfigs {
                 if (part.path("runtimeOnly").asBoolean(false)) runtimeOnly.add(name);
             }
         }
-        Set<String> setNames = new java.util.HashSet<>();
+        Set<String> setNames = new HashSet<>();
         for (JsonNode set : root.path("sourceSets")) setNames.add(text(set, "name"));
 
         String encoding = null;

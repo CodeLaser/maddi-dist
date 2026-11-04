@@ -17,26 +17,28 @@
 
 package io.codelaser.maddi.ide.client;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** The download is exercised against local zips of the CLI distribution's shape; no network. */
 public class KotlinFrontEndInstallerTest {
@@ -140,8 +142,8 @@ public class KotlinFrontEndInstallerTest {
                 zip.closeEntry();
             }
         }
-        String hex = java.util.HexFormat.of().formatHex(
-                java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(target)));
+        String hex = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(target)));
         Files.writeString(target.resolveSibling(target.getFileName() + ".sha256"),
                 hex + "  " + target.getFileName() + "\n");
         assertNotNull(target);

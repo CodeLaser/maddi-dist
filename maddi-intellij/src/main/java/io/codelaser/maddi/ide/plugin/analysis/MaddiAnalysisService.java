@@ -17,6 +17,25 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.CodeSource;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.codeInsight.hints.declarative.impl.DeclarativeInlayHintsPassFactory;
@@ -45,29 +64,13 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
-import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.plugin.settings.MaddiConfigurable;
 import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-
 import io.codelaser.maddi.ide.plugin.ui.MaddiFindingAnchors;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.CodeSource;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Owns the daemon for a project, runs whole-project analyses off the EDT, caches the latest result
@@ -152,7 +155,7 @@ public final class MaddiAnalysisService implements Disposable {
                 indicator.setIndeterminate(true);
                 // the progress bar's cancel button: nothing in the run looks at the indicator while it waits for the
                 // daemon, so watch it from beside the run
-                java.util.concurrent.Future<?> cancelWatch = ApplicationManager.getApplication().executeOnPooledThread(
+                Future<?> cancelWatch = ApplicationManager.getApplication().executeOnPooledThread(
                         () -> watchCancel(indicator));
                 try {
                     analyze(indicator);
@@ -505,7 +508,7 @@ public final class MaddiAnalysisService implements Disposable {
     }
 
     /** Run events are a UI concern: always on the EDT, and never allowed to break the run that reports them. */
-    private void publishRun(java.util.function.Consumer<MaddiRunListener> event) {
+    private void publishRun(Consumer<MaddiRunListener> event) {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             try {

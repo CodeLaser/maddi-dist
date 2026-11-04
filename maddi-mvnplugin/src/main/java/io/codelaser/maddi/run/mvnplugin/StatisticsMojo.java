@@ -1,18 +1,5 @@
 package io.codelaser.maddi.run.mvnplugin;
 
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.DependencyResolutionException;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.cst.api.expression.ConstructorCall;
-import io.codelaser.maddi.cst.api.expression.MethodCall;
-import io.codelaser.maddi.cst.api.info.MethodInfo;
-import io.codelaser.maddi.cst.api.info.TypeInfo;
-import io.codelaser.maddi.inspection.api.parser.ParseResult;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -21,6 +8,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Predicate;
+
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.DependencyResolutionException;
+
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.cst.api.expression.ConstructorCall;
+import io.codelaser.maddi.cst.api.expression.MethodCall;
+import io.codelaser.maddi.cst.api.info.MethodInfo;
+import io.codelaser.maddi.cst.api.info.TypeInfo;
+import io.codelaser.maddi.inspection.api.parser.ParseResult;
 
 @Mojo(name = StatisticsMojo.STATISTICS_GOAL, defaultPhase = LifecyclePhase.PROCESS_TEST_CLASSES, threadSafe = true,
         requiresDependencyResolution = ResolutionScope.TEST)

@@ -17,10 +17,10 @@
 
 package io.codelaser.maddi.gradleplugin;
 
-import org.gradle.api.Action;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import org.gradle.api.Action;
 
 public class ActionBroadcast<T> implements Action<T> {
 

@@ -17,13 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
-import io.modelcontextprotocol.server.McpServer;
-import io.modelcontextprotocol.server.McpSyncServer;
-import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
-import io.modelcontextprotocol.spec.McpSchema;
-
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,6 +26,13 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+
+import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpSyncServer;
+import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
+import io.modelcontextprotocol.spec.McpSchema;
 
 /**
  * {@code maddi-mcp}: an MCP server on stdin/stdout. Options, each with an environment variable as fallback:

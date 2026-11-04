@@ -17,6 +17,17 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.jetbrains.jps.model.java.JavaResourceRootType;
+import org.jetbrains.kotlin.config.ResourceKotlinRootType;
+import org.jetbrains.kotlin.config.SourceKotlinRootType;
+import org.jetbrains.kotlin.config.TestSourceKotlinRootType;
+
 import com.intellij.openapi.application.AccessToken;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
@@ -25,17 +36,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LoggedErrorProcessor;
 import com.intellij.testFramework.PsiTestUtil;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.jps.model.java.JavaResourceRootType;
-import org.jetbrains.kotlin.config.ResourceKotlinRootType;
-import org.jetbrains.kotlin.config.SourceKotlinRootType;
-import org.jetbrains.kotlin.config.TestSourceKotlinRootType;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Drives {@link MaddiConfigBuilder} against a real (light) IntelliJ project model and asserts the mapping into

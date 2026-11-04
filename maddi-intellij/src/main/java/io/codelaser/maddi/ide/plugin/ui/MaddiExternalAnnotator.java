@@ -17,6 +17,10 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.ExternalAnnotator;
 import com.intellij.lang.annotation.HighlightSeverity;
@@ -26,12 +30,10 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
+import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 
 /**
  * Paints the guard system's findings as error/warning highlights, with the nested {@code causes()}

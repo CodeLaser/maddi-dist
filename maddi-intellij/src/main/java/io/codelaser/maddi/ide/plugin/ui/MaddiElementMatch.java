@@ -16,13 +16,15 @@
  */
 package io.codelaser.maddi.ide.plugin.ui;
 
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.util.TextRange;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.List;
 import java.util.function.Predicate;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.util.TextRange;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Which analysed element a declaration's name belongs to: of the elements of the wanted kind whose range contains

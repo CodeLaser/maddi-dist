@@ -16,9 +16,10 @@
  */
 package io.codelaser.maddi.ide.daemon;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyzeAll;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.displayFor;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.finding;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,10 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyzeAll;
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.displayFor;
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.finding;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * -Dmaddi.daemon.warm: a second request with the same configuration re-analyses what changed on the state the first

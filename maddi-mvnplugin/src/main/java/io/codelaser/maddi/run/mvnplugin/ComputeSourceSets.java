@@ -1,29 +1,27 @@
 package io.codelaser.maddi.run.mvnplugin;
 
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.PluginManagement;
+import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.project.*;
-import io.codelaser.maddi.run.config.util.ComputeDependencies;
-import io.codelaser.maddi.run.config.util.PluginSourceSets;
-import io.codelaser.maddi.run.main.PluginOptions;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.inspection.resource.SourceSetImpl;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.graph.DependencyFilter;
 import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.util.artifact.JavaScopes;
 import org.eclipse.aether.util.filter.DependencyFilterUtils;
 
-import java.net.URI;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.stream.Collectors;
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.run.config.util.ComputeDependencies;
+import io.codelaser.maddi.run.config.util.PluginSourceSets;
+import io.codelaser.maddi.run.main.PluginOptions;
 
 public class ComputeSourceSets {
 

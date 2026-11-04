@@ -17,34 +17,34 @@
 
 package io.codelaser.maddi.gradleplugin;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
-import io.codelaser.maddi.run.config.GeneralConfiguration;
-import io.codelaser.maddi.run.config.util.JavaModules;
-import io.codelaser.maddi.run.config.util.PluginInputConfiguration;
-import io.codelaser.maddi.run.main.PluginOptions;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import io.codelaser.maddi.run.main.Main;
-import io.codelaser.maddi.gradleplugin.inputconfig.ComputeDependencies;
-import io.codelaser.maddi.gradleplugin.inputconfig.ComputeSourceSets;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.cst.api.runtime.LanguageConfiguration;
-import io.codelaser.maddi.cst.impl.runtime.LanguageConfigurationImpl;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import io.codelaser.maddi.graph.G;
-import io.codelaser.maddi.graph.V;
-import io.codelaser.maddi.graph.op.Linearize;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.*;
+
 import org.gradle.api.Project;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.stream.Collectors;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.cst.api.runtime.LanguageConfiguration;
+import io.codelaser.maddi.cst.impl.runtime.LanguageConfigurationImpl;
+import io.codelaser.maddi.gradleplugin.inputconfig.ComputeDependencies;
+import io.codelaser.maddi.gradleplugin.inputconfig.ComputeSourceSets;
+import io.codelaser.maddi.graph.G;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
+import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.GeneralConfiguration;
+import io.codelaser.maddi.run.config.util.JavaModules;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
+import io.codelaser.maddi.run.config.util.PluginInputConfiguration;
+import io.codelaser.maddi.run.main.Main;
+import io.codelaser.maddi.run.main.PluginOptions;
 
 /**
  * Property names are identical to those of the CLI (.cli.Main). In the system properties,
@@ -71,7 +71,7 @@ public record AnalyzerPropertyComputer(
         if (extension.skipProject) {
             return;
         }
-        io.codelaser.maddi.run.config.Configuration configuration = computeConfiguration(project, extension);
+        Configuration configuration = computeConfiguration(project, extension);
         try {
             String json = JsonStreaming.objectMapper().writerWithDefaultPrettyPrinter()
                     .writeValueAsString(configuration);
@@ -121,7 +121,7 @@ public record AnalyzerPropertyComputer(
         }*/
     }
 
-    public io.codelaser.maddi.run.config.Configuration computeConfiguration(Project project, AnalyzerExtension extension) {
+    public Configuration computeConfiguration(Project project, AnalyzerExtension extension) {
         LanguageConfiguration languageConfiguration = new LanguageConfigurationImpl(true);
 
         // general
@@ -133,7 +133,7 @@ public record AnalyzerPropertyComputer(
         // Input
         InputConfiguration inputConfiguration = makeInputConfiguration(project, extension);
 
-        return new io.codelaser.maddi.run.config.Configuration.Builder()
+        return new Configuration.Builder()
                 .setAnalysisHintsConfiguration(analysisHintsConfiguration)
                 .setGeneralConfiguration(generalConfiguration)
                 .setLanguageConfiguration(languageConfiguration)

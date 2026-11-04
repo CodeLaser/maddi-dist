@@ -1,5 +1,9 @@
 package io.codelaser.maddi.run.mvnplugin;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Component;
@@ -7,14 +11,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.DependencyResolutionException;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectDependenciesResolver;
-import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
-import io.codelaser.maddi.run.config.Configuration;
-import io.codelaser.maddi.run.config.GeneralConfiguration;
-import io.codelaser.maddi.run.config.util.ComputeDependencies;
-import io.codelaser.maddi.run.config.util.JavaModules;
-import io.codelaser.maddi.run.config.util.PluginInputConfiguration;
-import io.codelaser.maddi.run.main.PluginOptions;
-import io.codelaser.maddi.run.main.Main;
+
 import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.expression.ConstructorCall;
 import io.codelaser.maddi.cst.api.expression.MethodCall;
@@ -22,20 +19,21 @@ import io.codelaser.maddi.cst.api.info.MethodInfo;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.runtime.LanguageConfiguration;
 import io.codelaser.maddi.cst.impl.runtime.LanguageConfigurationImpl;
+import io.codelaser.maddi.graph.G;
 import io.codelaser.maddi.inspection.api.integration.JavaInspector;
 import io.codelaser.maddi.inspection.api.parser.ParseResult;
 import io.codelaser.maddi.inspection.api.parser.Summary;
 import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 import io.codelaser.maddi.inspection.integration.JavaInspectorImpl;
 import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import io.codelaser.maddi.graph.G;
-import io.codelaser.maddi.graph.V;
-import io.codelaser.maddi.graph.op.Linearize;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
+import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.GeneralConfiguration;
+import io.codelaser.maddi.run.config.util.ComputeDependencies;
+import io.codelaser.maddi.run.config.util.JavaModules;
+import io.codelaser.maddi.run.config.util.PluginInputConfiguration;
+import io.codelaser.maddi.run.main.Main;
+import io.codelaser.maddi.run.main.PluginOptions;
 
 
 public abstract class CommonMojo extends AbstractMojo {

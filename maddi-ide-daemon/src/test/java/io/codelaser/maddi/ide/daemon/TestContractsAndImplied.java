@@ -1,16 +1,16 @@
 package io.codelaser.maddi.ide.daemon;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Path;
-import java.util.List;
-
 import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
 import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.annotationsFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Path;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * maddi-dist#6: what the author wrote on an element is not shown again as computed, and the {@code @Independent} a

@@ -16,16 +16,17 @@
  */
 package io.codelaser.maddi.ide.plugin.kotlin;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import com.intellij.codeInsight.daemon.GutterMark;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 /**
  * The Java surfaces on a {@code .kt} file: a canned result (positions as the Kotlin front end reports them,

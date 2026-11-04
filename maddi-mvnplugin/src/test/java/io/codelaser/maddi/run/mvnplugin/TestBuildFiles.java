@@ -17,16 +17,19 @@
 
 package io.codelaser.maddi.run.mvnplugin;
 
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
 
 /** The build files a Maven-written input configuration declares, hashed at capture time. */
 public class TestBuildFiles {
@@ -47,8 +50,8 @@ public class TestBuildFiles {
         write(root, "core/target/classes/pom.xml", "output, not a build file");
         Path parent = write(tmp, "parent/pom.xml", "<project/>");
 
-        io.codelaser.maddi.inspection.api.resource.InputConfiguration configuration =
-                new io.codelaser.maddi.inspection.resource.InputConfigurationImpl.Builder()
+        InputConfiguration configuration =
+                new InputConfigurationImpl.Builder()
                         .setWorkingDirectory(root.toString()).addSource("core/main", "core/src/main/java").build();
         BuildFiles first = WriteInputConfigurationMojo.buildFiles(root, List.of(parent), configuration);
         assertEquals(BuildFiles.MAVEN_PLUGIN, first.declaredBy());

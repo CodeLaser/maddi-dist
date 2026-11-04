@@ -17,16 +17,18 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class CompileLogConfigurationTest {
 
@@ -60,7 +62,7 @@ public class CompileLogConfigurationTest {
     @Test
     public void aLogWithoutCompilationsIsRefused(@TempDir Path root) throws Exception {
         Path log = Files.writeString(root.resolve("compile.log"), "BUILD SUCCESSFUL\n");
-        Exception e = assertThrows(java.io.IOException.class, () -> CompileLogConfiguration.write(
+        Exception e = assertThrows(IOException.class, () -> CompileLogConfiguration.write(
                 new DaemonProtocol.WriteInputConfiguration("r", log.toString(), root.toString(), List.of(), List.of(),
                         root.resolve("x.json").toString())));
         assertTrue(e.getMessage().startsWith("no javac invocation"), e.getMessage());

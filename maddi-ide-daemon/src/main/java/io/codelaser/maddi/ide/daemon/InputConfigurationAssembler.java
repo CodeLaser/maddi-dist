@@ -17,16 +17,6 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import io.codelaser.maddi.annotation.Immutable;
-import io.codelaser.maddi.support.SetOnce;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import io.codelaser.maddi.inspection.resource.SourceSetImpl;
-
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -39,6 +29,16 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.codelaser.maddi.annotation.Immutable;
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
+import io.codelaser.maddi.inspection.resource.SourceSetImpl;
+import io.codelaser.maddi.support.SetOnce;
 
 /**
  * Turns the plain-JSON {@link DaemonProtocol.AnalyzeConfig} the plugin sends into a maddi

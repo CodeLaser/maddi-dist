@@ -17,6 +17,29 @@
 
 package io.codelaser.maddi.gradleplugin;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import ch.qos.logback.classic.Level;
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
@@ -25,7 +48,6 @@ import io.codelaser.maddi.analysis.api.ModificationRequest;
 import io.codelaser.maddi.analysis.api.PrepRequest;
 import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
 import io.codelaser.maddi.callgraph.ComputeCallGraph;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
 import io.codelaser.maddi.cst.api.analysis.Value;
 import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.info.Info;
@@ -38,24 +60,7 @@ import io.codelaser.maddi.inspection.api.parser.Summary;
 import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 import io.codelaser.maddi.inspection.openjdk.JavaInspectorImpl;
 import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Predicate;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * The eventual-immutability ratchet: the composed dogfood run (maddi analysing its own CST) must keep
@@ -142,7 +147,7 @@ public class TestEventualRatchet {
         }
         assertCoverage();
 
-        java.util.Map<String, Value.EventuallyImmutable> verdicts = runDogfoodAndCollectSurvivors();
+        Map<String, Value.EventuallyImmutable> verdicts = runDogfoodAndCollectSurvivors();
         Set<String> survivors = new TreeSet<>(verdicts.keySet());
 
         Files.createDirectories(ACTUAL.getParent());
@@ -210,11 +215,11 @@ public class TestEventualRatchet {
      * is built against, so it fails here rather than measuring the wrong engine.
      */
     private static void assertCoverage() throws IOException {
-        java.util.regex.Matcher versionMatcher = java.util.regex.Pattern.compile("(?m)^version=(.+)$")
+        Matcher versionMatcher = Pattern.compile("(?m)^version=(.+)$")
                 .matcher(Files.readString(Path.of("../../maddi/gradle.properties"))); // the jars are maddi's (base)
         String version = versionMatcher.find() ? versionMatcher.group(1).trim() : "?";
         Set<String> jars = new TreeSet<>();
-        java.util.regex.Matcher jarMatcher = java.util.regex.Pattern
+        Matcher jarMatcher = Pattern
                 .compile("maddi-(?:support|util)-[0-9][^/\"]*\\.jar").matcher(Files.readString(INPUT_CONFIGURATION));
         while (jarMatcher.find()) jars.add(jarMatcher.group());
         Set<String> stale = new TreeSet<>(jars);
@@ -236,7 +241,7 @@ public class TestEventualRatchet {
      * surviving {@code EVENTUALLY_IMMUTABLE_TYPE} verdicts read straight off the analysis — not parsed
      * back out of an {@code FPDUMP}, whose format is a diagnostic and free to change.
      */
-    private java.util.Map<String, Value.EventuallyImmutable> runDogfoodAndCollectSurvivors() throws IOException {
+    private Map<String, Value.EventuallyImmutable> runDogfoodAndCollectSurvivors() throws IOException {
         AnalysisEngine engine = AnalysisEngines.require("the eventual ratchet");
         InputConfiguration inputConfiguration = JsonStreaming.objectMapper()
                 .readValue(INPUT_CONFIGURATION.toFile(), InputConfigurationImpl.class);
@@ -282,7 +287,7 @@ public class TestEventualRatchet {
         engine.modification(new ModificationRequest(javaInspector, order, ccg.graph(),
                 parseResult.primaryTypes(), options, null));
 
-        java.util.Map<String, Value.EventuallyImmutable> survivors = new java.util.TreeMap<>();
+        Map<String, Value.EventuallyImmutable> survivors = new TreeMap<>();
         for (Info info : order) {
             if (!(info instanceof TypeInfo typeInfo)) continue;
             Value.EventuallyImmutable ev = info.analysis().getOrNull(PropertyImpl.EVENTUALLY_IMMUTABLE_TYPE,

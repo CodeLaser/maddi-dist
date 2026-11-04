@@ -17,6 +17,14 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+import java.util.function.Function;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.codeInsight.hints.declarative.AboveLineIndentedPosition;
 import com.intellij.codeInsight.hints.declarative.HintFormat;
 import com.intellij.codeInsight.hints.declarative.InlayHintsCollector;
@@ -28,23 +36,21 @@ import com.intellij.codeInsight.hints.declarative.SharedBypassCollector;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
+import com.intellij.psi.PsiParameter;
+import com.intellij.psi.PsiTypeParameter;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.plugin.settings.HintPlacement;
 import io.codelaser.maddi.ide.plugin.settings.InlineHintsMode;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
+import kotlin.Unit;
 
 /**
  * Renders the computed analysis hints ({@code @Immutable}, {@code @Container}, {@code @NotModified},
@@ -100,12 +106,12 @@ public class MaddiInlayProvider implements InlayHintsProvider {
         private final Document doc;
         private final InlineHintsMode mode;
         private final HintPlacement placement;
-        private final java.util.function.Function<PsiElement, List<String>> kinds;
-        private final java.util.function.ToIntFunction<PsiElement> parameterOffset;
+        private final Function<PsiElement, List<String>> kinds;
+        private final ToIntFunction<PsiElement> parameterOffset;
 
         Collector(List<AnalysisModel.ElementAnnotation> annotations, Document doc, InlineHintsMode mode,
-                  HintPlacement placement, java.util.function.Function<PsiElement, List<String>> kinds,
-                  java.util.function.ToIntFunction<PsiElement> parameterOffset) {
+                  HintPlacement placement, Function<PsiElement, List<String>> kinds,
+                  ToIntFunction<PsiElement> parameterOffset) {
             this.annotations = annotations;
             this.doc = doc;
             this.mode = mode;
@@ -128,7 +134,7 @@ public class MaddiInlayProvider implements InlayHintsProvider {
                     .filter(mode::shows)
                     .map(AnalysisModel.Annotation::text)
                     .map(AnalysisModel::abbreviate)
-                    .collect(java.util.stream.Collectors.joining(" "));
+                    .collect(Collectors.joining(" "));
             if (text.isEmpty()) return; // everything filtered out under the current mode
             sink.addPresentation(
                     position(element, kind),
@@ -137,7 +143,7 @@ public class MaddiInlayProvider implements InlayHintsProvider {
                     HintFormat.Companion.getDefault(),
                     builder -> {
                         builder.text(text, null);
-                        return kotlin.Unit.INSTANCE;
+                        return Unit.INSTANCE;
                     });
         }
 

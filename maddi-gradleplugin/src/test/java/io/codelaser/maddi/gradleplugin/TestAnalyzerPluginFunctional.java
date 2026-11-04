@@ -17,18 +17,24 @@
 
 package io.codelaser.maddi.gradleplugin;
 
-import org.gradle.testkit.runner.BuildResult;
-import org.gradle.testkit.runner.GradleRunner;
-import org.gradle.testkit.runner.TaskOutcome;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.gradle.testkit.runner.BuildResult;
+import org.gradle.testkit.runner.GradleRunner;
+import org.gradle.testkit.runner.TaskOutcome;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end reactivation test: apply the plugin to a generated Java project and run the {@code maddi-analyzer}
@@ -78,22 +84,22 @@ public class TestAnalyzerPluginFunctional {
                 .forwardOutput();
         runner.build();
         Path json = projectDir.resolve("build/inputConfiguration.json");
-        com.fasterxml.jackson.databind.JsonNode first = new com.fasterxml.jackson.databind.ObjectMapper()
+        JsonNode first = new ObjectMapper()
                 .readTree(json.toFile()).get("buildFiles");
         System.out.println("buildFiles: " + first.toPrettyString());
         assertEquals("gradle-plugin", first.get("declaredBy").asText(), first.toString());
-        java.util.List<String> files = new java.util.ArrayList<>();
+        List<String> files = new ArrayList<>();
         first.get("sha256").fieldNames().forEachRemaining(files::add);
-        assertEquals(java.util.List.of("build.gradle.kts", "gradle.properties", "settings.gradle.kts",
+        assertEquals(List.of("build.gradle.kts", "gradle.properties", "settings.gradle.kts",
                 "src/main/java/module-info.java"), files, first.toString());
 
         Files.writeString(projectDir.resolve("build.gradle.kts"),
                 Files.readString(projectDir.resolve("build.gradle.kts")) + "\n// edited\n");
         runner.build();
-        com.fasterxml.jackson.databind.JsonNode second = new com.fasterxml.jackson.databind.ObjectMapper()
+        JsonNode second = new ObjectMapper()
                 .readTree(json.toFile()).get("buildFiles");
         assertEquals(first.get("sha256").get("settings.gradle.kts"), second.get("sha256").get("settings.gradle.kts"));
-        org.junit.jupiter.api.Assertions.assertNotEquals(first.get("sha256").get("build.gradle.kts"),
+        Assertions.assertNotEquals(first.get("sha256").get("build.gradle.kts"),
                 second.get("sha256").get("build.gradle.kts"));
     }
 

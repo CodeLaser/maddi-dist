@@ -17,20 +17,22 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
 
 /*
  A stored configuration against the real daemon: kept across a restart of the service, used as it is while the build

@@ -17,8 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -27,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * The state of a project, a package or a type in one answer: types by immutability level, methods by modification,
@@ -93,7 +94,7 @@ public final class Overview {
         return out;
     }
 
-    private static final java.util.regex.Pattern AFTER = java.util.regex.Pattern.compile("after=\"[^\"]*\"");
+    private static final Pattern AFTER = Pattern.compile("after=\"[^\"]*\"");
 
     /*
      The type's level on the immutability ladder, as displayed, with an eventual verdict's roster of marks left out

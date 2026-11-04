@@ -16,9 +16,8 @@
  */
 package io.codelaser.maddi.ide.plugin.kotlin;
 
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.tree.IElementType;
-import com.intellij.psi.util.PsiTreeUtil;
+import java.util.List;
+
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.lexer.KtTokens;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
@@ -29,7 +28,9 @@ import org.jetbrains.kotlin.psi.KtParameter;
 import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtTypeReference;
 
-import java.util.List;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.util.PsiTreeUtil;
 
 /**
  * Kotlin's PSI mapped onto maddi's element kinds, for the surfaces that anchor on a declaration's name.

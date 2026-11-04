@@ -17,6 +17,12 @@
 
 package io.codelaser.maddi.ide.plugin.settings;
 
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+
+import org.jetbrains.annotations.Nls;
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
@@ -33,11 +39,6 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.util.ui.FormBuilder;
-import org.jetbrains.annotations.Nls;
-import org.jetbrains.annotations.Nullable;
-
-import javax.swing.JComponent;
-import javax.swing.JPanel;
 
 /** Settings → Tools → maddi. Configures the maddi JDK (25+), the daemon, and the display surfaces. */
 public class MaddiConfigurable implements Configurable {

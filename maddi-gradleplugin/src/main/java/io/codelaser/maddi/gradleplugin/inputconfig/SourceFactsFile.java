@@ -17,17 +17,19 @@
 
 package io.codelaser.maddi.gradleplugin.inputconfig;
 
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import org.gradle.api.Project;
-import org.gradle.api.plugins.JavaPluginExtension;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.gradle.api.Project;
+import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.tasks.SourceSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * The channel that carries a project's {@link SourceFacts} to a SIBLING that co-analyses its sources.
@@ -74,8 +76,8 @@ public final class SourceFactsFile {
     public static File write(Project project) {
         JavaPluginExtension java = project.getExtensions().findByType(JavaPluginExtension.class);
         if (java == null) return null;
-        org.gradle.api.tasks.SourceSet main = java.getSourceSets()
-                .findByName(org.gradle.api.tasks.SourceSet.MAIN_SOURCE_SET_NAME);
+        SourceSet main = java.getSourceSets()
+                .findByName(SourceSet.MAIN_SOURCE_SET_NAME);
         if (main == null) return null;
         SourceFacts facts = ComputeSourceSets.factsOf(project, main);
         Path file = project.getLayout().getBuildDirectory().get().getAsFile().toPath()

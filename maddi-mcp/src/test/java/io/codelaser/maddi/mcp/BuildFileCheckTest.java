@@ -17,18 +17,20 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
-import io.codelaser.maddi.project.config.BuildFileCheck;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import io.codelaser.maddi.project.config.BuildFileCheck;
 
 public class BuildFileCheckTest {
 
@@ -75,7 +77,7 @@ public class BuildFileCheckTest {
         Path project = Files.createDirectories(root.resolve("a"));
         Files.writeString(root.resolve("gradlew"), "#!/bin/sh\n");
         assertTrue(root.resolve("gradlew").toFile().setExecutable(true));
-        BuildFiles gradle = new BuildFiles(BuildFiles.GRADLE_PLUGIN, root.toString(), List.of(), java.util.Map.of(),
+        BuildFiles gradle = new BuildFiles(BuildFiles.GRADLE_PLUGIN, root.toString(), List.of(), Map.of(),
                 "now");
         ProjectStore.Regenerate regenerate = ProjectConfigs.defaultRegenerate(gradle,
                 project.resolve("build/inputConfiguration.json"));
@@ -83,13 +85,13 @@ public class BuildFileCheckTest {
         assertEquals(List.of(root.resolve("gradlew").toString(), "-q", "-p", project.toString(),
                 ProjectConfigs.GRADLE_TASK), regenerate.command(), "the build's wrapper, in the project");
 
-        BuildFiles maven = new BuildFiles(BuildFiles.MAVEN_PLUGIN, root.toString(), List.of(), java.util.Map.of(),
+        BuildFiles maven = new BuildFiles(BuildFiles.MAVEN_PLUGIN, root.toString(), List.of(), Map.of(),
                 "now");
         assertEquals(List.of("mvn", "-q", "-f", project.resolve("pom.xml").toString(), ProjectConfigs.MAVEN_GOAL),
                 ProjectConfigs.defaultRegenerate(maven, project.resolve("target/inputConfiguration.json")).command(),
                 "no wrapper: the tool on the PATH");
 
-        BuildFiles cli = new BuildFiles(BuildFiles.COMPILE_LOG, root.toString(), List.of(), java.util.Map.of(), "now");
+        BuildFiles cli = new BuildFiles(BuildFiles.COMPILE_LOG, root.toString(), List.of(), Map.of(), "now");
         assertNull(ProjectConfigs.defaultRegenerate(cli, root.resolve("x.json")), "only a given command can");
     }
 }

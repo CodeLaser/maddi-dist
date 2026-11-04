@@ -17,12 +17,6 @@
 
 package io.codelaser.maddi.ide.daemon;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Path;
-import java.util.List;
-
 import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
 import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.annotationsFor;
 import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.displayFor;
@@ -30,6 +24,12 @@ import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.finding;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Path;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Fixture-driven suite over the real analysis pipeline. Each test writes a small Java snippet, analyzes it

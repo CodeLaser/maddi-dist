@@ -17,12 +17,10 @@
 
 package io.codelaser.maddi.ide.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,7 +29,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /*
  Stopping the daemon: a run stopped from the IDE, an IDE closed during a run, an IDE that dies without closing.
@@ -73,7 +75,7 @@ public class DaemonStopTest {
             try {
                 return daemon.analyze("req-1", config, frame -> started.countDown());
             } catch (IOException e) {
-                throw new java.io.UncheckedIOException(e);
+                throw new UncheckedIOException(e);
             }
         });
     }

@@ -1,23 +1,22 @@
 package io.codelaser.maddi.run.mvnplugin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugins.annotations.Component;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.ProjectDependenciesResolver;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
-import org.apache.maven.project.MavenProject;
-
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.MavenProject;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 @Mojo(name = WriteInputConfigurationMojo.WRITE_INPUT_CONFIGURATION_GOAL,
         defaultPhase = LifecyclePhase.COMPILE, threadSafe = true)

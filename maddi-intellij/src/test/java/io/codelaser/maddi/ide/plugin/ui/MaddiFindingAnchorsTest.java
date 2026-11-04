@@ -17,13 +17,14 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
-import io.codelaser.maddi.ide.client.AnalysisModel;
 
-import java.util.List;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /*
  A finding moves with its statement once anchored: splitting the class's brace onto a line of its own moves the

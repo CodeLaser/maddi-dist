@@ -17,24 +17,25 @@
 
 package io.codelaser.maddi.ide.daemon;
 
+import java.io.File;
+import java.io.InputStream;
+import java.net.JarURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
 import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
 import io.codelaser.maddi.inspection.api.integration.JavaInspector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.net.JarURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 
 /**
  * Preloads maddi's bundled analysis hints (analyzed annotated-API results) so the daemon knows the

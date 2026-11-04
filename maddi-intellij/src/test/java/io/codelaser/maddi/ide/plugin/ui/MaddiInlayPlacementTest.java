@@ -17,18 +17,20 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+import java.util.Map;
+
+import org.jetbrains.annotations.NotNull;
+
 import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import com.intellij.testFramework.utils.inlays.declarative.DeclarativeInlayHintsProviderTestCase;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.plugin.settings.HintPlacement;
 import io.codelaser.maddi.ide.plugin.settings.InlineHintsMode;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-import org.jetbrains.annotations.NotNull;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Where the hints land. The default ({@link HintPlacement#ABOVE_DECLARATION}) gives each declaration a line
