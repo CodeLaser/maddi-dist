@@ -27,6 +27,8 @@ export interface LaunchOptions {
     /** Home of a JDK 25+; becomes JAVA_HOME for the daemon process. */
     jdkHome: string;
     maxHeapMb: number;
+    /** Experimental: the daemon keeps the last run's state and re-analyses only what an edit changed. */
+    incremental?: boolean;
     timeoutMs?: number;
     /** Where the daemon's own output goes, so a failure to start is diagnosable. */
     log?: (line: string) => void;
@@ -56,7 +58,8 @@ export async function launchDaemon(options: LaunchOptions): Promise<DaemonHandle
         env: {
             ...process.env,
             JAVA_HOME: options.jdkHome,
-            JAVA_OPTS: `-Xmx${options.maxHeapMb}m -XX:+UseG1GC`,
+            JAVA_OPTS: `-Xmx${options.maxHeapMb}m -XX:+UseG1GC`
+                + (options.incremental ? ' -Dmaddi.daemon.warm=true' : ''),
             // the daemon exits when this process (the extension host) does, also when it never gets to stop it
             MADDI_PARENT_PID: String(process.pid),
         },

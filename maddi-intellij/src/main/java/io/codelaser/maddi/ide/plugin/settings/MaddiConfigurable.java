@@ -60,6 +60,7 @@ public class MaddiConfigurable implements Configurable {
     private ComboBox<HintPlacement> hintPlacement;
     private JBCheckBox showGutterIcons;
     private JBCheckBox warnNearMisses;
+    private JBCheckBox incrementalReanalysis;
 
     @Override
     public @Nls String getDisplayName() {
@@ -93,6 +94,7 @@ public class MaddiConfigurable implements Configurable {
         hintPlacement = new ComboBox<>(HintPlacement.values());
         showGutterIcons = new JBCheckBox("Show gutter icons on analyzed declarations");
         warnNearMisses = new JBCheckBox("Warn about near misses");
+        incrementalReanalysis = new JBCheckBox("Incremental re-analysis (experimental)");
 
         JPanel panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent("maddi JDK (25+):", jdkCombo, 1, false)
@@ -114,6 +116,10 @@ public class MaddiConfigurable implements Configurable {
                 .addComponent(warnNearMisses)
                 .addTooltip("Flags types and methods that narrowly miss a property, e.g. one modifying method"
                         + " away from @Container. Advisory warnings; expect noise on uncurated code.")
+                .addComponent(incrementalReanalysis)
+                .addTooltip("After an edit, re-analyze only the changed types and what depends on them, on the"
+                        + " state the previous run left. Faster, but never certified; turn off for a full run."
+                        + " A change restarts the daemon.")
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
         reset();
@@ -134,7 +140,8 @@ public class MaddiConfigurable implements Configurable {
                 || inlineHintsMode.getSelectedItem() != s.inlineHintsMode
                 || hintPlacement.getSelectedItem() != s.hintPlacement
                 || showGutterIcons.isSelected() != s.showGutterIcons
-                || warnNearMisses.isSelected() != s.warnNearMisses;
+                || warnNearMisses.isSelected() != s.warnNearMisses
+                || incrementalReanalysis.isSelected() != s.incrementalReanalysis;
     }
 
     @Override
@@ -153,6 +160,7 @@ public class MaddiConfigurable implements Configurable {
         s.hintPlacement = (HintPlacement) hintPlacement.getSelectedItem();
         s.showGutterIcons = showGutterIcons.isSelected();
         s.warnNearMisses = warnNearMisses.isSelected();
+        s.incrementalReanalysis = incrementalReanalysis.isSelected();
     }
 
     @Override
@@ -169,6 +177,7 @@ public class MaddiConfigurable implements Configurable {
         hintPlacement.setSelectedItem(s.hintPlacement);
         showGutterIcons.setSelected(s.showGutterIcons);
         warnNearMisses.setSelected(s.warnNearMisses);
+        incrementalReanalysis.setSelected(s.incrementalReanalysis);
     }
 
     /**

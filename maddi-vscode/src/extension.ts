@@ -25,6 +25,8 @@ import { ResultStore } from './results';
  */
 
 let daemon: DaemonHandle | undefined;
+/** Whether the running daemon was started incremental: a change of the setting relaunches it. */
+let daemonIncremental = false;
 let diagnostics: vscode.DiagnosticCollection;
 let output: vscode.OutputChannel;
 let store: ResultStore;
@@ -196,7 +198,9 @@ async function ensureDaemon(
     context: vscode.ExtensionContext,
     jdkHome: string,
     settings: vscode.WorkspaceConfiguration): Promise<DaemonHandle> {
-    if (daemon && daemon.process.exitCode === null) return daemon;
+    const incremental = settings.get<boolean>('incrementalReanalysis') ?? false;
+    if (daemon && daemon.process.exitCode === null && incremental === daemonIncremental) return daemon;
+    stopDaemon();
 
     const configured = settings.get<string>('daemonInstall')?.trim();
     const installDir = configured && configured.length > 0
@@ -207,8 +211,10 @@ async function ensureDaemon(
         installDir,
         jdkHome,
         maxHeapMb: settings.get<number>('daemonXmxMb') ?? 4096,
+        incremental,
         log: (line) => output.appendLine(line),
     });
+    daemonIncremental = incremental;
     output.appendLine(`daemon listening on port ${daemon.port}`);
     return daemon;
 }

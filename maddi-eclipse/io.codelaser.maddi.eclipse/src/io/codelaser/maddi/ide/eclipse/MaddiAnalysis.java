@@ -219,7 +219,9 @@ public final class MaddiAnalysis {
 
         progress.subTask("starting the analysis daemon");
         MaddiDaemonProcess daemon = MaddiEclipsePlugin.get().daemon();
-        daemon.ensureStarted(install, Path.of(jdkHome), MaddiPreferences.daemonXmxMb(), daemonLogFile());
+        // a change of the incremental preference relaunches the daemon, as the heap does: it is a JVM property
+        daemon.ensureStarted(install, Path.of(jdkHome), MaddiPreferences.daemonXmxMb(), null,
+                MaddiDaemonProcess.incrementalJvmArgs(MaddiPreferences.incrementalReanalysis()), daemonLogFile());
         // WHICH daemon answered: the bundled one is a build, not a version, and a stale bundle presents as an
         // analyzer regression rather than as a stale bundle (2026-08-24). See DaemonMain's build stamp.
         MaddiEclipsePlugin.info("maddi daemon: install=" + install + ", build=" + daemon.buildStamp());

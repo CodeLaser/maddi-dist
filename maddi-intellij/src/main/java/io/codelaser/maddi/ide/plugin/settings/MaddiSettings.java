@@ -53,6 +53,11 @@ public final class MaddiSettings implements PersistentStateComponent<MaddiSettin
         public String kotlinFrontEndDir = "";
         /** Offer to download the Kotlin front end when a project has Kotlin sources and none is installed. */
         public boolean offerKotlinDownload = true;
+        /**
+         * Experimental: the daemon keeps the last run's state and re-analyses only what changed and depends on it.
+         * Such a result is never certified. A change restarts the daemon.
+         */
+        public boolean incrementalReanalysis = false;
     }
 
     private final State state = new State();

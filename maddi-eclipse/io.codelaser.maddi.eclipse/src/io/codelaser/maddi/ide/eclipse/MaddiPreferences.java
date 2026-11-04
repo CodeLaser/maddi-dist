@@ -37,6 +37,7 @@ public final class MaddiPreferences {
     public static final String HINT_PLACEMENT = "maddi.hintPlacement";
     public static final String SHOW_GUARD_FINDINGS = "maddi.showGuardFindings";
     public static final String SHOW_GUTTER_ICONS = "maddi.showGutterIcons";
+    public static final String INCREMENTAL_REANALYSIS = "maddi.incrementalReanalysis";
 
     public static final int DEFAULT_XMX_MB = 4096;
     public static final HintFilter DEFAULT_HINT_FILTER = HintFilter.HIDE_CONTEXT_DEFAULTS;
@@ -90,6 +91,14 @@ public final class MaddiPreferences {
      */
     public static boolean warnNearMisses() {
         return store().getBoolean(WARN_NEAR_MISSES);
+    }
+
+    /**
+     * Experimental: the daemon keeps the last run's state and re-analyses only what changed and depends on it.
+     * Such a result is never certified. A change restarts the daemon.
+     */
+    public static boolean incrementalReanalysis() {
+        return store().getBoolean(INCREMENTAL_REANALYSIS);
     }
 
     /**
