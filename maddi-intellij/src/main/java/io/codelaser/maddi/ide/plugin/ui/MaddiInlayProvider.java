@@ -17,6 +17,11 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.codeInsight.hints.declarative.AboveLineIndentedPosition;
 import com.intellij.codeInsight.hints.declarative.HintFormat;
 import com.intellij.codeInsight.hints.declarative.InlayHintsCollector;
@@ -28,23 +33,20 @@ import com.intellij.codeInsight.hints.declarative.SharedBypassCollector;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
+import com.intellij.psi.PsiParameter;
+import com.intellij.psi.PsiTypeParameter;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.plugin.settings.HintPlacement;
 import io.codelaser.maddi.ide.plugin.settings.InlineHintsMode;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * Renders the computed analysis hints ({@code @Immutable}, {@code @Container}, {@code @NotModified},

@@ -16,18 +16,18 @@
  */
 package io.codelaser.maddi.ide.plugin.kotlin;
 
-import com.intellij.testFramework.utils.inlays.declarative.DeclarativeInlayHintsProviderTestCase;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
-import io.codelaser.maddi.ide.plugin.settings.HintPlacement;
-import io.codelaser.maddi.ide.plugin.settings.InlineHintsMode;
-import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
+import static io.codelaser.maddi.ide.plugin.kotlin.MaddiKotlinSurfaceTest.element;
+import static io.codelaser.maddi.ide.plugin.kotlin.MaddiKotlinSurfaceTest.result;
 
 import java.util.List;
 import java.util.Map;
 
-import static io.codelaser.maddi.ide.plugin.kotlin.MaddiKotlinSurfaceTest.element;
-import static io.codelaser.maddi.ide.plugin.kotlin.MaddiKotlinSurfaceTest.result;
+import com.intellij.testFramework.utils.inlays.declarative.DeclarativeInlayHintsProviderTestCase;
+
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
+import io.codelaser.maddi.ide.plugin.settings.HintPlacement;
+import io.codelaser.maddi.ide.plugin.settings.InlineHintsMode;
+import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
 
 /** Inline hints on Kotlin declarations, through the real declarative-inlay pass. */
 public class MaddiKotlinInlayTest extends DeclarativeInlayHintsProviderTestCase {

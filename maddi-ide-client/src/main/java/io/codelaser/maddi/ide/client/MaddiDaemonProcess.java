@@ -17,14 +17,14 @@
 
 package io.codelaser.maddi.ide.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Owns one long-lived maddi daemon process for the IDE: launches it lazily, keeps it warm across

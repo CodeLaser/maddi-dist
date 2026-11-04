@@ -1,29 +1,29 @@
 package io.codelaser.maddi.run.mvnplugin;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.DependencyResolutionException;
+
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
 import io.codelaser.maddi.cst.api.element.Comment;
 import io.codelaser.maddi.cst.api.element.Element;
 import io.codelaser.maddi.cst.api.element.ImportStatement;
 import io.codelaser.maddi.cst.api.expression.AnnotationExpression;
-import io.codelaser.maddi.cst.api.info.Info;
 import io.codelaser.maddi.cst.api.info.MethodInfo;
 import io.codelaser.maddi.cst.api.info.TypeInfo;
 import io.codelaser.maddi.cst.api.output.Qualification;
 import io.codelaser.maddi.cst.api.runtime.Runtime;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Generate first-cut analysis-hint ({@code .java}) skeletons for the library types the project's sources call into

@@ -17,18 +17,19 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
-import io.codelaser.maddi.project.config.BuildFileCheck;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import io.codelaser.maddi.project.config.BuildFileCheck;
 
 public class BuildFileCheckTest {
 

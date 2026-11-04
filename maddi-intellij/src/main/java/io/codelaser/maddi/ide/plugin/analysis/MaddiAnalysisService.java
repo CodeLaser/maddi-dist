@@ -17,6 +17,23 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.CodeSource;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.codeInsight.hints.declarative.impl.DeclarativeInlayHintsPassFactory;
@@ -45,29 +62,13 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
-import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
 import io.codelaser.maddi.ide.plugin.settings.MaddiConfigurable;
 import io.codelaser.maddi.ide.plugin.settings.MaddiJdks;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-
 import io.codelaser.maddi.ide.plugin.ui.MaddiFindingAnchors;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.CodeSource;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Owns the daemon for a project, runs whole-project analyses off the EDT, caches the latest result

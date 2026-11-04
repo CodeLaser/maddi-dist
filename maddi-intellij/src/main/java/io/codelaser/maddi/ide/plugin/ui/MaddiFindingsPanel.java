@@ -17,6 +17,24 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.net.URI;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import javax.swing.BoxLayout;
+import javax.swing.JPanel;
+import javax.swing.Timer;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
+
+import org.jetbrains.annotations.NotNull;
+
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -38,27 +56,11 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.JBUI;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiResultListener;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiRunListener;
-import org.jetbrains.annotations.NotNull;
-
-import javax.swing.BoxLayout;
-import javax.swing.JPanel;
-import javax.swing.Timer;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
-import java.awt.BorderLayout;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.net.URI;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The tool-window content: what the run is doing, what it produced, and which daemon produced it.

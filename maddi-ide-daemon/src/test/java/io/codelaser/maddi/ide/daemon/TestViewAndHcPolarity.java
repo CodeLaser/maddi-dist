@@ -16,16 +16,16 @@
  */
 package io.codelaser.maddi.ide.daemon;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
+import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.annotationsFor;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Path;
 import java.util.List;
 
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.analyze;
-import static io.codelaser.maddi.ide.daemon.DaemonAnalysisFixture.annotationsFor;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Two verdicts the decorator learned after the tagger was written: {@code @UnmodifiableView} (maddi-mod#52) and

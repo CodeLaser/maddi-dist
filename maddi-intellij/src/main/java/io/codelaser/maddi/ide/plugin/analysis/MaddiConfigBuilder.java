@@ -17,6 +17,11 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.jetbrains.jps.model.java.JavaSourceRootProperties;
+
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -26,11 +31,8 @@ import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.OrderEnumerator;
 import com.intellij.openapi.roots.SourceFolder;
 import com.intellij.openapi.vfs.VirtualFile;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.jps.model.java.JavaSourceRootProperties;
 
-import java.util.ArrayList;
-import java.util.List;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Builds the daemon's {@code AnalyzeConfig} from IntelliJ's project model, as PER-MODULE source sets: each

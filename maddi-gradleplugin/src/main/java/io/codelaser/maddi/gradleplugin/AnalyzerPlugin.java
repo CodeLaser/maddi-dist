@@ -17,12 +17,14 @@
 
 package io.codelaser.maddi.gradleplugin;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import io.codelaser.maddi.run.config.Configuration;
-import io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import io.codelaser.maddi.gradleplugin.task.AnalyzerTask;
-import io.codelaser.maddi.gradleplugin.task.WriteInputConfigurationTask;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
@@ -36,13 +38,13 @@ import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
+import io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile;
+import io.codelaser.maddi.gradleplugin.task.AnalyzerTask;
+import io.codelaser.maddi.gradleplugin.task.WriteInputConfigurationTask;
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * The maddi Gradle plugin. Registers the {@code maddi-analyzer} and {@code maddi-write-input-configuration} tasks

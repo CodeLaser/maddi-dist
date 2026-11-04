@@ -17,10 +17,7 @@
 
 package io.codelaser.maddi.ide.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,7 +28,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /*
  Stopping the daemon: a run stopped from the IDE, an IDE closed during a run, an IDE that dies without closing.

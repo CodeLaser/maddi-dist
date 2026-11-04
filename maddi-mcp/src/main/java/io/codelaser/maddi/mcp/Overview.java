@@ -17,8 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -27,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * The state of a project, a package or a type in one answer: types by immutability level, methods by modification,

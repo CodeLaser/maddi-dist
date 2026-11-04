@@ -17,17 +17,18 @@
 
 package io.codelaser.maddi.gradleplugin.inputconfig;
 
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import org.gradle.api.Project;
-import org.gradle.api.plugins.JavaPluginExtension;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.gradle.api.Project;
+import org.gradle.api.plugins.JavaPluginExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * The channel that carries a project's {@link SourceFacts} to a SIBLING that co-analyses its sources.

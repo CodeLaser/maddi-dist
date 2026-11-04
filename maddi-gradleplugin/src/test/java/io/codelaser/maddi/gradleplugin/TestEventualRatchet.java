@@ -17,6 +17,25 @@
 
 package io.codelaser.maddi.gradleplugin;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Predicate;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import ch.qos.logback.classic.Level;
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
 import io.codelaser.maddi.analysis.api.AnalysisEngines;
@@ -25,7 +44,6 @@ import io.codelaser.maddi.analysis.api.ModificationRequest;
 import io.codelaser.maddi.analysis.api.PrepRequest;
 import io.codelaser.maddi.callgraph.ComputeAnalysisOrder;
 import io.codelaser.maddi.callgraph.ComputeCallGraph;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
 import io.codelaser.maddi.cst.api.analysis.Value;
 import io.codelaser.maddi.cst.api.element.SourceSet;
 import io.codelaser.maddi.cst.api.info.Info;
@@ -38,24 +56,7 @@ import io.codelaser.maddi.inspection.api.parser.Summary;
 import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 import io.codelaser.maddi.inspection.openjdk.JavaInspectorImpl;
 import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Predicate;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * The eventual-immutability ratchet: the composed dogfood run (maddi analysing its own CST) must keep

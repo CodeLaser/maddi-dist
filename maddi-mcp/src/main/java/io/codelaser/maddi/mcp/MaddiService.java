@@ -17,17 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
-import io.codelaser.maddi.project.config.BuildFileCheck;
-import io.codelaser.maddi.project.config.CaptureListener;
-import io.codelaser.maddi.project.config.CaptureResult;
-import io.codelaser.maddi.project.config.CaptureSpec;
-import io.codelaser.maddi.project.config.CompileLogCapture;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -39,6 +28,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.client.MaddiDaemonProcess;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.CaptureListener;
+import io.codelaser.maddi.project.config.CaptureResult;
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.CompileLogCapture;
 
 /**
  * What the MCP tools do, without MCP: the configured projects, the daemon, and the runs. One daemon serves every

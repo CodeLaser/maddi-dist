@@ -17,13 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.project.config.BuildFileCheck;
-import io.codelaser.maddi.project.config.Regenerate;
-
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -35,6 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.Regenerate;
 
 /**
  * The daemon's per-module {@link AnalysisModel.AnalyzeConfig}, built without an IDE: from the

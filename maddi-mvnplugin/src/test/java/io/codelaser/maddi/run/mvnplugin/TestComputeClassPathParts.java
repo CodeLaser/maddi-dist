@@ -17,16 +17,7 @@
 
 package io.codelaser.maddi.run.mvnplugin;
 
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import org.apache.maven.plugin.logging.SystemStreamLog;
-import org.eclipse.aether.artifact.Artifact;
-import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.graph.DefaultDependencyNode;
-import org.eclipse.aether.graph.Dependency;
-import org.eclipse.aether.graph.DependencyNode;
-import org.eclipse.aether.util.artifact.JavaScopes;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,7 +31,17 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.jar.JarOutputStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.apache.maven.plugin.logging.SystemStreamLog;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.graph.DefaultDependencyNode;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
+import org.eclipse.aether.util.artifact.JavaScopes;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import io.codelaser.maddi.cst.api.element.SourceSet;
 
 /**
  * The Maven plugin's dependency walk: which resolved artifacts end up on which of the two class paths, and under

@@ -17,6 +17,13 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.openapi.editor.Document;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiEllipsisType;
@@ -29,13 +36,8 @@ import com.intellij.psi.PsiType;
 import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.TypeConversionUtil;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * A library file's declarations (Set.java from the JDK's sources, a library's sources jar) given the values the last

@@ -17,17 +17,19 @@
 
 package io.codelaser.maddi.gradleplugin.task;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.run.config.Configuration;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import io.codelaser.maddi.run.main.Main;
-import io.codelaser.maddi.run.openjdkmain.RunAnalyzer;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.gradle.api.provider.Property;
 import org.gradle.workers.WorkAction;
 import org.gradle.workers.WorkParameters;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
+import io.codelaser.maddi.run.main.Main;
+import io.codelaser.maddi.run.openjdkmain.RunAnalyzer;
 
 /**
  * The actual analysis, run in a forked worker JVM (see {@link AnalyzerTask}) so the openjdk front-end's required

@@ -16,14 +16,14 @@
  */
 package io.codelaser.maddi.ide.plugin.settings;
 
+import java.nio.file.Path;
+
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.projectRoots.JavaSdk;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
-
-import java.nio.file.Path;
 
 /**
  * The maddi JDK needs no typing: with nothing in the settings, the default JDK (25+) is used and shown, and the

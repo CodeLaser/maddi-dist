@@ -17,20 +17,21 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.project.config.CaptureSpec;
-import io.codelaser.maddi.project.config.CompileLogCapture;
-import io.codelaser.maddi.project.config.ConfiguredBy;
-import io.codelaser.maddi.project.config.ProjectConfigurator;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.CompileLogCapture;
+import io.codelaser.maddi.project.config.ConfiguredBy;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
 
 /**
  * The configured projects, one JSON file each, so that a configuration outlives the server, and the build file that

@@ -17,18 +17,18 @@
 
 package io.codelaser.maddi.gradleplugin.task;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.run.config.Configuration;
-import io.codelaser.maddi.run.config.util.JsonStreaming;
-import io.codelaser.maddi.inspection.api.resource.BuildFiles;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
-import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.provider.ListProperty;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
@@ -36,12 +36,14 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.work.DisableCachingByDefault;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
+import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.util.JsonStreaming;
 
 /**
  * Writes the project's {@link InputConfiguration} (extracted from the plugin-computed

@@ -17,13 +17,14 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * One analysis of a project, from the request to its terminal frame. A run takes minutes on a large project, longer

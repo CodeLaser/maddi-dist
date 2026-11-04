@@ -17,6 +17,18 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
@@ -49,18 +61,8 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiManager;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * "Translate to Kotlin with maddi": Java sources to Kotlin by maddi's translator, which reads the analysis's verdicts

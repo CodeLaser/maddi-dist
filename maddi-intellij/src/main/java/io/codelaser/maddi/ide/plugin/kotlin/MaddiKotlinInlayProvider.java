@@ -16,12 +16,14 @@
  */
 package io.codelaser.maddi.ide.plugin.kotlin;
 
-import com.intellij.psi.PsiElement;
-import io.codelaser.maddi.ide.plugin.ui.MaddiInlayProvider;
+import java.util.List;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.kotlin.psi.KtParameter;
 
-import java.util.List;
+import com.intellij.psi.PsiElement;
+
+import io.codelaser.maddi.ide.plugin.ui.MaddiInlayProvider;
 
 /** {@link MaddiInlayProvider} on Kotlin sources; registered only when the Kotlin plugin is (maddi-kotlin.xml). */
 public class MaddiKotlinInlayProvider extends MaddiInlayProvider {

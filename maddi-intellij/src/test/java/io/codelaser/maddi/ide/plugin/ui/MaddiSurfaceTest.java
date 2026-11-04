@@ -17,16 +17,17 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import com.intellij.codeInsight.daemon.GutterMark;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
-import io.codelaser.maddi.ide.client.AnalysisModel;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 
 /**
  * Surface tests: inject a canned {@link AnalysisModel.Result} into {@link MaddiAnalysisService} (via the

@@ -17,26 +17,28 @@
 
 package io.codelaser.maddi.ide.plugin.ui;
 
+import java.util.List;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.codeInsight.daemon.LineMarkerInfo;
 import com.intellij.codeInsight.daemon.LineMarkerProvider;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiMethod;
-import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
+import com.intellij.psi.PsiTypeParameter;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.ide.client.GutterText;
+import io.codelaser.maddi.ide.plugin.analysis.MaddiAnalysisService;
 import io.codelaser.maddi.ide.plugin.settings.MaddiSettings;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * A gutter icon next to each analyzed type/method/field carrying computed annotations; the tooltip

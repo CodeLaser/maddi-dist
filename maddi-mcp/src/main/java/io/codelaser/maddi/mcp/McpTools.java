@@ -17,7 +17,15 @@
 
 package io.codelaser.maddi.mcp;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
+
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.codelaser.maddi.project.config.CaptureSpec;
@@ -25,13 +33,6 @@ import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The tools, as MCP declares them: a name, a description an agent reads to choose, an input schema, and a handler

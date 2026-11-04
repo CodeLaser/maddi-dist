@@ -17,17 +17,18 @@
 
 package io.codelaser.maddi.ide.plugin.settings;
 
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Comparator;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.projectRoots.JavaSdk;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.util.lang.JavaVersion;
-import org.jetbrains.annotations.Nullable;
-
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Comparator;
 
 /**
  * The JDKs maddi can run on: the IDE's registered Java SDKs of release 25 or later. maddi needs one to start the

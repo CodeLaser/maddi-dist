@@ -17,8 +17,6 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -26,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * What changed between two results: the question after an edit. Elements are matched by kind and fully qualified

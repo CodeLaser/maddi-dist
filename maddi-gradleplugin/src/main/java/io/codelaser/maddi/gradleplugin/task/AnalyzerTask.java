@@ -17,6 +17,11 @@
 
 package io.codelaser.maddi.gradleplugin.task;
 
+import java.io.File;
+import java.util.List;
+
+import javax.inject.Inject;
+
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
@@ -33,10 +38,6 @@ import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.workers.WorkQueue;
 import org.gradle.workers.WorkerExecutor;
-
-import javax.inject.Inject;
-import java.io.File;
-import java.util.List;
 
 /**
  * Runs the maddi analyzer over the project's sources. It deserializes the {@link io.codelaser.maddi.run.config.Configuration}

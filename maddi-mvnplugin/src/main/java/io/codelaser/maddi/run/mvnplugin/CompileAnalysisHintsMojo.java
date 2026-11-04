@@ -1,21 +1,5 @@
 package io.codelaser.maddi.run.mvnplugin;
 
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.plugins.annotations.Parameter;
-import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
-import io.codelaser.maddi.run.config.Configuration;
-import io.codelaser.maddi.run.config.GeneralConfiguration;
-import io.codelaser.maddi.run.main.Main;
-import io.codelaser.maddi.run.openjdkmain.RunAnalyzer;
-import io.codelaser.maddi.cst.api.element.SourceSet;
-import io.codelaser.maddi.cst.impl.runtime.LanguageConfigurationImpl;
-import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
-import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
-import io.codelaser.maddi.inspection.resource.SourceSetImpl;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -24,6 +8,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+
+import io.codelaser.maddi.cst.api.element.SourceSet;
+import io.codelaser.maddi.cst.impl.runtime.LanguageConfigurationImpl;
+import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
+import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
+import io.codelaser.maddi.inspection.resource.SourceSetImpl;
+import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
+import io.codelaser.maddi.run.config.Configuration;
+import io.codelaser.maddi.run.config.GeneralConfiguration;
+import io.codelaser.maddi.run.main.Main;
+import io.codelaser.maddi.run.openjdkmain.RunAnalyzer;
 
 /**
  * Compile hand-written analysis hints ({@code .java}) into analysis-result ({@code .json}) files (use case 2).

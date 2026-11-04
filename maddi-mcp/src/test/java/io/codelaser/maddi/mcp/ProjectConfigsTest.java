@@ -17,16 +17,18 @@
 
 package io.codelaser.maddi.mcp;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.codelaser.maddi.ide.client.AnalysisModel;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 public class ProjectConfigsTest {
 

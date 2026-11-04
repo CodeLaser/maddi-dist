@@ -17,13 +17,13 @@
 
 package io.codelaser.maddi.mcp;
 
-import io.codelaser.maddi.ide.client.AnalysisModel;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /**
  * Questions about one analysis result, answered in the MCP process: the daemon sends every element's annotations

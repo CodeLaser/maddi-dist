@@ -17,13 +17,14 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.List;
+import java.util.Map;
+
 import com.intellij.openapi.editor.Document;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
-import io.codelaser.maddi.ide.client.AnalysisModel;
 
-import java.util.List;
-import java.util.Map;
+import io.codelaser.maddi.ide.client.AnalysisModel;
 
 /*
  A library file's declarations get the daemon's library elements by declaring type, kind and signature; the signature
