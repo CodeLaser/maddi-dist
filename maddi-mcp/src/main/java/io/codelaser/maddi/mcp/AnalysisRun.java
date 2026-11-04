@@ -49,18 +49,23 @@ public final class AnalysisRun {
     private Process process;
     private String finishedAt;
     private long restoredElapsedSeconds = -1;
+    // what an incremental daemon said it did, from the status frames: re-parsed, seeded; null for a cold run
+    private String reparsed;
+    private String seeded;
+    private boolean reloaded;
 
     /**
      * A run as it is stored once it has ended, to be queried and compared after a restart. Only the result counts:
      * the daemon's model of the run is gone with the daemon.
      */
     public record Snapshot(String id, String project, Map<String, Object> scope, State state, String configuration,
-                           long elapsedSeconds, int passesStreamed, String finishedAt, AnalysisModel.Result result) {
+                           long elapsedSeconds, int passesStreamed, String finishedAt, AnalysisModel.Result result,
+                           String incremental) {
     }
 
     public synchronized Snapshot snapshot() {
         return new Snapshot(id, project, scope, state, configuration, elapsedSeconds(), lastIteration + 1,
-                finishedAt, result);
+                finishedAt, result, incremental());
     }
 
     public static AnalysisRun restore(Snapshot snapshot) {
@@ -72,6 +77,7 @@ public final class AnalysisRun {
         run.lastIteration = snapshot.passesStreamed() - 1;
         run.finishedAt = snapshot.finishedAt();
         run.restoredElapsedSeconds = snapshot.elapsedSeconds();
+        run.restoredIncremental = snapshot.incremental();
         return run;
     }
 
@@ -133,8 +139,47 @@ public final class AnalysisRun {
             }
         } else {
             lastStatus = frame;
+            noteIncremental(frame.path("phase").asText(""), frame.path("message").asText(""));
         }
         notifyAll();
+    }
+
+    private String restoredIncremental;
+
+    /*
+     An incremental daemon says what it does in its status frames: "reload" first, then "parse: re-parsing N changed
+     type(s)" and "analyze: modification analysis, seeded with M type(s)". A reload that falls back to a cold run
+     starts over with "initialize".
+     */
+    private void noteIncremental(String phase, String message) {
+        switch (phase) {
+            case "reload" -> reloaded = true;
+            case "initialize" -> {
+                reloaded = false;
+                reparsed = null;
+                seeded = null;
+            }
+            case "parse" -> {
+                if (reloaded && message.startsWith("re-parsing ")) reparsed = message.substring("re-parsing ".length());
+            }
+            case "analyze" -> {
+                if (reloaded && message.contains("seeded with ")) {
+                    seeded = message.substring(message.indexOf("seeded with ") + "seeded with ".length());
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** What the incremental daemon did for this run, in words; null for a cold run. */
+    public synchronized String incremental() {
+        if (restoredIncremental != null) return restoredIncremental;
+        if (state != State.FINISHED || !reloaded) return null;
+        // the daemon returns the previous result as it was, its outcome included
+        if (reparsed == null) return "no source changed since the previous run: its result stands";
+        return "re-analysed after an edit, on the previous run's state: re-parsed " + reparsed
+               + (seeded == null ? "" : ", analysis seeded with " + seeded);
     }
 
     /** A step before the analysis proper (checking or regenerating the configuration), as a status frame would say. */
@@ -244,9 +289,16 @@ public final class AnalysisRun {
         if (configuration != null) out.put("configuration", configuration);
         if (lastIteration >= 0 && state != State.FINISHED) out.put("passesStreamed", lastIteration + 1);
         if (error != null) out.put("error", error);
-        out.putAll(Verdicts.certaintyOf(certainty(), state == State.STOPPED));
+        String incremental = incremental();
+        if (incremental != null) out.put("incremental", incremental);
+        out.putAll(Verdicts.certaintyOf(certainty(), state == State.STOPPED, incrementalOutcome()));
         if (result != null) out.put("summary", Verdicts.summary(result));
         return out;
+    }
+
+    /** Whether the result is an incremental one, which is never certified. */
+    public synchronized boolean incrementalOutcome() {
+        return result != null && AnalysisModel.OUTCOME_INCREMENTAL.equals(result.outcome());
     }
 
     /** Progress as a fraction for an MCP progress notification, when the daemon gave a type count. */

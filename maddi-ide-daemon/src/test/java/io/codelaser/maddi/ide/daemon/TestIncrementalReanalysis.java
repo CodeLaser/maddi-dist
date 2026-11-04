@@ -148,4 +148,19 @@ public class TestIncrementalReanalysis {
         assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, removed.outcome());
         assertTrue(finding(removed, "contract-violation").isEmpty());
     }
+
+    @DisplayName("a cold request: from scratch, and the run after it is incremental again")
+    @Test
+    public void coldRequest(@TempDir Path dir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        analyzeAll(dir, Map.of("x/Box.java", BOX, "x/User.java", USER), service, false);
+
+        DaemonProtocol.Result cold = analyzeAll(dir, Map.of("x/Box.java", BOX_MODIFYING), service, false, true);
+        assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, cold.outcome(), "the same configuration, yet cold");
+        assertTrue(displayFor(cold, "METHOD", "Box.get").contains("@Modified"));
+
+        DaemonProtocol.Result next = analyzeAll(dir, Map.of("x/Box.java", BOX), service, false, false);
+        assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, next.outcome(), "the cold run left its state behind");
+        assertTrue(displayFor(next, "METHOD", "Box.get").contains("@NotModified"));
+    }
 }

@@ -30,7 +30,8 @@
       "env": {
         "JAVA_HOME": "${user_config.jdk_home}",
         "MADDI_JDK_HOME": "${user_config.jdk_home}",
-        "MADDI_DAEMON_XMX_MB": "${user_config.daemon_xmx_mb}"
+        "MADDI_DAEMON_XMX_MB": "${user_config.daemon_xmx_mb}",
+        "MADDI_INCREMENTAL": "${user_config.incremental}"
       }
     }
   },
@@ -59,6 +60,13 @@
       "type": "string",
       "title": "Analysis heap (MB)",
       "description": "The maximum heap of the analysis, in megabytes, for example 8192 for a large project. Empty: the JVM's default.",
+      "required": false
+    },
+    "incremental": {
+      "type": "boolean",
+      "title": "Incremental re-analysis (experimental)",
+      "description": "After an edit, re-analyse only the changed types and those that depend on them, on what the previous run left. Such a result is best available, never certified; analyze with cold makes a full run.",
+      "default": false,
       "required": false
     }
   },

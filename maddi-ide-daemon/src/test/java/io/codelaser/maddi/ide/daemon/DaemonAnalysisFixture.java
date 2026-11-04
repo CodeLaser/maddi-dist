@@ -95,6 +95,13 @@ public final class DaemonAnalysisFixture {
     public static DaemonProtocol.Result analyzeAll(Path projectDir, Map<String, String> sourcesByRelativePath,
                                                    WarmAnalysisService service, boolean warnNearMisses)
             throws Exception {
+        return analyzeAll(projectDir, sourcesByRelativePath, service, warnNearMisses, false);
+    }
+
+    /** As above; {@code cold}: the request asks for a run from scratch, whatever the service kept. */
+    public static DaemonProtocol.Result analyzeAll(Path projectDir, Map<String, String> sourcesByRelativePath,
+                                                   WarmAnalysisService service, boolean warnNearMisses, boolean cold)
+            throws Exception {
         for (Map.Entry<String, String> entry : sourcesByRelativePath.entrySet()) {
             Path file = projectDir.resolve("src").resolve(entry.getKey());
             Files.createDirectories(file.getParent());
@@ -110,7 +117,7 @@ public final class DaemonAnalysisFixture {
                 List.of(),
                 false,
                 warnNearMisses);
-        return service.analyze(new DaemonProtocol.AnalyzeProject("test", config), status -> { });
+        return service.analyze(new DaemonProtocol.AnalyzeProject("test", config, cold), status -> { });
     }
 
     /** The display annotations computed for the first element of {@code kind} whose fqn contains {@code fqnPart}. */

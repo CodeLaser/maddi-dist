@@ -61,8 +61,9 @@ public final class McpTools {
             FINISHED, then overview, verdicts / explain / element_at / findings, and after an edit and a new run, \
             diff_runs. A stored run says when it was analysed and how many sources changed since. Every answer carries a \
             certainty: only FINAL values are certified; PROVISIONAL and BEST_AVAILABLE values hold but may be \
-            weaker than the code allows, so never present them as final. Analyse compiled projects: sources \
-            resolve against class files.""";
+            weaker than the code allows, so never present them as final. A run after an edit may be incremental \
+            (it says so): best available, and analyze with cold makes a certified run. Analyse compiled projects: \
+            sources resolve against class files.""";
 
     public List<McpServerFeatures.SyncToolSpecification> specifications() {
         List<McpServerFeatures.SyncToolSpecification> out = new ArrayList<>();
@@ -126,7 +127,8 @@ public final class McpTools {
                           "packages":{"type":"array","items":{"type":"string"}},
                           "waitSeconds":{"type":"integer","description":"wait this long for the run to finish before answering; default 0"},
                           "allowStale":{"type":"boolean","description":"analyse with a stale configuration that cannot be computed again, rather than fail"},
-                          "configureOnly":{"type":"boolean","description":"bring the configuration up to date (make it, for a gradle project), and stop there"}
+                          "configureOnly":{"type":"boolean","description":"bring the configuration up to date (make it, for a gradle project), and stop there"},
+                          "cold":{"type":"boolean","description":"analyse from scratch: when the server runs incrementally, a run after an edit otherwise re-analyses only what changed, which is never certified"}
                         }}""", this::analyze));
         out.add(tool("run_status", """
                         The state of a run (RUNNING, FINISHED, FAILED, STOPPED), its progress, certainty and a summary \
@@ -341,7 +343,7 @@ public final class McpTools {
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
         AnalysisRun run = service.analyze(a.string("project"), a.strings("sourceSets"),
-                a.strings("packages"), a.bool("allowStale"), a.bool("configureOnly"));
+                a.strings("packages"), a.bool("allowStale"), a.bool("configureOnly"), a.bool("cold"));
         int wait = a.integer("waitSeconds", 0);
         if (wait > 0) service.await(run.id(), Math.min(wait, 600), r -> progress(x, token, r));
         return service.describe(run);
@@ -480,7 +482,8 @@ public final class McpTools {
         out.put("runId", run.id());
         out.put("state", run.state().name());
         if (run.finishedAt() != null) out.put("analysedAt", run.finishedAt());
-        out.putAll(Verdicts.certaintyOf(run.certainty(), run.state() == AnalysisRun.State.STOPPED));
+        out.putAll(Verdicts.certaintyOf(run.certainty(), run.state() == AnalysisRun.State.STOPPED,
+                run.incrementalOutcome()));
         return out;
     }
 

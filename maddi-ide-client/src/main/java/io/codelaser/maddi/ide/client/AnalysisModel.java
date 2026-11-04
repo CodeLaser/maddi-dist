@@ -336,6 +336,11 @@ public final class AnalysisModel {
 
     public static final String OUTCOME_CERTIFIED = "CERTIFIED";
     public static final String OUTCOME_UNKNOWN = "UNKNOWN";
+    /**
+     * Re-analysed after an edit on what a warm daemon kept of the last run ({@code -Dmaddi.daemon.warm}): best
+     * available, never certified; a {@code cold} request makes it a full run again.
+     */
+    public static final String OUTCOME_INCREMENTAL = "INCREMENTAL";
 
     /**
      * The certainty of a completed result. {@code null}/absent outcome is treated as UNKNOWN rather than

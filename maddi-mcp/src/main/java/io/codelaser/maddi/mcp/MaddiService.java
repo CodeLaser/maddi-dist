@@ -46,9 +46,24 @@ import java.util.function.Consumer;
  */
 public final class MaddiService implements Closeable {
 
-    /** How the daemon is launched. {@code xmxMb} 0: the JVM's default heap. */
-    public record DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile) {
+    /**
+     * How the daemon is launched. {@code xmxMb} 0: the JVM's default heap. {@code incremental}: the daemon keeps the
+     * last run's state ({@code -Dmaddi.daemon.warm}), and a run of the same project and scope after an edit
+     * re-analyses only what changed and depends on it; such a result is never certified, which an analyze with
+     * {@code cold} restores.
+     */
+    public record DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile, boolean incremental) {
+        public DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile) {
+            this(installDir, jdkHome, xmxMb, logFile, false);
+        }
+
+        List<String> daemonJvmArgs() {
+            return incremental ? List.of("-D" + WARM_PROPERTY + "=true") : List.of();
+        }
     }
+
+    /** The daemon's switch for {@link DaemonSettings#incremental()}: WarmAnalysisService. */
+    static final String WARM_PROPERTY = "maddi.daemon.warm";
 
     private final DaemonSettings settings;
     private final MaddiDaemonProcess daemon = new MaddiDaemonProcess();
@@ -210,6 +225,15 @@ public final class MaddiService implements Closeable {
     /** @param configureOnly bring the configuration up to date, and stop there */
     public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages,
                                             boolean allowStale, boolean configureOnly) {
+        return analyze(project, sourceSets, packages, allowStale, configureOnly, false);
+    }
+
+    /**
+     * @param cold from scratch, even when an incremental daemon could re-analyse only what changed: the way back to
+     *             a certified result
+     */
+    public synchronized AnalysisRun analyze(String project, List<String> sourceSets, List<String> packages,
+                                            boolean allowStale, boolean configureOnly, boolean cold) {
         if (project == null) project = projects.size() == 1 ? projects.keySet().iterator().next() : "default";
         ProjectStore.StoredProject stored = projects.get(project);
         if (stored == null) throw new IllegalArgumentException("no project '" + project + "'; configure it first");
@@ -227,7 +251,7 @@ public final class MaddiService implements Closeable {
         runs.put(run.id(), run);
         forgetOldRuns();
         if (!configureOnly) lastRuns.put(project, run); // a run without verdicts hides none of the last one's
-        runner.execute(() -> execute(run, stored, sourceSets, packages, allowStale, configureOnly));
+        runner.execute(() -> execute(run, stored, sourceSets, packages, allowStale, configureOnly, cold));
         return run;
     }
 
@@ -256,7 +280,7 @@ public final class MaddiService implements Closeable {
     }
 
     private void execute(AnalysisRun run, ProjectStore.StoredProject stored, List<String> sourceSets,
-                         List<String> packages, boolean allowStale, boolean configureOnly) {
+                         List<String> packages, boolean allowStale, boolean configureOnly, boolean cold) {
         try {
             ProjectStore.StoredProject project = upToDate(run, stored, allowStale);
             if (project == null) return; // the run has failed, saying why
@@ -268,8 +292,9 @@ public final class MaddiService implements Closeable {
             AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages)
                     .withContainerWhyMaxSlots(Integer.MAX_VALUE);
             run.phase("analyze", "starting the daemon on " + daemonJdkOf(project));
-            daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), settings.logFile());
-            JsonNode end = daemon.analyze(run.id(), request, frame -> run.onFrame(frame, mapper));
+            daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), null,
+                    settings.daemonJvmArgs(), settings.logFile());
+            JsonNode end = daemon.analyze(run.id(), request, cold, frame -> run.onFrame(frame, mapper));
             run.onEnd(end, mapper);
         } catch (IOException | RuntimeException e) {
             run.fail(e.getMessage() == null ? e.toString() : e.getMessage()); // after a stop: already STOPPED

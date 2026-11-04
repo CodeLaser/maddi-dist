@@ -39,6 +39,12 @@ public final class Verdicts {
 
     /** The certainty fields every answer carries, so a value that may still strengthen is never read as final. */
     public static Map<String, Object> certaintyOf(AnalysisModel.Certainty certainty, boolean stopped) {
+        return certaintyOf(certainty, stopped, false);
+    }
+
+    /** @param incremental the result is an incremental re-analysis after an edit (outcome INCREMENTAL) */
+    public static Map<String, Object> certaintyOf(AnalysisModel.Certainty certainty, boolean stopped,
+                                                  boolean incremental) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("certainty", certainty.name());
         String note = switch (certainty) {
@@ -46,8 +52,11 @@ public final class Verdicts {
                     ? "the run was stopped: these values hold, but a complete run may strengthen them"
                     : "the analysis is still running: these values hold, but may still strengthen";
             case FINAL -> "the fixpoint was certified: these values are final";
-            case BEST_AVAILABLE -> "best available: the analysis did not reach a certified fixpoint, or some files"
-                                   + " did not parse; values may be weaker than the code allows";
+            case BEST_AVAILABLE -> incremental
+                    ? "best available: re-analysed incrementally after an edit, which is never certified; values may"
+                      + " be weaker than the code allows. analyze with cold for a certified run"
+                    : "best available: the analysis did not reach a certified fixpoint, or some files"
+                      + " did not parse; values may be weaker than the code allows";
             case UNKNOWN -> "no completed analysis";
         };
         out.put("certaintyNote", note);

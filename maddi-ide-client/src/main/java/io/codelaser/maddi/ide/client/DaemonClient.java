@@ -67,10 +67,20 @@ public final class DaemonClient implements Closeable {
      */
     public JsonNode analyze(String requestId, Object config, java.util.function.Consumer<JsonNode> onStatus)
             throws IOException {
+        return analyze(requestId, config, false, onStatus);
+    }
+
+    /**
+     * As above; {@code cold}: analyse from scratch, even when a warm daemon kept the last run's state and could
+     * re-analyse only what changed. An incremental result is never certified; a cold one can be.
+     */
+    public JsonNode analyze(String requestId, Object config, boolean cold,
+                            java.util.function.Consumer<JsonNode> onStatus) throws IOException {
         ObjectNode msg = mapper.createObjectNode();
         msg.put("type", "analyzeProject");
         msg.put("requestId", requestId);
         msg.set("config", mapper.valueToTree(config));
+        if (cold) msg.put("cold", true); // absent, not false: the request stays as an older daemon knows it
         out.write(mapper.writeValueAsString(msg));
         out.write('\n');
         out.flush();

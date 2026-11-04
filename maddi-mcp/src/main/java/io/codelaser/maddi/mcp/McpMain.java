@@ -42,6 +42,8 @@ import java.util.concurrent.CountDownLatch;
  *   --xmx-mb N             MADDI_DAEMON_XMX_MB    the daemon's heap; default: the JVM's default
  *   --log FILE             MADDI_DAEMON_LOG       the daemon's log; default: in the temporary directory
  *   --store DIR            MADDI_MCP_STORE        where configured projects are kept; default: ~/.maddi/mcp
+ *   --incremental BOOL     MADDI_INCREMENTAL      after an edit, re-analyse only what changed (never certified;
+ *                                                 analyze with cold for a full run); default: false
  * </pre>
  * stdout carries the protocol and nothing else: everything else goes to stderr or the log.
  */
@@ -59,7 +61,7 @@ public final class McpMain {
             return;
         }
         System.err.println("maddi-mcp: daemon " + settings.installDir() + " on " + settings.jdkHome()
-                           + ", log " + settings.logFile());
+                           + (settings.incremental() ? ", incremental" : "") + ", log " + settings.logFile());
         // the client ends the session by closing stdin; the daemon exits with this process (MADDI_PARENT_PID)
         CountDownLatch closed = new CountDownLatch(1);
         InputStream in = new FilterInputStream(System.in) {
@@ -109,6 +111,10 @@ public final class McpMain {
         String jdk = option(args, "--jdk", "MADDI_JDK_HOME");
         String xmx = option(args, "--xmx-mb", "MADDI_DAEMON_XMX_MB");
         String log = option(args, "--log", "MADDI_DAEMON_LOG");
+        String incremental = option(args, "--incremental", "MADDI_INCREMENTAL");
+        if (incremental != null && !incremental.equals("true") && !incremental.equals("false")) {
+            throw new IllegalArgumentException("--incremental is true or false, not '" + incremental + "'");
+        }
 
         Path installDir = install != null ? Path.of(install) : bundledDaemon();
         if (installDir == null || !Files.isDirectory(installDir.resolve("lib"))) {
@@ -123,7 +129,7 @@ public final class McpMain {
         Path logFile = log != null ? Path.of(log)
                 : Path.of(System.getProperty("java.io.tmpdir"), "maddi-mcp-daemon-" + ProcessHandle.current().pid() + ".log");
         return new MaddiService.DaemonSettings(installDir.toAbsolutePath(), jdkHome.toAbsolutePath(),
-                xmx == null ? 0 : Integer.parseInt(xmx), logFile);
+                xmx == null ? 0 : Integer.parseInt(xmx), logFile, Boolean.parseBoolean(incremental));
     }
 
     private static String option(String[] args, String name, String environment) {

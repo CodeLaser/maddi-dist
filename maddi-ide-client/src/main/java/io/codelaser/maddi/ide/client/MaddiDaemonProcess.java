@@ -38,7 +38,7 @@ public final class MaddiDaemonProcess implements Closeable {
     public static final int PROTOCOL_VERSION = 2;
 
     /** What a running daemon was launched WITH; a request that differs needs a new process, not this one. */
-    private record Launch(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome) {
+    private record Launch(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome, List<String> jvmArgs) {
     }
 
     private final DaemonLauncher launcher = new DaemonLauncher();
@@ -74,7 +74,16 @@ public final class MaddiDaemonProcess implements Closeable {
      */
     public synchronized void ensureStarted(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome,
                                            Path logFile) throws IOException {
-        Launch wanted = new Launch(installDir, jdkHome, xmxMb, kotlinFrontEndHome);
+        ensureStarted(installDir, jdkHome, xmxMb, kotlinFrontEndHome, List.of(), logFile);
+    }
+
+    /**
+     * As above, with JVM arguments of the caller's own after the heap's, such as {@code -Dmaddi.daemon.warm=true}.
+     * A change relaunches the daemon, as any other launch parameter does.
+     */
+    public synchronized void ensureStarted(Path installDir, Path jdkHome, int xmxMb, Path kotlinFrontEndHome,
+                                           List<String> extraJvmArgs, Path logFile) throws IOException {
+        Launch wanted = new Launch(installDir, jdkHome, xmxMb, kotlinFrontEndHome, List.copyOf(extraJvmArgs));
         if (handle != null && handle.process().isAlive() && client != null && wanted.equals(launched)) return;
         closeQuietly();
         List<String> jvmArgs = new ArrayList<>();
@@ -82,6 +91,7 @@ public final class MaddiDaemonProcess implements Closeable {
             jvmArgs.add("-Xmx" + xmxMb + "m");
             jvmArgs.add("-XX:+UseG1GC");
         }
+        jvmArgs.addAll(extraJvmArgs);
         java.util.Map<String, String> environment = kotlinFrontEndHome == null ? java.util.Map.of()
                 : java.util.Map.of(KotlinFrontEndInstaller.ENV_K2_HOME, kotlinFrontEndHome.toAbsolutePath().toString());
         handle = launcher.launch(installDir, jdkHome, jvmArgs, environment, 60_000, logFile);
@@ -138,10 +148,16 @@ public final class MaddiDaemonProcess implements Closeable {
     /** Send an analyze request; blocks until the daemon returns {@code result} or {@code error}. */
     public synchronized JsonNode analyze(String requestId, Object config, Consumer<JsonNode> onStatus)
             throws IOException {
+        return analyze(requestId, config, false, onStatus);
+    }
+
+    /** As above; {@code cold}: from scratch, whatever a warm daemon kept of the last run. */
+    public synchronized JsonNode analyze(String requestId, Object config, boolean cold, Consumer<JsonNode> onStatus)
+            throws IOException {
         if (client == null) throw new IOException("daemon not started");
         busy = true;
         try {
-            return client.analyze(requestId, config, onStatus);
+            return client.analyze(requestId, config, cold, onStatus);
         } finally {
             busy = false;
         }

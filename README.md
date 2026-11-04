@@ -155,6 +155,15 @@ files changed since.
 Every answer carries the run's certainty. Only `FINAL` values are certified; `PROVISIONAL` (a run going on or
 stopped) and `BEST_AVAILABLE` values hold, but may be weaker than the code allows.
 
+With `--incremental true` (experimental, off by default) the daemon keeps what the last run built: the parse, the
+call graph, the findings. A run of the same project and scope after an edit then re-parses the changed types,
+re-analyses them and the types that depend on them, and keeps the rest; when nothing changed, the previous result
+stands at once. Such a run says so (`incremental`: what it re-parsed and seeded), and is `BEST_AVAILABLE`, never
+`FINAL`: it skips the whole-project passes that certify. `analyze` with `cold` runs from scratch, for a certified
+result, and the runs after it are incremental again. A file added or removed, another scope, Kotlin sources or a
+partial parse run cold by themselves. The daemon keeps one project's state, so alternating projects runs cold each
+time. It is not much faster yet: the re-analysed part is every type that depends on a changed one.
+
 `explain` says why a verdict holds, as a chain of statements (`whys`), the element's own first, then into what it
 calls: why a method, field or parameter is `@Modified`, why something is `@Dependent` or `@Nullable`, why a method has
 `@StaticSideEffects`. For a type, why it stops where it does on the way to `@Immutable` (`@Mutable`, `@FinalFields`,
@@ -173,6 +182,7 @@ variable:
 | `--xmx-mb` | `MADDI_DAEMON_XMX_MB` | the daemon's own default heap |
 | `--log` | `MADDI_DAEMON_LOG` | `maddi-mcp-daemon-<pid>.log` in the temporary directory |
 | `--store` | `MADDI_MCP_STORE` | `~/.maddi/mcp` |
+| `--incremental` | `MADDI_INCREMENTAL` | `false`; `true` re-analyses only what an edit changed (above) |
 
 How the server is built on the daemon, and what comes next (asking what an edit would do to the verdicts, and
 whether it would break a contract, before making it): [`docs/roadmap/mcp-server.md`](docs/roadmap/mcp-server.md).

@@ -235,7 +235,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
     @Override
     public DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception {
         long start = System.currentTimeMillis();
-        if (warm && warmState != null) {
+        if (warm && warmState != null && request.cold()) {
+            LOGGER.info("incremental: the client asked for a cold run, analysing from scratch");
+        } else if (warm && warmState != null) {
             WarmState state = warmState;
             warmState = null; // whatever happens below, a failed attempt leaves nothing behind
             try {
