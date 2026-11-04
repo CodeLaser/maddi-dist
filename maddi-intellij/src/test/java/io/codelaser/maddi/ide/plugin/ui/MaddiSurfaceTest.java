@@ -23,6 +23,7 @@ import java.util.Objects;
 
 import com.intellij.codeInsight.daemon.GutterMark;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
+import com.intellij.icons.AllIcons;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 
@@ -101,7 +102,7 @@ public class MaddiSurfaceTest extends LightJavaCodeInsightFixtureTestCase {
         List<GutterMark> gutters = myFixture.findGuttersAtCaret();
         assertFalse("expected a maddi gutter mark", gutters.isEmpty());
         assertTrue("the eventual verdict must not use the plain annotation icon",
-                gutters.stream().anyMatch(g -> g.getIcon() == com.intellij.icons.AllIcons.Nodes.Static));
+                gutters.stream().anyMatch(g -> g.getIcon() == AllIcons.Nodes.Static));
         // ...and the roster the inline hint abbreviates is still readable here, in full
         List<String> tooltips = gutters.stream().map(GutterMark::getTooltipText)
                 .filter(Objects::nonNull).toList();
@@ -181,7 +182,7 @@ public class MaddiSurfaceTest extends LightJavaCodeInsightFixtureTestCase {
         List<GutterMark> gutters = myFixture.findGuttersAtCaret();
         assertFalse("expected a maddi gutter mark", gutters.isEmpty());
         assertTrue("a proven verdict keeps the plain annotation icon",
-                gutters.stream().anyMatch(g -> g.getIcon() == com.intellij.icons.AllIcons.Nodes.Annotationtype));
+                gutters.stream().anyMatch(g -> g.getIcon() == AllIcons.Nodes.Annotationtype));
     }
 
     private MaddiAnalysisService service() {

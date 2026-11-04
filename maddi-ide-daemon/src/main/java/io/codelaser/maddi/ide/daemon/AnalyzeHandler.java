@@ -17,6 +17,9 @@
 
 package io.codelaser.maddi.ide.daemon;
 
+import java.io.IOException;
+import java.util.List;
+
 /**
  * Seam between the socket transport ({@link DaemonMain}) and the actual analysis
  * ({@link WarmAnalysisService}). Implementations run one whole-project analysis per call.
@@ -49,12 +52,12 @@ public interface AnalyzeHandler {
      * that keeps no model.
      */
     default DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
-        return new DaemonProtocol.LibraryResult(request.requestId(), java.util.List.of(), request.types());
+        return new DaemonProtocol.LibraryResult(request.requestId(), List.of(), request.types());
     }
 
     /** The given types in Kotlin. Default: nothing translated, every type unknown — a handler that keeps no model. */
-    default DaemonProtocol.TranslateResult translate(DaemonProtocol.Translate request) throws java.io.IOException {
-        return new DaemonProtocol.TranslateResult(request.requestId(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(), request.types());
+    default DaemonProtocol.TranslateResult translate(DaemonProtocol.Translate request) throws IOException {
+        return new DaemonProtocol.TranslateResult(request.requestId(), List.of(), List.of(),
+                List.of(), request.types());
     }
 }

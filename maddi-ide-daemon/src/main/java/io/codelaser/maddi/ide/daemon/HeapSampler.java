@@ -20,6 +20,7 @@ package io.codelaser.maddi.ide.daemon;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryUsage;
+import java.util.Locale;
 
 /**
  * The daemon's memory headroom, for the progress line: heap in use against the maximum, and the share of the
@@ -44,7 +45,7 @@ final class HeapSampler {
         long gcShare = Math.min(100, Math.round(100.0 * (gc - lastGcMillis) / wallMillis));
         lastGcMillis = gc;
         lastSampleNanos = now;
-        return String.format(java.util.Locale.ROOT, "heap %.1f of %.1f GB, GC %d%%", heap.getUsed() / GB, max / GB, gcShare);
+        return String.format(Locale.ROOT, "heap %.1f of %.1f GB, GC %d%%", heap.getUsed() / GB, max / GB, gcShare);
     }
 
     private static long gcMillis() {

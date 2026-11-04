@@ -29,6 +29,8 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
@@ -140,8 +142,8 @@ public class KotlinFrontEndInstallerTest {
                 zip.closeEntry();
             }
         }
-        String hex = java.util.HexFormat.of().formatHex(
-                java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(target)));
+        String hex = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(target)));
         Files.writeString(target.resolveSibling(target.getFileName() + ".sha256"),
                 hex + "  " + target.getFileName() + "\n");
         assertNotNull(target);

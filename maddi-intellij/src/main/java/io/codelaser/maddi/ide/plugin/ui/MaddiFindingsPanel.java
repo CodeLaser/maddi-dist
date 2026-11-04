@@ -29,6 +29,7 @@ import java.util.Map;
 import javax.swing.BoxLayout;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import javax.swing.text.BadLocationException;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
@@ -274,7 +275,7 @@ public class MaddiFindingsPanel extends SimpleToolWindowPanel implements Disposa
         if (lines > MAX_LOG_LINES) {
             try {
                 log.replaceRange("", 0, log.getLineEndOffset(lines - MAX_LOG_LINES - 1));
-            } catch (javax.swing.text.BadLocationException e) {
+            } catch (BadLocationException e) {
                 log.setText(""); // never let trimming the log break the log
             }
         }

@@ -26,6 +26,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import io.codelaser.maddi.ide.plugin.analysis.MaddiTranslation;
+import java.util.Arrays;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -47,7 +48,7 @@ public class TranslateToKotlinAction extends AnAction {
     public void update(@NotNull AnActionEvent e) {
         Module module = e.getData(LangDataKeys.MODULE_CONTEXT);
         VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
-        boolean javaFile = files != null && java.util.Arrays.stream(files)
+        boolean javaFile = files != null && Arrays.stream(files)
                 .anyMatch(f -> !f.isDirectory() && "java".equals(f.getExtension()));
         e.getPresentation().setEnabledAndVisible(e.getProject() != null && (module != null || javaFile));
         e.getPresentation().setText(module != null ? "Translate Module to Kotlin with maddi"

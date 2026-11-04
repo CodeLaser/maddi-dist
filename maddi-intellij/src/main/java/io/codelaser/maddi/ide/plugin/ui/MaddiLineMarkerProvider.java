@@ -19,6 +19,8 @@ package io.codelaser.maddi.ide.plugin.ui;
 
 import java.util.List;
 
+import javax.swing.Icon;
+
 import org.jetbrains.annotations.Nullable;
 
 import com.intellij.codeInsight.daemon.LineMarkerInfo;
@@ -79,7 +81,7 @@ public class MaddiLineMarkerProvider implements LineMarkerProvider {
         // "@Immutable" and "@Immutable(hc=true,after=…)" -- a proven property and one that holds only after a
         // mark -- reached the gutter under the same icon, and the difference was legible only by reading the
         // tooltip to its end. It is the distinction the whole eventual family exists to make.
-        javax.swing.Icon icon = AnalysisModel.isEventual(match) || parameters.stream().anyMatch(AnalysisModel::isEventual)
+        Icon icon = AnalysisModel.isEventual(match) || parameters.stream().anyMatch(AnalysisModel::isEventual)
                 ? AllIcons.Nodes.Static : AllIcons.Nodes.Annotationtype;
         String tooltipText = tooltip;
         String accessibleName = accessible;

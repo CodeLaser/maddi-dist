@@ -17,12 +17,14 @@
 
 package io.codelaser.maddi.mcp;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import io.codelaser.maddi.ide.client.AnalysisModel;
 
@@ -94,7 +96,7 @@ public final class AnalysisRun {
 
     private void ended() {
         endNanos = System.nanoTime();
-        finishedAt = java.time.Instant.now().toString();
+        finishedAt = Instant.now().toString();
     }
 
     public AnalysisRun(String id, String project) {
@@ -185,7 +187,7 @@ public final class AnalysisRun {
 
     /** A step before the analysis proper (checking or regenerating the configuration), as a status frame would say. */
     synchronized void phase(String phase, String message) {
-        lastStatus = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+        lastStatus = JsonNodeFactory.instance.objectNode()
                 .put("phase", phase).put("message", message);
         notifyAll();
     }

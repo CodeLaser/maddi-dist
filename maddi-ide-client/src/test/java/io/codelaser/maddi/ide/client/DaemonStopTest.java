@@ -20,6 +20,7 @@ package io.codelaser.maddi.ide.client;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -74,7 +75,7 @@ public class DaemonStopTest {
             try {
                 return daemon.analyze("req-1", config, frame -> started.countDown());
             } catch (IOException e) {
-                throw new java.io.UncheckedIOException(e);
+                throw new UncheckedIOException(e);
             }
         });
     }

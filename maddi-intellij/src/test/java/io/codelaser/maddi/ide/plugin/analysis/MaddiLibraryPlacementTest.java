@@ -17,6 +17,7 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +56,7 @@ public class MaddiLibraryPlacementTest extends LightJavaCodeInsightFixtureTestCa
 
     public void testSignatures() {
         PsiJavaFile file = (PsiJavaFile) myFixture.configureByText("Bag.java", SOURCE);
-        List<String> signatures = java.util.Arrays.stream(file.getClasses()[0].getMethods())
+        List<String> signatures = Arrays.stream(file.getClasses()[0].getMethods())
                 .map(MaddiLibraryPlacement::signature).toList();
         assertEquals(List.of("add(java.lang.Object)", "size()", "max(lib.Bag.Entry)",
                 "addAll(lib.Bag.Entry,java.lang.Object[])"), signatures);

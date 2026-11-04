@@ -19,8 +19,11 @@ package io.codelaser.maddi.ide.plugin.analysis;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -83,7 +86,7 @@ public final class MaddiLibraryPlacement {
                                                                List<AnalysisModel.ElementAnnotation> annotations) {
         Map<String, AnalysisModel.ElementAnnotation> byKey = new HashMap<>();
         List<AnalysisModel.ElementAnnotation> out = new ArrayList<>();
-        java.util.Set<String> types = new java.util.HashSet<>();
+        Set<String> types = new HashSet<>();
         declarations(file, (key, name) -> types.add(key.substring(0, key.indexOf('|'))));
         for (AnalysisModel.ElementAnnotation a : annotations) {
             if (a.owner() != null && a.signature() != null && types.contains(a.owner())) {
@@ -102,7 +105,7 @@ public final class MaddiLibraryPlacement {
     }
 
     /** Every named declaration of the file, by its key: of a type, its fields, methods and their parameters. */
-    private static void declarations(PsiJavaFile file, java.util.function.BiConsumer<String, PsiIdentifier> sink) {
+    private static void declarations(PsiJavaFile file, BiConsumer<String, PsiIdentifier> sink) {
         for (PsiClass c : PsiTreeUtil.findChildrenOfType(file, PsiClass.class)) {
             // a type parameter is a PsiClass too; an anonymous or local class has no qualified name
             if (c instanceof PsiTypeParameter || c.getQualifiedName() == null) continue;
@@ -122,7 +125,7 @@ public final class MaddiLibraryPlacement {
         }
     }
 
-    private static void accept(java.util.function.BiConsumer<String, PsiIdentifier> sink, String key,
+    private static void accept(BiConsumer<String, PsiIdentifier> sink, String key,
                                @Nullable PsiIdentifier name) {
         if (name != null) sink.accept(key, name);
     }

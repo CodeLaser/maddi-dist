@@ -28,8 +28,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -153,7 +155,7 @@ public final class MaddiAnalysisService implements Disposable {
                 indicator.setIndeterminate(true);
                 // the progress bar's cancel button: nothing in the run looks at the indicator while it waits for the
                 // daemon, so watch it from beside the run
-                java.util.concurrent.Future<?> cancelWatch = ApplicationManager.getApplication().executeOnPooledThread(
+                Future<?> cancelWatch = ApplicationManager.getApplication().executeOnPooledThread(
                         () -> watchCancel(indicator));
                 try {
                     analyze(indicator);
@@ -506,7 +508,7 @@ public final class MaddiAnalysisService implements Disposable {
     }
 
     /** Run events are a UI concern: always on the EDT, and never allowed to break the run that reports them. */
-    private void publishRun(java.util.function.Consumer<MaddiRunListener> event) {
+    private void publishRun(Consumer<MaddiRunListener> event) {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             try {

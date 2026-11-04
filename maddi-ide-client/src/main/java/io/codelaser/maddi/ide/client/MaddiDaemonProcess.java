@@ -22,6 +22,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -92,8 +96,8 @@ public final class MaddiDaemonProcess implements Closeable {
             jvmArgs.add("-XX:+UseG1GC");
         }
         jvmArgs.addAll(extraJvmArgs);
-        java.util.Map<String, String> environment = kotlinFrontEndHome == null ? java.util.Map.of()
-                : java.util.Map.of(KotlinFrontEndInstaller.ENV_K2_HOME, kotlinFrontEndHome.toAbsolutePath().toString());
+        Map<String, String> environment = kotlinFrontEndHome == null ? Map.of()
+                : Map.of(KotlinFrontEndInstaller.ENV_K2_HOME, kotlinFrontEndHome.toAbsolutePath().toString());
         handle = launcher.launch(installDir, jdkHome, jvmArgs, environment, 60_000, logFile);
         client = new DaemonClient(handle.port(), 600_000); // heartbeats keep long analyses alive
         JsonNode ack = client.handshake(PROTOCOL_VERSION);
@@ -179,13 +183,13 @@ public final class MaddiDaemonProcess implements Closeable {
         descendants.forEach(ProcessHandle::destroyForcibly);
         h.process().destroyForcibly();
         try {
-            h.process().waitFor(KILL_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            h.process().waitFor(KILL_WAIT_SECONDS, TimeUnit.SECONDS);
             for (ProcessHandle descendant : descendants) {
-                descendant.onExit().get(KILL_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+                descendant.onExit().get(KILL_WAIT_SECONDS, TimeUnit.SECONDS);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+        } catch (ExecutionException | TimeoutException e) {
             // destroyed, but not yet reaped: nothing more this side can do
         }
     }
@@ -198,7 +202,7 @@ public final class MaddiDaemonProcess implements Closeable {
      */
     public synchronized JsonNode libraryAnnotations(String requestId, List<String> types) throws IOException {
         if (client == null) throw new IOException("daemon not started");
-        return client.requestUntil(java.util.Map.of("type", AnalysisModel.LIBRARY_ANNOTATIONS, "requestId", requestId,
+        return client.requestUntil(Map.of("type", AnalysisModel.LIBRARY_ANNOTATIONS, "requestId", requestId,
                 "types", types), AnalysisModel.LIBRARY_RESULT, null);
     }
 
@@ -210,7 +214,7 @@ public final class MaddiDaemonProcess implements Closeable {
     public synchronized JsonNode translate(String requestId, List<String> types, boolean together)
             throws IOException {
         if (client == null) throw new IOException("daemon not started");
-        return client.requestUntil(java.util.Map.of("type", AnalysisModel.TRANSLATE, "requestId", requestId,
+        return client.requestUntil(Map.of("type", AnalysisModel.TRANSLATE, "requestId", requestId,
                 "types", types, "together", together), AnalysisModel.TRANSLATE_RESULT, null);
     }
 
@@ -223,7 +227,7 @@ public final class MaddiDaemonProcess implements Closeable {
                                                          List<String> buildFileGlobs, List<String> extraJmods,
                                                          Path output) throws IOException {
         if (client == null) throw new IOException("daemon not started");
-        return client.requestUntil(java.util.Map.of("type", AnalysisModel.WRITE_INPUT_CONFIGURATION,
+        return client.requestUntil(Map.of("type", AnalysisModel.WRITE_INPUT_CONFIGURATION,
                 "requestId", requestId, "compileLog", compileLog.toString(), "buildRoot", buildRoot.toString(),
                 "buildFileGlobs", buildFileGlobs, "extraJmods", extraJmods, "output", output.toString()),
                 AnalysisModel.INPUT_CONFIGURATION_WRITTEN, null);

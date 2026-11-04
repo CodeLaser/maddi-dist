@@ -38,6 +38,7 @@ import io.codelaser.maddi.graph.G;
 import io.codelaser.maddi.inspection.api.resource.InputConfiguration;
 import io.codelaser.maddi.inspection.resource.InputConfigurationImpl;
 import io.codelaser.maddi.run.config.AnalysisHintsConfiguration;
+import io.codelaser.maddi.run.config.Configuration;
 import io.codelaser.maddi.run.config.GeneralConfiguration;
 import io.codelaser.maddi.run.config.util.JavaModules;
 import io.codelaser.maddi.run.config.util.JsonStreaming;
@@ -70,7 +71,7 @@ public record AnalyzerPropertyComputer(
         if (extension.skipProject) {
             return;
         }
-        io.codelaser.maddi.run.config.Configuration configuration = computeConfiguration(project, extension);
+        Configuration configuration = computeConfiguration(project, extension);
         try {
             String json = JsonStreaming.objectMapper().writerWithDefaultPrettyPrinter()
                     .writeValueAsString(configuration);
@@ -120,7 +121,7 @@ public record AnalyzerPropertyComputer(
         }*/
     }
 
-    public io.codelaser.maddi.run.config.Configuration computeConfiguration(Project project, AnalyzerExtension extension) {
+    public Configuration computeConfiguration(Project project, AnalyzerExtension extension) {
         LanguageConfiguration languageConfiguration = new LanguageConfigurationImpl(true);
 
         // general
@@ -132,7 +133,7 @@ public record AnalyzerPropertyComputer(
         // Input
         InputConfiguration inputConfiguration = makeInputConfiguration(project, extension);
 
-        return new io.codelaser.maddi.run.config.Configuration.Builder()
+        return new Configuration.Builder()
                 .setAnalysisHintsConfiguration(analysisHintsConfiguration)
                 .setGeneralConfiguration(generalConfiguration)
                 .setLanguageConfiguration(languageConfiguration)

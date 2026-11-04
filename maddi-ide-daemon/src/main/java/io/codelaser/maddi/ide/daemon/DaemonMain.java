@@ -20,6 +20,7 @@ package io.codelaser.maddi.ide.daemon;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -27,6 +28,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,7 +120,7 @@ public final class DaemonMain {
             LOGGER.warn("ignoring {}={}: not a pid", ENV_PARENT_PID, parentPid);
             return;
         }
-        java.util.Optional<ProcessHandle> parent = ProcessHandle.of(pid);
+        Optional<ProcessHandle> parent = ProcessHandle.of(pid);
         if (parent.isEmpty()) {
             LOGGER.info("the process that launched this daemon ({}) is gone; exiting", pid);
             Runtime.getRuntime().halt(0);
@@ -344,9 +347,9 @@ public final class DaemonMain {
      * failure: an absent or unreadable stamp must degrade to "unknown", never keep the daemon from starting.
      */
     private static String readBuildStamp() {
-        try (java.io.InputStream in = DaemonMain.class.getResourceAsStream("build-stamp.properties")) {
+        try (InputStream in = DaemonMain.class.getResourceAsStream("build-stamp.properties")) {
             if (in == null) return "unknown";
-            java.util.Properties properties = new java.util.Properties();
+            Properties properties = new Properties();
             properties.load(in);
             return properties.getProperty("source", "unknown");
         } catch (IOException | RuntimeException e) {
@@ -360,9 +363,9 @@ public final class DaemonMain {
         String fromProperty = System.getProperty("maddi.version");
         if (fromProperty != null) return fromProperty;
         // the build stamp carries the release too; a front end matches downloads (the Kotlin front end) to it
-        try (java.io.InputStream in = DaemonMain.class.getResourceAsStream("build-stamp.properties")) {
+        try (InputStream in = DaemonMain.class.getResourceAsStream("build-stamp.properties")) {
             if (in == null) return "unknown";
-            java.util.Properties properties = new java.util.Properties();
+            Properties properties = new Properties();
             properties.load(in);
             return properties.getProperty("version", "unknown");
         } catch (IOException | RuntimeException e) {

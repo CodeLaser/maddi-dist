@@ -38,6 +38,9 @@ import org.junit.jupiter.api.io.TempDir;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.codelaser.maddi.gradleplugin.inputconfig.SourceFacts;
+import io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile;
+
 /**
  * A SIBLING project's compile facts — {@code sourceRelease}, {@code addModules}, {@code warningFlags} —
  * reaching the consumer that co-analyses its sources.
@@ -124,10 +127,10 @@ public class TestSiblingSourceFacts {
      */
     @Test
     public void anOlderFactsFileReadsWithoutTheLanguageFacts(@TempDir Path dir) throws IOException {
-        Path file = dir.resolve(io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile.FILE_NAME);
+        Path file = dir.resolve(SourceFactsFile.FILE_NAME);
         Files.writeString(file, "{\"sourceRelease\":17,\"addModules\":[],\"warningFlags\":[\"-Werror\"]}");
-        io.codelaser.maddi.gradleplugin.inputconfig.SourceFacts facts =
-                io.codelaser.maddi.gradleplugin.inputconfig.SourceFactsFile.read(file.toFile());
+        SourceFacts facts =
+                SourceFactsFile.read(file.toFile());
         assertNotNull(facts);
         assertEquals(17, facts.sourceRelease());
         assertEquals(List.of("-Werror"), facts.warningFlags());

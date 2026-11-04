@@ -19,7 +19,10 @@ package io.codelaser.maddi.mcp;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -328,7 +331,7 @@ public final class MaddiService implements Closeable {
             project = projects.get(run.project());
         }
         if (run.finishedAt() != null && run.result() != null && project != null && project.config() != null) {
-            int changed = sourcesChangedSince(project.config(), java.time.Instant.parse(run.finishedAt()));
+            int changed = sourcesChangedSince(project.config(), Instant.parse(run.finishedAt()));
             out.put("sourcesChangedSince", changed);
             String hint = jdkHint(run.result());
             if (hint != null) out.put("hint", hint);
@@ -356,24 +359,24 @@ public final class MaddiService implements Closeable {
         return null;
     }
 
-    private static int sourcesChangedSince(AnalysisModel.AnalyzeConfig config, java.time.Instant since) {
+    private static int sourcesChangedSince(AnalysisModel.AnalyzeConfig config, Instant since) {
         int[] count = {0};
         for (AnalysisModel.ModuleSourceSet set : config.moduleSourceSets()) {
             for (String dir : set.sourceDirectories()) {
                 Path root = Path.of(dir);
-                if (!java.nio.file.Files.isDirectory(root)) continue;
-                try (var files = java.nio.file.Files.walk(root)) {
+                if (!Files.isDirectory(root)) continue;
+                try (var files = Files.walk(root)) {
                     files.filter(f -> {
                         String name = f.getFileName().toString();
                         return name.endsWith(".java") || name.endsWith(".kt");
                     }).forEach(f -> {
                         try {
-                            if (java.nio.file.Files.getLastModifiedTime(f).toInstant().isAfter(since)) count[0]++;
+                            if (Files.getLastModifiedTime(f).toInstant().isAfter(since)) count[0]++;
                         } catch (IOException e) {
                             // a file that went while counting: not one to count
                         }
                     });
-                } catch (IOException | java.io.UncheckedIOException e) {
+                } catch (IOException | UncheckedIOException e) {
                     // an unreadable directory changes no count worth failing for
                 }
             }
@@ -471,7 +474,7 @@ public final class MaddiService implements Closeable {
     /* the project's own command; false when the run failed */
     private boolean runCommand(AnalysisRun run, ProjectStore.Regenerate regenerate, Path log) throws IOException {
         run.phase("configure", "regenerating the configuration: " + regenerate.describe());
-        java.nio.file.Files.createDirectories(log.getParent());
+        Files.createDirectories(log.getParent());
         Process process = new ProcessBuilder(regenerate.command())
                 .directory(regenerate.directory() == null ? null : Path.of(regenerate.directory()).toFile())
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();

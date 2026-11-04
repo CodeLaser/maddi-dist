@@ -32,6 +32,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -80,14 +81,14 @@ public final class DaemonLauncher {
      */
     public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, long startTimeoutMillis, Path logFile)
             throws IOException {
-        return launch(installDir, jdkHome, jvmArgs, java.util.Map.of(), startTimeoutMillis, logFile);
+        return launch(installDir, jdkHome, jvmArgs, Map.of(), startTimeoutMillis, logFile);
     }
 
     /**
      * As above, with extra environment variables for the daemon process. A path goes here rather than in
      * {@code jvmArgs}: those travel as one space-joined {@code JAVA_OPTS}, which splits a path containing a space.
      */
-    public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, java.util.Map<String, String> environment,
+    public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, Map<String, String> environment,
                          long startTimeoutMillis, Path logFile)
             throws IOException {
         Path launcher = launcherScript(installDir);

@@ -17,6 +17,7 @@
 
 package io.codelaser.maddi.ide.plugin.analysis;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,7 +88,7 @@ final class MaddiKotlinFrontEnd {
      * then found no front end at a directory literally named {@code ~} (maddi-dist#6).
      */
     static Path expandHome(String path) {
-        if (path.equals("~") || path.startsWith("~/") || path.startsWith("~" + java.io.File.separator)) {
+        if (path.equals("~") || path.startsWith("~/") || path.startsWith("~" + File.separator)) {
             return Path.of(System.getProperty("user.home") + path.substring(1));
         }
         return Path.of(path);

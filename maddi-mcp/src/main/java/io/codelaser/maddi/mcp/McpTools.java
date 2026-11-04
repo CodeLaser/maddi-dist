@@ -19,6 +19,7 @@ package io.codelaser.maddi.mcp;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -266,7 +267,7 @@ public final class McpTools {
         if (daemonJdk != null && inputConfiguration == null && a.string("workingDirectory") == null) {
             return service.setDaemonJdk(project, daemonJdk);
         }
-        String now = java.time.Instant.now().toString();
+        String now = Instant.now().toString();
         if (inputConfiguration != null) {
             Path file = Path.of(inputConfiguration).toAbsolutePath().normalize();
             AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromInputConfiguration(file, service.mapper());
