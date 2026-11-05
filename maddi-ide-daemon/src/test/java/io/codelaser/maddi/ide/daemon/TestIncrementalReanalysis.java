@@ -149,6 +149,20 @@ public class TestIncrementalReanalysis {
                 findings(second).toString().replace(warmDir.toUri().toString(), "DIR/"));
     }
 
+    @DisplayName("an edit that moves a type to another package: a cold run, which analyses it")
+    @Test
+    public void packageChanged(@TempDir Path dir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        String lone = "package %s;\npublic class Lone {\n    private int n;\n    public int get() { return n; }\n}\n";
+        analyzeAll(dir, Map.of("x/Box.java", BOX, "x/User.java", USER, "x/Lone.java", lone.formatted("x")),
+                service, false);
+        // javac does not hold the package to the directory: the file stays, its type is z.Lone now
+        DaemonProtocol.Result moved = analyzeAll(dir, Map.of("x/Lone.java", lone.formatted("z")), service, false);
+        assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, moved.outcome());
+        assertTrue(displayFor(moved, "METHOD", "Lone.get").contains("@NotModified"),
+                () -> "Lone.get: " + displayFor(moved, "METHOD", "Lone.get"));
+    }
+
     @DisplayName("nothing changed: the previous result, at once")
     @Test
     public void noChange(@TempDir Path dir) throws Exception {

@@ -452,7 +452,14 @@ public class WarmAnalysisService implements AnalyzeHandler {
         }
         for (String name : seedNames) {
             TypeInfo t = parseResult.findType(name);
-            if (t != null) seedTypes.add(t);
+            if (t != null) {
+                seedTypes.add(t);
+            } else if (changed.stream().anyMatch(c -> c.fullyQualifiedName().equals(name))) {
+                // a changed type the re-parse no longer has by that name: renamed, or moved to another package. Its
+                // new type would be in neither the seed nor the carry, and stay unanalysed.
+                LOGGER.info("incremental: changed type {} is gone from the re-parse, analysing from scratch", name);
+                return null;
+            }
         }
         Set<Info> seed = new HashSet<>();
         for (Info info : order) {
