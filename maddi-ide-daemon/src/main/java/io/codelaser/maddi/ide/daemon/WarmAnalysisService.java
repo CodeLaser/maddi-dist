@@ -100,6 +100,16 @@ public class WarmAnalysisService implements AnalyzeHandler {
     /** Keep the model between requests and re-analyse incrementally; see the class comment. */
     static final boolean WARM = Boolean.getBoolean("maddi.daemon.warm");
 
+    /*
+     The early cutoff of an incremental re-analysis (on unless -Dmaddi.daemon.cutoff=false). The rewired types carry
+     their analysis values onto the new objects, the seed is the changed types alone, and the analysis compares what
+     their dependents can see of them with what the previous run left (ModificationRequest.seedPrevious): equal, the
+     carried values stand and the run ends there; otherwise it falls back to a cold analysis of the whole order. Off,
+     the seed is the changed types and their dependents, cleared; every element the worklist reaches is cleared too,
+     counts as changed, and wakes its neighbours, so an edit anywhere re-analyses the connected project.
+     */
+    static final boolean CUTOFF = !"false".equals(System.getProperty("maddi.daemon.cutoff"));
+
     private final InputConfigurationAssembler assembler = new InputConfigurationAssembler();
     private final boolean warm;
     /** The static-side-effect analysis for this service's runs; null keeps the analyzer's default. */
@@ -168,6 +178,13 @@ public class WarmAnalysisService implements AnalyzeHandler {
     }
 
     private LastRun lastRun;
+
+    /* for tests: how many elements the last incremental run analysed; -1 when it fell back to the cold analysis */
+    private int lastIncrementalScope;
+
+    int lastIncrementalScope() {
+        return lastIncrementalScope;
+    }
 
     @Override
     public DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
@@ -415,12 +432,24 @@ public class WarmAnalysisService implements AnalyzeHandler {
         G<Info> graph = prep.callGraph().graph();
         List<Info> order = new ComputeAnalysisOrder().go(graph, parallel);
 
-        // the seed: every element of the re-parsed and the rewired types, as their new objects; the rewired ones
-        // carry no analysis values (docs/design/incremental-and-overlay.md), so they are analysed again
+        // the seed: every element of the re-parsed types, as their new objects. With the cutoff (CUTOFF) the rewired
+        // types carry the previous run's analysis values; without it they carry none
+        // (docs/design/incremental-and-overlay.md) and are seeded too, so they are analysed again
         Set<TypeInfo> seedTypes = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<String> seedNames = new HashSet<>();
         for (TypeInfo t : changed) seedNames.add(t.fullyQualifiedName());
-        for (TypeInfo t : dependents) seedNames.add(t.fullyQualifiedName());
+        Set<TypeInfo> carryFrom = null;
+        Set<TypeInfo> seedPrevious = null;
+        if (CUTOFF) {
+            // every previous primary type but the changed ones: the rewired ones, and whatever else the re-parse
+            // rebuilt; a kept type maps onto itself and is skipped (RunRewireTests does the same)
+            Set<TypeInfo> previous = new HashSet<>(state.parseResult().primaryTypes());
+            previous.removeAll(changed);
+            carryFrom = Set.copyOf(previous);
+            seedPrevious = Set.copyOf(changed);
+        } else {
+            for (TypeInfo t : dependents) seedNames.add(t.fullyQualifiedName());
+        }
         for (String name : seedNames) {
             TypeInfo t = parseResult.findType(name);
             if (t != null) seedTypes.add(t);
@@ -438,7 +467,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 0, order.size());
         StreamingValueFeed valueFeed = new StreamingValueFeed(status, requestId, collector);
         ModificationRequest modRequest = new ModificationRequest(inspector, order, graph, parseResult.primaryTypes(),
-                modificationOptions(request.config()), valueFeed, seed);
+                modificationOptions(request.config()), valueFeed, seed, carryFrom, seedPrevious);
         ModificationOutcome outcome = runWithHeartbeat(status, valueFeed, () -> {
             try {
                 return engine.modification(modRequest);
@@ -451,11 +480,15 @@ public class WarmAnalysisService implements AnalyzeHandler {
         // The passes spoke about their scope only, the contract check after them (contracts, near misses) about the
         // whole order again. So an earlier finding stands unless it is about a re-parsed or rewired type (those are new
         // objects now) or an element the passes went over again, or the contract check gave it once more.
-        Set<Info> scope = outcome.scope() == null ? Set.of() : outcome.scope();
+        // No scope: the early cutoff fell back to a cold analysis of the whole order, which keeps no earlier finding.
+        boolean fellBackCold = outcome.scope() == null;
+        Set<Info> scope = fellBackCold ? Set.of() : outcome.scope();
+        if (fellBackCold) LOGGER.info("incremental: the early cutoff fell back to the cold analysis");
+        lastIncrementalScope = fellBackCold ? -1 : scope.size();
         List<KeptFinding> fresh = keptFindings(collector, outcome.messages());
         Set<DaemonProtocol.Finding> freshFindings = new HashSet<>(fresh.stream().map(KeptFinding::finding).toList());
         List<KeptFinding> analysisFindings = new ArrayList<>();
-        for (KeptFinding kept : state.findings()) {
+        for (KeptFinding kept : fellBackCold ? List.<KeptFinding>of() : state.findings()) {
             if (kept.info() == null || scope.contains(kept.info()) || freshFindings.contains(kept.finding())) continue;
             TypeInfo type = kept.info() instanceof TypeInfo ti ? ti : kept.info().typeInfo();
             if (type == null || seedNames.contains(type.primaryType().fullyQualifiedName())) continue;
