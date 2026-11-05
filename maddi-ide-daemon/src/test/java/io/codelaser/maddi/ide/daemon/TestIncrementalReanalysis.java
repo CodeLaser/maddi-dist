@@ -119,6 +119,50 @@ public class TestIncrementalReanalysis {
         assertEquals(findings(first), findings(third));
     }
 
+    // the same summary as BOX: what User sees of Box does not move
+    private static final String BOX_REWRITTEN = """
+            package x;
+            public class Box {
+                private int n;
+                public int get() { int m = n; return m; }
+            }
+            """;
+
+    @DisplayName("an edit its dependents cannot see: the early cutoff stops at the changed type")
+    @Test
+    public void earlyCutoff(@TempDir Path warmDir, @TempDir Path coldDir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        analyzeAll(warmDir, Map.of("x/Box.java", BOX, "x/User.java", USER, "x/Bad.java", BAD), service, false);
+
+        DaemonProtocol.Result second = analyzeAll(warmDir, Map.of("x/Box.java", BOX_REWRITTEN), service, false);
+        assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, second.outcome());
+        int scope = service.lastIncrementalScope();
+        assertTrue(scope >= 0, "the cutoff held, no cold fallback");
+        assertTrue(scope <= 4, () -> "only Box's elements were analysed, not " + scope);
+        assertTrue(finding(second, "contract-violation").isPresent(), "the untouched type keeps its finding");
+
+        DaemonProtocol.Result cold = analyzeAll(coldDir, Map.of("x/Box.java", BOX_REWRITTEN, "x/User.java", USER,
+                "x/Bad.java", BAD), new WarmAnalysisService(null, false), false);
+        assertEquals(annotations(cold).toString().replace(coldDir.toString(), "DIR"),
+                annotations(second).toString().replace(warmDir.toString(), "DIR"));
+        assertEquals(findings(cold).toString().replace(coldDir.toUri().toString(), "DIR/"),
+                findings(second).toString().replace(warmDir.toUri().toString(), "DIR/"));
+    }
+
+    @DisplayName("an edit that moves a type to another package: a cold run, which analyses it")
+    @Test
+    public void packageChanged(@TempDir Path dir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        String lone = "package %s;\npublic class Lone {\n    private int n;\n    public int get() { return n; }\n}\n";
+        analyzeAll(dir, Map.of("x/Box.java", BOX, "x/User.java", USER, "x/Lone.java", lone.formatted("x")),
+                service, false);
+        // javac does not hold the package to the directory: the file stays, its type is z.Lone now
+        DaemonProtocol.Result moved = analyzeAll(dir, Map.of("x/Lone.java", lone.formatted("z")), service, false);
+        assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, moved.outcome());
+        assertTrue(displayFor(moved, "METHOD", "Lone.get").contains("@NotModified"),
+                () -> "Lone.get: " + displayFor(moved, "METHOD", "Lone.get"));
+    }
+
     @DisplayName("nothing changed: the previous result, at once")
     @Test
     public void noChange(@TempDir Path dir) throws Exception {
