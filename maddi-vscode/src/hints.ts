@@ -6,6 +6,7 @@
 
 import * as vscode from 'vscode';
 import { Certainty, ElementAnnotation, certaintyLabel } from './analysisModel';
+import { LIBRARY_NOTE, Line, STEP_PREFIX, lines, prefixOf } from './gutterText';
 import { DEFAULT_HINT_FILTER, HintFilter, textFor } from './hintFilter';
 import { ResultStore } from './results';
 
@@ -44,7 +45,8 @@ export class MaddiInlayHintsProvider implements vscode.InlayHintsProvider {
         const certainty = this.store.certainty();
 
         const hints: vscode.InlayHint[] = [];
-        for (const element of this.store.annotationsFor(document.uri)) {
+        const all = this.store.annotationsFor(document.uri);
+        for (const element of all) {
             const position = positionOf(document, element);
             // VS Code asks for one visible range at a time; anything outside it is somebody else's call
             if (!position || !range.contains(position)) continue;
@@ -53,7 +55,7 @@ export class MaddiInlayHintsProvider implements vscode.InlayHintsProvider {
 
             const hint = new vscode.InlayHint(position, text, kindOf(element));
             hint.paddingRight = true; // it precedes the declaration, so it must not touch it
-            hint.tooltip = tooltip(element, certainty);
+            hint.tooltip = tooltip(element, all, certainty);
             hints.push(hint);
         }
         return hints;
@@ -86,17 +88,42 @@ function kindOf(element: ElementAnnotation): vscode.InlayHintKind {
     return element.kind === 'PARAMETER' ? vscode.InlayHintKind.Parameter : vscode.InlayHintKind.Type;
 }
 
-/** The full computed picture on hover, including what the filter left out and how settled it is. */
-function tooltip(element: ElementAnnotation, certainty: Certainty): vscode.MarkdownString {
+/**
+ * The full computed picture on hover: what IntelliJ's gutter and Eclipse's ruler say ({@link lines}), so each
+ * annotation's why — and for a method, its parameters with theirs — then how settled it is, and the raw
+ * properties, which include what the filter left out.
+ */
+function tooltip(element: ElementAnnotation, all: ElementAnnotation[], certainty: Certainty): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
-    md.appendMarkdown(`**${element.fqn}**\n\n`);
+    md.appendMarkdown(`**${escape(element.fqn)}**\n\n`);
     const caveat = certaintyLabel(certainty);
-    if (caveat) md.appendMarkdown(`_${caveat}_\n\n`);
-    const all = element.displayAnnotations ?? [];
-    if (all.length > 0) md.appendMarkdown(`${all.join(' ')}\n\n`);
-    const properties = Object.entries(element.properties ?? {});
+    if (caveat) md.appendMarkdown(`_${escape(caveat)}_\n\n`);
+    const shown = lines(element, all);
+    if (shown.length > 0) md.appendMarkdown(shown.map(render).join('  \n') + '\n\n');
+    const properties = Object.entries(element.properties ?? {}).filter(([k]) => k !== LIBRARY_NOTE);
     if (properties.length > 0) {
-        md.appendMarkdown(properties.map(([k, v]) => `- \`${k}\` = ${v}`).join('\n'));
+        md.appendMarkdown('---\n\n' + properties.map(([k, v]) => `- \`${k}\` = ${escape(v)}`).join('\n'));
     }
     return md;
+}
+
+/**
+ * One line, indented with non-breaking spaces (markdown collapses ordinary ones). A why's step with a place links
+ * to it: VS Code's opener reads `#L<line>,<column>` on a file link as where to put the cursor.
+ */
+function render(line: Line): string {
+    const indent = '\u00a0'.repeat(2 * line.depth);
+    if (line.kind === 'HEADING') return `${indent}**${escape(line.text)}**`;
+    const link = line.link;
+    if (link && line.text.startsWith(link.place)) {
+        const target = `${link.uri}#L${link.line},${Math.max(1, link.column)}`;
+        return `${indent}${escape(STEP_PREFIX)}[${escape(link.place)}](${target})`
+            + escape(line.text.substring(link.place.length));
+    }
+    return `${indent}${escape(prefixOf(line.kind))}${escape(line.text)}`;
+}
+
+/** Markdown-escape analysis text: annotations, signatures and code fragments are full of `*`, `_`, `<` and `[`. */
+function escape(text: string): string {
+    return text.replace(/[\\`*_{}\[\]()<>#+\-.!|]/g, (c) => '\\' + c);
 }

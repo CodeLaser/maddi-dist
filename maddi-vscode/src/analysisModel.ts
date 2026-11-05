@@ -62,6 +62,25 @@ export interface Annotation {
     contextDefault: boolean;
 }
 
+/** One statement of a {@link Why}: where it is, and what it does. Line and column are 1-based; line 0: no place. */
+export interface WhyStep {
+    uri?: string;
+    line: number;
+    column: number;
+    text: string;
+}
+
+/**
+ * Why an annotation holds — or, when `negative`, why the element is NOT `@annotation` (not `@Container`): the
+ * statement responsible, followed into the callees, the element's own statement first.
+ */
+export interface Why {
+    /** The annotation's simple name, e.g. `Modified`. */
+    annotation: string;
+    steps: WhyStep[];
+    negative?: boolean;
+}
+
 export interface ElementAnnotation {
     uri: string;
     beginLine?: number;
@@ -73,6 +92,11 @@ export interface ElementAnnotation {
     displayAnnotations: string[];
     annotations: Annotation[];
     properties: Record<string, string>;
+    /** Absent from an older daemon's frames. */
+    whys?: Why[];
+    /** The declaring type and the name-based key of the element; absent from an older daemon's frames. */
+    owner?: string;
+    signature?: string;
 }
 
 export interface Result {
