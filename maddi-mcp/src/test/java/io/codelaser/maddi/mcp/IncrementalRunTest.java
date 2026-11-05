@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.project.config.Directories;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
 
 /*
  An incremental server against the real daemon: the first run is cold, a run after an edit is incremental and says so
@@ -62,11 +64,9 @@ public class IncrementalRunTest {
         Path project = Files.createDirectories(dir.resolve("p"));
         Files.createDirectories(project.resolve("src/x"));
         Files.writeString(project.resolve("src/x/A.java"), GET);
-        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(project, List.of("src"), List.of(),
-                List.of(), List.of(), null, 0, null, List.of("java.base"), null);
         try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
-            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    ProjectConfigs.buildFilesOf(config), "then", config));
+            service.configure("p", new ProjectConfigurator.FromDirectories(new Directories(project, List.of("src"), List.of(), List.of(), List.of(),
+                    null, 0, null, List.of("java.base"), null)), null);
 
             AnalysisRun first = run(service, false);
             assertNull(first.incremental(), "nothing kept yet: cold");

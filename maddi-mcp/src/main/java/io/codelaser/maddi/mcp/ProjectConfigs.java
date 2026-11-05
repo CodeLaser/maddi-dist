@@ -36,7 +36,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.codelaser.maddi.project.config.BuildFileCheck;
-import io.codelaser.maddi.project.config.Regenerate;
+import io.codelaser.maddi.project.config.Directories;
+import io.codelaser.maddi.project.config.DirectoriesConfiguration;
 
 /**
  * The daemon's per-module {@link AnalysisModel.AnalyzeConfig}, built without an IDE: from the
@@ -103,38 +104,9 @@ public final class ProjectConfigs {
                 false, false, sets);
     }
 
-    /** The {@code buildFiles} a build tool recorded with the configuration; null when it recorded none. */
-    public static BuildFiles buildFilesOf(Path file, ObjectMapper mapper) throws IOException {
-        JsonNode node = mapper.readTree(file.toFile()).get("buildFiles");
-        return node == null || node.isNull() ? null : mapper.treeToValue(node, BuildFiles.class);
-    }
-
-    /** The Gradle plugin's task that writes {@code build/inputConfiguration.json}. */
-    public static final String GRADLE_TASK = Regenerate.GRADLE_TASK;
-    /** The Maven plugin's goal that writes {@code target/inputConfiguration.json}. */
-    public static final String MAVEN_GOAL = Regenerate.MAVEN_GOAL;
-
-    /**
-     * How to write {@code file} again, from who wrote it: the plugin's task or goal ({@link Regenerate#defaultFor}).
-     * Null for any other producer (a compile log, say): then only a command given at configuration can.
-     */
-    public static ProjectStore.Regenerate defaultRegenerate(BuildFiles buildFiles, Path file) {
-        Regenerate regenerate = Regenerate.defaultFor(buildFiles, file);
-        return regenerate == null ? null
-                : new ProjectStore.Regenerate(regenerate.command(), regenerate.directory().toString());
-    }
-
     /** Whether the build files recorded with a configuration still hash as they did. */
     public static BuildFileCheck.Freshness freshness(BuildFiles recorded, AnalysisModel.AnalyzeConfig config) {
         return BuildFileCheck.check(recorded, config == null ? List.of() : sourceDirectories(config));
-    }
-
-    /**
-     * What to record for a configuration that no build tool wrote: the Gradle and Maven files under its working
-     * directory and its module-infos, so a change to the build is noticed even though it cannot be redone.
-     */
-    public static BuildFiles buildFilesOf(AnalysisModel.AnalyzeConfig config) {
-        return BuildFileCheck.hashDefault(Path.of(config.workingDirectory()), sourceDirectories(config));
     }
 
     private static List<Path> sourceDirectories(AnalysisModel.AnalyzeConfig config) {
@@ -146,31 +118,27 @@ public final class ProjectConfigs {
     }
 
     /**
-     * From directories: one {@code main} source set, and a {@code test} one depending on it when test directories
-     * are given. Relative paths are taken against {@code workingDirectory}.
-     *
-     * @param outputDirectory the main set's compiled classes, if any; it is the set's identity, not a class-path part
+     * From directories named by hand: one {@code main} source set, and a {@code test} one depending on it when test
+     * directories are given. Unlike maddi-project-config's {@link DirectoriesConfiguration} (one set per directory,
+     * each seeing only the sets before it), the main directories form one set, so that they may use each other; and
+     * the test class path is the test set's alone. The configuration file is still the library's: it is what the
+     * build files are checked against.
      */
-    public static AnalysisModel.AnalyzeConfig fromDirectories(Path workingDirectory, List<String> sourceDirectories,
-                                                              List<String> testSourceDirectories,
-                                                              List<String> classPath, List<String> testClassPath,
-                                                              String outputDirectory, int sourceRelease,
-                                                              String sdkHome, List<String> jdkModules,
-                                                              String sourceEncoding) {
-        if (sourceDirectories.isEmpty()) throw new IllegalArgumentException("no source directories");
+    public static AnalysisModel.AnalyzeConfig fromDirectories(Directories d) {
+        Path base = d.workingDirectory().toAbsolutePath().normalize();
         List<AnalysisModel.ModuleSourceSet> sets = new ArrayList<>();
-        sets.add(new AnalysisModel.ModuleSourceSet("main", resolve(workingDirectory, sourceDirectories),
-                outputDirectory == null ? null : workingDirectory.resolve(outputDirectory).toString(), false,
-                sourceRelease, List.of(), resolve(workingDirectory, classPath)));
-        if (!testSourceDirectories.isEmpty()) {
-            List<String> testPath = new ArrayList<>(resolve(workingDirectory, classPath));
-            testPath.addAll(resolve(workingDirectory, testClassPath));
-            sets.add(new AnalysisModel.ModuleSourceSet("test", resolve(workingDirectory, testSourceDirectories),
-                    null, true, sourceRelease, List.of("main"), testPath));
+        sets.add(new AnalysisModel.ModuleSourceSet("main", resolve(base, d.sourceDirectories()),
+                d.outputDirectory() == null ? null : base.resolve(d.outputDirectory()).toString(), false,
+                d.sourceRelease(), List.of(), resolve(base, d.classPath())));
+        if (!d.testSourceDirectories().isEmpty()) {
+            List<String> testPath = new ArrayList<>(resolve(base, d.classPath()));
+            testPath.addAll(resolve(base, d.testClassPath()));
+            sets.add(new AnalysisModel.ModuleSourceSet("test", resolve(base, d.testSourceDirectories()),
+                    null, true, d.sourceRelease(), List.of("main"), testPath));
         }
-        return new AnalysisModel.AnalyzeConfig(workingDirectory.toString(), sdkHome,
-                sourceEncoding == null ? "UTF-8" : sourceEncoding, jdkModules, List.of(), List.of(), List.of(),
-                false, false, sets);
+        return new AnalysisModel.AnalyzeConfig(base.toString(), d.sdkHome(),
+                d.sourceEncoding() == null ? "UTF-8" : d.sourceEncoding(), d.jdkModules(), List.of(), List.of(),
+                List.of(), false, false, sets);
     }
 
     /**

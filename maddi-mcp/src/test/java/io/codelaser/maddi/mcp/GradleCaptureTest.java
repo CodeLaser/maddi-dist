@@ -29,6 +29,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
+
 /*
  A Gradle build without the maddi plugin, configured by its directory alone: the configuration is made by compiling
  it (real Gradle, through this repository's wrapper), analysed, and made again when a build file changes. Slow: it
@@ -79,9 +82,7 @@ public class GradleCaptureTest {
     public void configuredByItsDirectory(@TempDir Path dir) throws Exception {
         Path root = build(dir);
         try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
-            service.configure(new ProjectStore.StoredProject("demo", ProjectStore.StoredProject.GRADLE,
-                    service.inputConfigurationOf("demo").toString(),
-                    ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString()), null, "now", null));
+            service.configure("demo", new ProjectConfigurator.FromCapture(CaptureSpec.gradle(root)), null);
             assertTrue(service.projects().getFirst().get("configuration").toString().startsWith("not made yet"));
 
             AnalysisRun made = service.await(service.analyze("demo", List.of(), List.of(), false, true).id(), 600, null);

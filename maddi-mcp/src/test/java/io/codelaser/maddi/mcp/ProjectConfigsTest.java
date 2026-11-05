@@ -29,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.project.config.Directories;
 
 public class ProjectConfigsTest {
 
@@ -103,8 +104,9 @@ public class ProjectConfigsTest {
 
     @Test
     public void fromDirectories(@TempDir Path dir) {
-        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(dir, List.of("src"), List.of("test"),
-                List.of("lib/a.jar"), List.of("lib/junit.jar"), "classes", 17, null, List.of("java.base"), null);
+        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(new Directories(dir, List.of("src"),
+                List.of("test"), List.of("lib/a.jar"), List.of("lib/junit.jar"), "classes", 17, null,
+                List.of("java.base"), null));
         assertEquals(2, config.moduleSourceSets().size());
         AnalysisModel.ModuleSourceSet main = config.moduleSourceSets().get(0);
         assertEquals(List.of(dir.resolve("src").toString()), main.sourceDirectories());

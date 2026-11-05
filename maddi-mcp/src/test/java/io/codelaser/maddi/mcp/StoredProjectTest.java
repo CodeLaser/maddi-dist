@@ -21,8 +21,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -31,6 +35,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import io.codelaser.maddi.ide.client.AnalysisModel;
+import io.codelaser.maddi.project.config.BuildFileCheck;
+import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.ConfiguredBy;
+import io.codelaser.maddi.project.config.Directories;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
+import io.codelaser.maddi.project.config.ProjectRecord;
+import io.codelaser.maddi.project.config.Regenerate;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
 import io.codelaser.maddi.inspection.resource.BuildFilesCapture;
 
@@ -80,10 +91,8 @@ public class StoredProjectTest {
         Path store = dir.resolve("store");
 
         try (MaddiService service = new MaddiService(settings(dir), store)) {
-            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.INPUT_CONFIGURATION,
-                    file.toString(), new ProjectStore.Regenerate(List.of("cp", next.toString(), file.toString()),
-                    project.toString()), ProjectConfigs.buildFilesOf(file, mapper), "then",
-                    ProjectConfigs.fromInputConfiguration(file, mapper)));
+            service.configure("p", new ProjectConfigurator.FromFile(file,
+                    Regenerate.command(List.of("cp", next.toString(), file.toString()), project)), null);
             AnalysisRun run = finish(service, service.analyze(null, List.of(), List.of(), false));
             assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
             assertEquals("stored, build files unchanged", run.describe().get("configuration"));
@@ -126,13 +135,12 @@ public class StoredProjectTest {
         Path project = Files.createDirectories(dir.resolve("p"));
         Files.createDirectories(project.resolve("src/x"));
         Files.writeString(project.resolve("src/x/A.java"), "package x; public class A { int i; void inc() { i++; } }\n");
-        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(project, List.of("src"), List.of(),
-                List.of(), List.of(), null, 0, null, List.of("java.base"), null);
+        ProjectConfigurator.Way config = new ProjectConfigurator.FromDirectories(new Directories(project, List.of("src"), List.of(), List.of(), List.of(),
+                null, 0, null, List.of("java.base"), null));
         Path jdk = Path.of(System.getProperty("maddi.test.jdkHome", System.getProperty("java.home")));
         Path store = dir.resolve("store");
         try (MaddiService service = new MaddiService(settings(dir), store)) {
-            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    ProjectConfigs.buildFilesOf(config), "then", config));
+            service.configure("p", config, null);
             assertNull(service.projects().getFirst().get("daemonJdk"));
 
             assertThrows(IllegalArgumentException.class, () -> service.setDaemonJdk("p", dir.toString()),
@@ -140,13 +148,110 @@ public class StoredProjectTest {
             assertEquals(jdk.toString(), service.setDaemonJdk("p", jdk.toString()).get("daemonJdk"));
 
             // configured again without one: the JDK the project needs stays
-            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    ProjectConfigs.buildFilesOf(config), "again", config));
+            service.configure("p", config, null);
             AnalysisRun run = service.await(service.analyze("p", List.of(), List.of(), false).id(), 300, null);
             assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
         }
         try (MaddiService service = new MaddiService(settings(dir), store)) {
             assertEquals(jdk.toString(), service.projects().getFirst().get("daemonJdk"), "stored");
+        }
+    }
+
+    /*
+     A store as the server wrote it before it kept maddi-project-config's records: a directories project without a
+     configuration file (its build files hashed in the project itself), a Gradle capture as the built-in "gradle",
+     and a command. All three still open, and the directories project is still checked against its own hashes.
+     */
+    @Test
+    public void aStoreFromBefore(@TempDir Path dir) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("p"));
+        Files.createDirectories(project.resolve("src/x"));
+        Files.writeString(project.resolve("src/x/A.java"), "package x; public class A { int i; void inc() { i++; } }\n");
+        Files.writeString(project.resolve("pom.xml"), "<project/>\n");
+        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(new Directories(project, List.of("src"),
+                List.of(), List.of(), List.of(), null, 0, null, List.of("java.base"), null));
+        BuildFiles buildFiles = BuildFileCheck.hashDefault(project, List.of(project.resolve("src")));
+        Path store = Files.createDirectories(dir.resolve("store"));
+        ObjectNode directories = mapper.createObjectNode().put("name", "p").put("kind", "directories")
+                .putNull("sourceFile").putNull("regenerate").put("configuredAt", "2026-10-01T10:00:00Z");
+        directories.set("buildFiles", mapper.valueToTree(buildFiles));
+        directories.set("config", mapper.valueToTree(config));
+        directories.putNull("daemonJdk");
+        mapper.writeValue(store.resolve("p.project.json").toFile(), directories);
+        mapper.writeValue(store.resolve("g.project.json").toFile(), Map.of("name", "g", "kind", "gradle",
+                "sourceFile", store.resolve("work/g/inputConfiguration.json").toString(),
+                "regenerate", Map.of("command", List.of(), "directory", project.toString(), "builtin", "gradle"),
+                "configuredAt", "2026-10-01T10:00:00Z"));
+        mapper.writeValue(store.resolve("c.project.json").toFile(), Map.of("name", "c", "kind", "inputConfiguration",
+                "sourceFile", project.resolve("inputConfiguration.json").toString(),
+                "regenerate", Map.of("command", List.of("make", "config"), "directory", project.toString()),
+                "configuredAt", "2026-10-01T10:00:00Z"));
+
+        ProjectStore records = new ProjectStore(store, mapper);
+        List<String> problems = new ArrayList<>();
+        Map<String, ProjectRecord> byName = new HashMap<>();
+        for (ProjectRecord r : records.loadAll(problems)) byName.put(r.name(), r);
+        assertEquals(List.of(), problems);
+        assertEquals(Set.of("p", "g", "c"), byName.keySet());
+        assertEquals(ConfiguredBy.DIRECTORIES, byName.get("p").configuredBy());
+        assertNull(byName.get("p").inputConfiguration());
+        assertNull(byName.get("p").regenerate());
+        assertEquals(ConfiguredBy.GRADLE_CAPTURE, byName.get("g").configuredBy());
+        assertTrue(byName.get("g").regenerate().isCapture(), "the built-in is the Gradle capture");
+        assertEquals(CaptureSpec.gradle(project), byName.get("g").regenerate().capture());
+        assertEquals(Regenerate.command(List.of("make", "config"), project), byName.get("c").regenerate());
+        assertEquals(Instant.parse("2026-10-01T10:00:00Z"), byName.get("c").configuredAt());
+
+        // written back as it was read
+        records.save(records.loadStored("g").orElseThrow());
+        assertEquals(byName.get("g"), records.load("g").orElseThrow());
+
+        try (MaddiService service = new MaddiService(settings(dir), store)) {
+            assertEquals("FRESH", service.projects().stream().filter(m -> "p".equals(m.get("project"))).findFirst()
+                    .orElseThrow().get("buildFiles"));
+            AnalysisRun run = finish(service, service.analyze("p", List.of(), List.of(), false));
+            assertEquals(AnalysisRun.State.FINISHED, run.state(), () -> run.describe().toString());
+            assertEquals("stored, build files unchanged", run.describe().get("configuration"));
+
+            Files.writeString(project.resolve("pom.xml"), "<project><!-- a dependency more --></project>\n");
+            AnalysisRun refused = finish(service, service.analyze("p", List.of(), List.of(), false));
+            assertEquals(AnalysisRun.State.FAILED, refused.state());
+            assertTrue(refused.describe().get("error").toString().contains("pom.xml (changed)"),
+                    () -> refused.describe().toString());
+            AnalysisRun allowed = finish(service, service.analyze("p", List.of(), List.of(), true));
+            assertEquals(AnalysisRun.State.FINISHED, allowed.state(), () -> allowed.describe().toString());
+            assertEquals("STALE, analysed anyway: pom.xml (changed)", allowed.describe().get("configuration"));
+        }
+    }
+
+    /* a stop during a regeneration kills the build that regenerates: maddi-project-config hands its process over */
+    @Test
+    public void stoppedWhileRegenerating(@TempDir Path dir) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("p"));
+        Files.createDirectories(project.resolve("src/x"));
+        Files.writeString(project.resolve("src/x/A.java"), "package x; public class A { }\n");
+        Files.writeString(project.resolve("build.gradle.kts"), "plugins { java }\n");
+        Path file = project.resolve("inputConfiguration.json");
+        writeInputConfiguration(project, file);
+        Path pid = dir.resolve("pid");
+        try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
+            service.configure("p", new ProjectConfigurator.FromFile(file, Regenerate.command(List.of("sh", "-c",
+                    "echo $$ > " + pid + "; exec sleep 300"), project)), null);
+            Files.writeString(project.resolve("build.gradle.kts"), "plugins { java; `java-library` }\n");
+            AnalysisRun run = service.analyze("p", List.of(), List.of(), false);
+            for (int i = 0; i < 200 && !(Files.isRegularFile(pid) && !Files.readString(pid).isBlank()); i++) {
+                Thread.sleep(50);
+            }
+            long buildPid = Long.parseLong(Files.readString(pid).strip());
+            assertTrue(ProcessHandle.of(buildPid).map(ProcessHandle::isAlive).orElse(false), "regenerating");
+
+            service.stop(run.id());
+            assertTrue(run.awaitEnd(10_000));
+            assertEquals(AnalysisRun.State.STOPPED, run.state(), () -> run.describe().toString());
+            for (int i = 0; i < 100 && ProcessHandle.of(buildPid).map(ProcessHandle::isAlive).orElse(false); i++) {
+                Thread.sleep(50);
+            }
+            assertFalse(ProcessHandle.of(buildPid).map(ProcessHandle::isAlive).orElse(false), "the build was killed");
         }
     }
 
@@ -156,12 +261,11 @@ public class StoredProjectTest {
         Files.createDirectories(project.resolve("src/x"));
         Files.writeString(project.resolve("src/x/A.java"), "package x; public class A { }\n");
         Files.writeString(project.resolve("pom.xml"), "<project/>\n");
-        AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromDirectories(project, List.of("src"), List.of(),
-                List.of(), List.of(), null, 0, null, List.of("java.base"), null);
+        ProjectConfigurator.Way config = new ProjectConfigurator.FromDirectories(new Directories(project, List.of("src"), List.of(), List.of(), List.of(),
+                null, 0, null, List.of("java.base"), null));
 
         try (MaddiService service = new MaddiService(settings(dir), dir.resolve("store"))) {
-            service.configure(new ProjectStore.StoredProject("p", ProjectStore.StoredProject.DIRECTORIES, null, null,
-                    ProjectConfigs.buildFilesOf(config), "then", config));
+            service.configure("p", config, null);
             Files.writeString(project.resolve("pom.xml"), "<project><!-- a dependency more --></project>\n");
 
             AnalysisRun refused = finish(service, service.analyze("p", List.of(), List.of(), false));

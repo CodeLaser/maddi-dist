@@ -19,7 +19,6 @@ package io.codelaser.maddi.mcp;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +28,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.codelaser.maddi.ide.client.AnalysisModel;
 import io.codelaser.maddi.inspection.api.resource.BuildFiles;
+import io.codelaser.maddi.project.config.BuildFileCheck;
 import io.codelaser.maddi.project.config.CaptureSpec;
+import io.codelaser.maddi.project.config.Directories;
+import io.codelaser.maddi.project.config.ProjectConfigurator;
+import io.codelaser.maddi.project.config.Regenerate;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
@@ -267,23 +270,18 @@ public final class McpTools {
         if (daemonJdk != null && inputConfiguration == null && a.string("workingDirectory") == null) {
             return service.setDaemonJdk(project, daemonJdk);
         }
-        String now = Instant.now().toString();
         if (inputConfiguration != null) {
             Path file = Path.of(inputConfiguration).toAbsolutePath().normalize();
-            AnalysisModel.AnalyzeConfig config = ProjectConfigs.fromInputConfiguration(file, service.mapper());
-            BuildFiles buildFiles = ProjectConfigs.buildFilesOf(file, service.mapper());
-            ProjectStore.Regenerate regenerate;
             List<String> command = a.strings("regenerate");
+            Regenerate regenerate = null; // the plugin's task or goal, if it wrote the file
             if (!command.isEmpty()) {
                 String dir = a.string("regenerateDirectory");
-                regenerate = new ProjectStore.Regenerate(command, dir != null ? dir
-                        : buildFiles != null && buildFiles.root() != null ? buildFiles.root() : config.workingDirectory());
-            } else {
-                regenerate = ProjectConfigs.defaultRegenerate(buildFiles, file);
+                BuildFiles buildFiles = BuildFileCheck.buildFilesOf(file);
+                regenerate = Regenerate.command(command, Path.of(dir != null ? dir
+                        : buildFiles != null && buildFiles.root() != null ? buildFiles.root()
+                        : ProjectConfigs.fromInputConfiguration(file, service.mapper()).workingDirectory()));
             }
-            return service.configure(new ProjectStore.StoredProject(project,
-                    ProjectStore.StoredProject.INPUT_CONFIGURATION, file.toString(), regenerate, buildFiles, now,
-                    config, daemonJdk));
+            return service.configure(project, new ProjectConfigurator.FromFile(file, regenerate), daemonJdk);
         }
         String build = a.string("build");
         String workingDirectoryArg = a.string("workingDirectory");
@@ -300,17 +298,16 @@ public final class McpTools {
             if (buildJdk != null && !Files.isExecutable(buildJdk.resolve("bin/java"))) {
                 throw new IllegalArgumentException("buildJdk " + buildJdk + " holds no bin/java");
             }
-            ProjectStore.Regenerate regenerate = switch (build) {
+            CaptureSpec spec = switch (build) {
                 case ProjectStore.StoredProject.GRADLE -> {
                     if (!CaptureSpec.isGradleBuild(root)) {
                         throw new IllegalArgumentException(root + " holds no settings.gradle(.kts) or build.gradle(.kts)");
                     }
-                    yield buildJdk == null ? ProjectStore.Regenerate.builtin(ProjectStore.Regenerate.GRADLE, root.toString())
-                            : ProjectStore.Regenerate.capture(CaptureSpec.gradle(root, buildJdk));
+                    yield CaptureSpec.gradle(root, buildJdk);
                 }
                 case ProjectStore.StoredProject.MAVEN -> {
                     if (!CaptureSpec.isMavenBuild(root)) throw new IllegalArgumentException(root + " holds no pom.xml");
-                    yield ProjectStore.Regenerate.capture(CaptureSpec.maven(root, buildJdk));
+                    yield CaptureSpec.maven(root, buildJdk);
                 }
                 case ProjectStore.StoredProject.COMPILE_LOG -> {
                     if (buildJdk != null) throw new IllegalArgumentException("buildJdk is for build gradle or maven;"
@@ -320,27 +317,21 @@ public final class McpTools {
                     if (command.isEmpty() == (log == null)) {
                         throw new IllegalArgumentException("build compileLog needs compileCommand or compileLog, not both");
                     }
-                    yield ProjectStore.Regenerate.capture(CaptureSpec.compileLog(root, command,
-                            log == null ? null : root.resolve(log), a.string("javacPattern"), a.strings("buildFileGlobs")));
+                    yield CaptureSpec.compileLog(root, command, log == null ? null : root.resolve(log),
+                            a.string("javacPattern"), a.strings("buildFileGlobs"));
                 }
                 default -> throw new IllegalArgumentException("unknown build '" + build + "'");
             };
-            return service.configure(new ProjectStore.StoredProject(project, build,
-                    service.inputConfigurationOf(project).toString(), regenerate, null, now, null, daemonJdk));
+            return service.configure(project, new ProjectConfigurator.FromCapture(spec), daemonJdk);
         }
-        AnalysisModel.AnalyzeConfig config;
-        {
-            String workingDirectory = a.string("workingDirectory");
-            if (workingDirectory == null) {
-                throw new IllegalArgumentException("give inputConfiguration, or workingDirectory and sourceDirectories");
-            }
-            config = ProjectConfigs.fromDirectories(Path.of(workingDirectory).toAbsolutePath(),
-                    a.strings("sourceDirectories"), a.strings("testSourceDirectories"), a.strings("classPath"),
-                    a.strings("testClassPath"), a.string("outputDirectory"), a.integer("sourceRelease", 0),
-                    a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
+        if (workingDirectoryArg == null) {
+            throw new IllegalArgumentException("give inputConfiguration, or workingDirectory and sourceDirectories");
         }
-        return service.configure(new ProjectStore.StoredProject(project, ProjectStore.StoredProject.DIRECTORIES,
-                null, null, ProjectConfigs.buildFilesOf(config), now, config, daemonJdk));
+        Directories directories = new Directories(Path.of(workingDirectoryArg).toAbsolutePath().normalize(),
+                a.strings("sourceDirectories"), a.strings("testSourceDirectories"), a.strings("classPath"),
+                a.strings("testClassPath"), a.string("outputDirectory"), a.integer("sourceRelease", 0),
+                a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
+        return service.configure(project, new ProjectConfigurator.FromDirectories(directories), daemonJdk);
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
