@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { AnalyzeConfig, ClasspathEntry, SourceRoot } from './analysisModel';
+import { AnalyzeConfig, ClasspathEntry, ModuleSourceSet, SourceRoot } from './analysisModel';
 
 /**
  * Builds maddi's `AnalyzeConfig` from the Java project model, the counterpart of `MaddiConfigBuilder`
@@ -22,6 +22,8 @@ import { AnalyzeConfig, ClasspathEntry, SourceRoot } from './analysisModel';
  * - `java.project.getAll` -> project root URIs (string[])
  * - `java.project.getClasspaths(uri, {scope})` -> `{projectRoot, classpaths[], modulepaths[]}`
  * - `java.project.listSourcePaths` -> `{data: [{path, displayPath, classpathEntry, projectName, projectType}]}`
+ * - `java.project.getSettings(uri, keys[])` -> `{key: value}`; for {@link CLASSPATH_ENTRIES} the project's raw
+ *   class path, `[{kind, path, output, attributes}]`, with containers (Maven, Gradle) expanded and the JRE left out
  */
 
 /**
@@ -71,11 +73,45 @@ export interface BuildOptions {
     workingDirectory: string;
 }
 
+/**
+ * The project model as maddi's per-module source sets when jdt.ls can say enough for them, else the flat form.
+ *
+ * The source sets are what the IntelliJ and Eclipse front-ends send: each project a main set and a test set, each
+ * with its own class path and the main sets of the projects it requires. The flat form makes the daemon wire every
+ * source root to every class-path entry, which on a multi-module workspace is many times what javac opens, puts
+ * test-only libraries in reach of main code, and makes a project's own classes reachable both as source and as
+ * bytecode through another project's output folder.
+ */
 export async function buildConfig(execute: ExecuteCommand, options: BuildOptions): Promise<AnalyzeConfig> {
     const all = (await execute(WORKSPACE_COMMAND, 'java.project.getAll')) as string[] | undefined ?? [];
     // jdt.ls reports its synthetic catch-all project alongside the real ones; it has nothing to analyse
     const projects = all.filter((uri) => !isDefaultProject(uri));
+    const sourcePaths = await listSourcePaths(execute);
 
+    const sets = await moduleSourceSets(execute, projects, sourcePaths);
+    if (sets) {
+        return {
+            workingDirectory: options.workingDirectory,
+            sdkHome: options.jdkHome,
+            sourceEncoding: 'UTF-8',
+            jmods: DEFAULT_JMODS,
+            sources: [],   // the flat pair stays empty: the sets carry the structure
+            classpath: [],
+            restrictToPackages: [],
+            parallel: true,
+            warnNearMisses: options.warnNearMisses,
+            moduleSourceSets: sets,
+        };
+    }
+    return flatConfig(execute, projects, sourcePaths, options);
+}
+
+/**
+ * The flat form, for a workspace the source sets cannot describe: one union class path, and every source root on
+ * its own. What this front-end sent before 0.9.6.
+ */
+async function flatConfig(execute: ExecuteCommand, projects: string[], sourcePaths: SourcePath[],
+                          options: BuildOptions): Promise<AnalyzeConfig> {
     // path -> scope, deduplicated and order-preserving, as in the other front-ends
     const classpath = new Map<string, string>();
     for (const project of projects) {
@@ -88,7 +124,6 @@ export async function buildConfig(execute: ExecuteCommand, options: BuildOptions
         for (const entry of test) if (!classpath.has(entry)) classpath.set(entry, 'test');
     }
 
-    const sourcePaths = await listSourcePaths(execute);
     const sources: SourceRoot[] = sourcePaths.map((sp) => ({
         name: sp.displayPath || sp.path,
         path: sp.path,
@@ -108,6 +143,164 @@ export async function buildConfig(execute: ExecuteCommand, options: BuildOptions
         parallel: true,
         warnNearMisses: options.warnNearMisses,
     };
+}
+
+/** `IClasspathEntry` kinds, as jdt.ls reports them. */
+export const CPE_LIBRARY = 1;
+export const CPE_PROJECT = 2;
+export const CPE_SOURCE = 3;
+
+export const CLASSPATH_ENTRIES = 'org.eclipse.jdt.ls.core.classpathEntries';
+export const OUTPUT_PATH = 'org.eclipse.jdt.ls.core.outputPath';
+export const COMPILER_RELEASE = 'org.eclipse.jdt.core.compiler.release';
+export const COMPILER_COMPLIANCE = 'org.eclipse.jdt.core.compiler.compliance';
+
+/** One raw class-path entry of a project, as `java.project.getSettings` reports it. */
+export interface ProjectClasspathEntry {
+    kind: number;
+    /** A source folder's or library's absolute path; a project's `/<name>`. */
+    path: string;
+    /** A source folder's own output folder, absolute; absent when it uses the project's. */
+    output?: string;
+    /** `test: "true"` marks a test source folder, or a library only the tests use. */
+    attributes?: Record<string, string>;
+}
+
+interface ProjectModel {
+    uri: string;
+    name: string;
+    entries: ProjectClasspathEntry[];
+    outputPath?: string;
+    release: number;
+}
+
+/**
+ * The counterpart of `MaddiEclipseConfigBuilder.addSets`, on what jdt.ls — which is Eclipse JDT — reports of each
+ * project's raw class path. Undefined when that is not enough to describe the workspace, and the flat form must do:
+ * a jdt.ls without `getSettings`, a project it gives no class path for, or a source root no set covers (jdt.ls drops
+ * a source folder that is the project's root folder itself, and an analysis that silently skipped it would be worse
+ * than the flat one).
+ */
+export async function moduleSourceSets(execute: ExecuteCommand, projects: string[], sourcePaths: SourcePath[]):
+    Promise<ModuleSourceSet[] | undefined> {
+    const models: ProjectModel[] = [];
+    for (const uri of projects) {
+        let settings: Record<string, unknown> | undefined;
+        try {
+            settings = (await execute(WORKSPACE_COMMAND, 'java.project.getSettings', uri,
+                [CLASSPATH_ENTRIES, OUTPUT_PATH, COMPILER_RELEASE, COMPILER_COMPLIANCE])) as
+                Record<string, unknown> | undefined;
+        } catch {
+            return undefined;
+        }
+        const entries = settings?.[CLASSPATH_ENTRIES];
+        if (!Array.isArray(entries)) return undefined;
+        const typed = entries as ProjectClasspathEntry[];
+        const sources = typed.filter((e) => e.kind === CPE_SOURCE).map((e) => normalize(e.path));
+        // jdt.ls knows a project by its URI here and by its name in a project entry; listSourcePaths has both a
+        // source root's path and its project's name, which ties the two together
+        const name = sourcePaths.find((sp) => sources.includes(normalize(sp.path)))?.projectName
+            ?? lastSegment(uri);
+        const output = settings?.[OUTPUT_PATH];
+        models.push({
+            uri, name, entries: typed,
+            outputPath: typeof output === 'string' && output.length > 0 ? output : undefined,
+            release: apiRelease(settings?.[COMPILER_RELEASE], settings?.[COMPILER_COMPLIANCE]),
+        });
+    }
+
+    const sets: ModuleSourceSet[] = [];
+    for (const model of models) addSets(model, sets);
+    const mainSets = new Set(sets.filter((s) => !s.test).map((s) => s.name));
+    for (const set of sets) set.dependencies = set.dependencies.filter((d) => mainSets.has(d));
+
+    const covered = new Set(sets.flatMap((s) => s.sourceDirectories.map(normalize)));
+    const uncovered = sourcePaths.some((sp) => sp.projectName !== DEFAULT_PROJECT_NAME
+        && !covered.has(normalize(sp.path)));
+    if (sets.length === 0 || uncovered) return undefined;
+    return sets;
+}
+
+function addSets(model: ProjectModel, sets: ModuleSourceSet[]): void {
+    const main: string[] = [];
+    const test: string[] = [];
+    let mainOutput: string | undefined;
+    let testOutput: string | undefined;
+    // path -> whether ONLY tests use it; a library on both class paths counts as main
+    const libraries = new Map<string, boolean>();
+    const required: string[] = [];
+    for (const entry of model.entries) {
+        const isTest = entry.attributes?.test === 'true';
+        if (entry.kind === CPE_SOURCE) {
+            // a source folder's own output overrides the project default (e.g. test sources -> bin/test)
+            const out = entry.output || model.outputPath;
+            if (isTest) {
+                test.push(entry.path);
+                testOutput ??= out;
+            } else {
+                main.push(entry.path);
+                mainOutput ??= out;
+            }
+        } else if (entry.kind === CPE_LIBRARY) {
+            const previous = libraries.get(entry.path);
+            libraries.set(entry.path, previous === undefined ? isTest : previous && isTest);
+        } else if (entry.kind === CPE_PROJECT) {
+            const name = entry.path.replace(/^[/\\]+/, '');
+            if (name.length > 0 && !required.includes(name)) required.push(name);
+        }
+    }
+    if (main.length === 0 && test.length === 0) return; // no Java sources of its own
+
+    const mainClassPath: string[] = [];
+    const testClassPath: string[] = [];
+    for (const [path, testOnly] of libraries) {
+        if (!testOnly) mainClassPath.push(path);
+        testClassPath.push(path);
+    }
+    const dependencies = required.map(mainSetName);
+    if (main.length > 0) {
+        sets.push({
+            name: mainSetName(model.name), sourceDirectories: main, outputPath: mainOutput, test: false,
+            sourceRelease: model.release, dependencies, classPath: mainClassPath,
+        });
+    }
+    if (test.length > 0) {
+        sets.push({
+            name: testSetName(model.name), sourceDirectories: test, outputPath: testOutput, test: true,
+            sourceRelease: model.release,
+            dependencies: main.length > 0 ? [...dependencies, mainSetName(model.name)] : [...dependencies],
+            classPath: testClassPath,
+        });
+    }
+}
+
+export function mainSetName(project: string): string {
+    return `${project}/main`;
+}
+
+export function testSetName(project: string): string {
+    return `${project}/test`;
+}
+
+/**
+ * The release whose API the project compiles against, or 0 for "not known", which the daemon reads as "the JDK maddi
+ * runs on". As in the Eclipse front-end: only with `--release` on (m2e sets it from `maven.compiler.release`) is the
+ * compliance level an API release; without it the project compiles against the JRE it is bound to.
+ */
+export function apiRelease(release: unknown, compliance: unknown): number {
+    if (release !== 'enabled' || typeof compliance !== 'string') return 0;
+    const version = compliance.startsWith('1.') ? compliance.substring(2) : compliance;
+    const n = Number.parseInt(version, 10);
+    return Number.isNaN(n) ? 0 : n;
+}
+
+function normalize(path: string): string {
+    return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function lastSegment(uri: string): string {
+    const trimmed = uri.replace(/\/+$/, '');
+    return decodeURIComponent(trimmed.substring(trimmed.lastIndexOf('/') + 1));
 }
 
 async function classpathsOf(execute: ExecuteCommand, projectUri: string, scope: string): Promise<string[]> {

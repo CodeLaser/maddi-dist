@@ -29,6 +29,11 @@
         "command": "maddi.analyze",
         "title": "Analyze with maddi",
         "category": "maddi"
+      },
+      {
+        "command": "maddi.stop",
+        "title": "Stop maddi Analysis",
+        "category": "maddi"
       }
     ],
     "configuration": {
@@ -73,6 +78,14 @@
           "markdownDescription": "**Incremental re-analysis (experimental).** After an edit, re-analyze only the changed types and what depends on them, on the state the previous run left. Faster, but never certified; turn off for a full run. A change restarts the daemon."
         }
       }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "maddi.stop",
+          "when": "maddi.running"
+        }
+      ]
     }
   },
   "scripts": {

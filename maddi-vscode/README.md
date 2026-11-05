@@ -20,12 +20,35 @@ So this extension asks jdt.ls rather than reimplementing anything:
 | What | How |
 |---|---|
 | projects | `java.project.getAll` (minus jdt.ls's synthetic catch-all project) |
-| classpath + output dirs | `java.project.getClasspaths(uri, {scope})` — the runtime classpath, which includes the compiler output folders |
+| per-module source sets | `java.project.getSettings(uri, [keys])` — each project's raw class path (containers expanded, JRE left out), its output folder and `--release` |
+| classpath + output dirs (fallback) | `java.project.getClasspaths(uri, {scope})` — the runtime classpath, which includes the compiler output folders |
 | source roots | `java.project.listSourcePaths` |
 | fresh `.class` files | `java.workspace.compile(false)` — resolves only when the build has finished |
 
 All of it goes through `java.execute.workspaceCommand`, the bridge `redhat.java` exposes onto jdt.ls's
 delegate commands.
+
+The daemon gets the project as **module source sets**, as from the Eclipse plugin (`MaddiEclipseConfigBuilder`,
+which reads the same JDT model): each project a main and a test set, with its own libraries and the main sets of
+the projects it requires. Only when jdt.ls cannot describe the workspace that way — no `getSettings`, or a source
+root no set covers, such as a source folder that is the project's root, which jdt.ls leaves out — does it fall back
+to the flat pair of all source roots and one union class path. The output channel says which.
+
+## In the editor
+
+- **Findings** are diagnostics, with their why-chain as related information.
+- **Computed annotations** are inline hints. The hover says what IntelliJ's gutter and Eclipse's ruler say
+  (`gutterText.ts`, a port of `GutterText`): each annotation's why, step by step with links to the statements,
+  why a type close to `@Container` is not one, and for a method its parameters with theirs.
+- **Hints follow their declarations through edits.** IntelliJ and Eclipse find each declaration again by name
+  (`owner` and `signature`, an erased signature their compilers' bindings give); jdt.ls offers no bindings here, so
+  `edits.ts` moves the positions with every change VS Code reports, as a range marker does, and drops a hint whose
+  declaration was deleted. Edits never saved are forgotten when their editor closes.
+- **Analyze saves the Java editors first**: the daemon reads the files on disk. Asking again during a run that has
+  already saved runs once more when it ends.
+- **Stop maddi Analysis** (or the progress notification's cancel) kills the daemon, the one way out of a fixpoint
+  iteration in progress. What the run streamed stays on screen, marked provisional; the next analysis starts a
+  fresh daemon.
 
 ## Two things that fail silently, and are handled
 
@@ -83,4 +106,8 @@ error.
   which is unsupported and version-fragile; inline was reviewed in situ and judged fine, so do not add the
   hack.
 - **no gutter or findings view** — the Problems panel covers the second, and VS Code has no real analogue of
-  the first.
+  the first; the hover carries what the gutter says elsewhere.
+- **library files** — the JDK's and libraries' sources (`jdt://` editors) show no annotations yet. The daemon
+  answers `libraryAnnotations`, but places them by erased signature, and jdt.ls's document symbols give only
+  unerased simple names (`add(E)`).
+- not in step with the other front-ends, by choice: Kotlin sources, and Translate to Kotlin.

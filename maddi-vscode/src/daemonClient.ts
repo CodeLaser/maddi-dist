@@ -47,7 +47,7 @@ export class DaemonClient {
     private readonly reader = new FrameReader();
     /** Frames that arrived before anyone asked for them; drained by the next read. */
     private pending: Frame[] = [];
-    private waiter: ((frame: Frame) => void) | undefined;
+    private waiter: { resolve: (frame: Frame) => void; reject: (error: Error) => void } | undefined;
     private failure: Error | undefined;
 
     constructor(private readonly port: number, private readonly timeoutMs = 600_000) {}
@@ -78,7 +78,7 @@ export class DaemonClient {
             const waiter = this.waiter;
             if (waiter) {
                 this.waiter = undefined;
-                waiter(frame);
+                waiter.resolve(frame);
             } else {
                 this.pending.push(frame);
             }
@@ -89,6 +89,13 @@ export class DaemonClient {
         // Remember the first failure: a socket error usually arrives before 'close', and the later, vaguer
         // message would otherwise overwrite the one that explains what actually happened.
         this.failure ??= error;
+        // ...and wake a read already waiting. Without this, a daemon that dies (or is killed, which is how a run
+        // is stopped) mid-analysis left the read hanging until its timeout, ten minutes later.
+        const waiter = this.waiter;
+        if (waiter) {
+            this.waiter = undefined;
+            waiter.reject(this.failure);
+        }
     }
 
     private send(message: Frame): void {
@@ -105,9 +112,15 @@ export class DaemonClient {
                 this.waiter = undefined;
                 reject(new Error(`no frame from the daemon within ${this.timeoutMs} ms`));
             }, this.timeoutMs);
-            this.waiter = (frame) => {
-                clearTimeout(timer);
-                resolve(frame);
+            this.waiter = {
+                resolve: (frame) => {
+                    clearTimeout(timer);
+                    resolve(frame);
+                },
+                reject: (error) => {
+                    clearTimeout(timer);
+                    reject(error);
+                },
             };
         });
     }

@@ -4,12 +4,13 @@
  * Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { PARTIAL_RESULT, PartialResult, Result, merge } from './analysisModel';
 import { buildConfig } from './configBuilder';
 import { DaemonClient, Frame, PROTOCOL_VERSION } from './daemonClient';
-import { DaemonHandle, launchDaemon } from './daemonLauncher';
+import { DaemonHandle, killDaemon, launchDaemon, launcherPath } from './daemonLauncher';
 import { toDiagnostics } from './diagnostics';
 import { MaddiInlayHintsProvider } from './hints';
 import { CompileStatus, compileWorkspace, waitForStandardServer } from './javaLanguageServer';
@@ -31,6 +32,12 @@ let diagnostics: vscode.DiagnosticCollection;
 let output: vscode.OutputChannel;
 let store: ResultStore;
 let running = false;
+/** Set when the user stops the run in progress: its failure is then the stop, not an error. */
+let stopRequested = false;
+/** Set once the run in progress has saved the editors: from then on, it does not see what is typed. */
+let runHasSaved = false;
+/** Analyze was asked for again during a run that will not see the latest edits: one more run when it ends. */
+let rerunRequested = false;
 
 export function activate(context: vscode.ExtensionContext): void {
     diagnostics = vscode.languages.createDiagnosticCollection('maddi');
@@ -44,7 +51,22 @@ export function activate(context: vscode.ExtensionContext): void {
         store,
         hints,
         vscode.languages.registerInlayHintsProvider({ language: 'java' }, hints),
+        // the hints follow their declarations through edits (see edits.ts)
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            if (!isProjectJava(event.document)) return;
+            store.edit(event.document.uri, event.contentChanges.map((c) => ({
+                startLine: c.range.start.line, startCol: c.range.start.character,
+                endLine: c.range.end.line, endCol: c.range.end.character, text: c.text,
+            })));
+        }),
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (isProjectJava(document)) store.saved(document.uri);
+        }),
+        vscode.workspace.onDidCloseTextDocument((document) => {
+            if (isProjectJava(document)) store.closed(document.uri);
+        }),
         vscode.commands.registerCommand('maddi.analyze', () => analyzeCommand(context)),
+        vscode.commands.registerCommand('maddi.stop', () => stopCommand()),
         // the daemon is a child process: it does not go away with the window unless it is killed
         { dispose: () => stopDaemon() });
 }
@@ -53,14 +75,42 @@ export function deactivate(): void {
     stopDaemon();
 }
 
+/** A Java source on disk: what the analysis reads, as opposed to a library's `jdt://` class file. */
+function isProjectJava(document: vscode.TextDocument): boolean {
+    return document.languageId === 'java' && document.uri.scheme === 'file';
+}
+
 function stopDaemon(): void {
-    daemon?.process.kill();
+    if (daemon) killDaemon(daemon);
     daemon = undefined;
+    void vscode.commands.executeCommand('setContext', 'maddi.running', false);
+}
+
+/**
+ * Stop the run in progress by killing the daemon, as the IntelliJ and Eclipse plugins do: it is the one way out of
+ * a fixpoint iteration in progress. The waiting analysis then fails with "daemon closed the connection", what the
+ * run streamed stays on screen, and the next analysis starts a fresh daemon. Nothing is lost that a new run does
+ * not rebuild, since every run builds its own model.
+ */
+function stopCommand(): void {
+    if (!running) {
+        vscode.window.showInformationMessage('maddi is not analyzing.');
+        return;
+    }
+    stopRequested = true;
+    rerunRequested = false; // stopping empties the queue, as in the other front-ends
+    output.appendLine('stopping the analysis');
+    stopDaemon();
 }
 
 async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     if (running) {
-        vscode.window.showInformationMessage('maddi is already analyzing.');
+        // Before the run has saved the editors, it will read what is there now: the request is part of it. After,
+        // it asks for one more run when this one ends, rather than being dropped (as the other front-ends do).
+        if (runHasSaved && !rerunRequested) {
+            rerunRequested = true;
+            vscode.window.showInformationMessage('maddi will analyze again when the current run ends.');
+        }
         return;
     }
     const folder = vscode.workspace.workspaceFolders?.[0];
@@ -78,11 +128,25 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     }
 
     running = true;
+    stopRequested = false;
+    runHasSaved = false;
+    let again = false;
+    void vscode.commands.executeCommand('setContext', 'maddi.running', true);
     try {
         await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'maddi', cancellable: false },
-            (progress) => analyze(context, folder, jdkHome, settings, progress));
+            { location: vscode.ProgressLocation.Notification, title: 'maddi', cancellable: true },
+            (progress, token) => {
+                token.onCancellationRequested(() => stopCommand());
+                return analyze(context, folder, jdkHome, settings, progress);
+            });
     } catch (e) {
+        if (stopRequested) {
+            // What the run streamed stays: it is established, only possibly weaker than a finished run's, and the
+            // hover says so (provisional). Findings come only at the end of a run, so the previous run's stay too.
+            output.appendLine('analysis stopped');
+            vscode.window.showInformationMessage('maddi: analysis stopped. What it had established stays on screen.');
+            return;
+        }
         // Drop what is on screen: it came from a run that did not finish, and stale findings presented as
         // current are worse than none — they look like an answer.
         diagnostics.clear();
@@ -92,8 +156,14 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
         vscode.window.showErrorMessage(`maddi: ${message}`, 'Show log')
             .then((choice) => { if (choice) output.show(); });
     } finally {
+        again = rerunRequested && !stopRequested;
         running = false;
+        stopRequested = false;
+        runHasSaved = false;
+        rerunRequested = false;
+        void vscode.commands.executeCommand('setContext', 'maddi.running', false);
     }
+    if (again) void analyzeCommand(context);
 }
 
 async function analyze(
@@ -105,6 +175,15 @@ async function analyze(
 
     progress.report({ message: 'waiting for the Java language server' });
     await waitForStandardServer();
+
+    // The daemon reads the files on disk, and jdt.ls compiles them: an unsaved editor would be analysed as it was
+    // last saved, so a class still being typed showed nothing. As the other front-ends do since 0.9.6, save first.
+    progress.report({ message: 'saving' });
+    await saveJavaEditors();
+    runHasSaved = true;
+    // from here on, what the run reports is placed on the sources as saved now; edits made during the run are
+    // followed on top of it (see ResultStore.beginRun)
+    store.beginRun();
 
     // The parser reads .class files, so compile before asking for anything. jdt.ls autobuilds, but a file
     // saved a moment ago may still be in flight; this resolves only once the server's build has returned.
@@ -129,8 +208,11 @@ async function analyze(
             warnNearMisses: settings.get<boolean>('warnNearMisses') ?? false,
             workingDirectory: folder.uri.fsPath,
         });
-    output.appendLine(
-        `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`);
+    const sets = config.moduleSourceSets ?? [];
+    output.appendLine(sets.length > 0
+        ? `analyzing ${sets.length} module source set(s): ${sets.map((s) => s.name).join(', ')}`
+        // the flat form: jdt.ls could not describe the workspace as source sets (see moduleSourceSets)
+        : `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`);
 
     const client = new DaemonClient(handle.port);
     try {
@@ -186,6 +268,13 @@ async function analyze(
     }
 }
 
+async function saveJavaEditors(): Promise<void> {
+    const dirty = vscode.workspace.textDocuments.filter((d) => d.isDirty && isProjectJava(d));
+    const saved = await Promise.all(dirty.map((d) => d.save()));
+    const failed = dirty.filter((_, i) => !saved[i]).map((d) => path.basename(d.uri.fsPath));
+    if (failed.length > 0) output.appendLine(`could not save ${failed.join(', ')}; analyzing them as on disk`);
+}
+
 function applyResult(result: Result): void {
     store.set(result);
     diagnostics.clear();
@@ -206,6 +295,16 @@ async function ensureDaemon(
     const installDir = configured && configured.length > 0
         ? configured
         : path.join(context.extensionPath, 'daemon');
+    // Say which setting to change: an override that holds no daemon is a stale setting, not a broken install, and
+    // the bare launcher path left the user to work that out (the IntelliJ plugin says the same since 0.9.6).
+    if (!fs.existsSync(launcherPath(installDir))) {
+        throw new Error(configured
+            ? `maddi.daemonInstall is set to ${installDir}, which holds no maddi daemon (no ${path.relative(installDir,
+                launcherPath(installDir))}). Clear the setting to use the daemon bundled with the extension, or point `
+              + 'it at a daemon distribution (the directory containing bin/ and lib/).'
+            : `the daemon bundled with the extension is missing from ${installDir}. Reinstall the extension, or set `
+              + 'maddi.daemonInstall to a daemon distribution.');
+    }
     output.appendLine(`starting the daemon from ${installDir} on ${jdkHome}`);
     daemon = await launchDaemon({
         installDir,

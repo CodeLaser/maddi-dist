@@ -6,6 +6,7 @@
 
 import * as vscode from 'vscode';
 import { Certainty, ElementAnnotation, Finding, Result, certaintyOf } from './analysisModel';
+import { TextChange, followAll } from './edits';
 
 /**
  * The latest analysis result, indexed for the display surfaces — the counterpart of `MaddiResults`
@@ -16,7 +17,13 @@ import { Certainty, ElementAnnotation, Finding, Result, certaintyOf } from './an
  */
 export class ResultStore {
     private latest: Result | undefined;
+    /** What is drawn: {@link base} with the edits since applied ({@link followAll}). */
     private annotations = new Map<string, ElementAnnotation[]>();
+    /** By path, at the positions of the source the run read. */
+    private base = new Map<string, ElementAnnotation[]>();
+    /** By path, the edits since that source was saved for a run, in order; and how many of them are on disk. */
+    private edits = new Map<string, TextChange[]>();
+    private savedEdits = new Map<string, number>();
     /** True while what is held came from a streamed pass rather than a finished run. */
     private provisional = false;
 
@@ -42,14 +49,65 @@ export class ResultStore {
 
     private replace(result: Result): void {
         this.latest = result;
-        this.annotations = index(result.elementAnnotations ?? []);
+        this.base = index(result.elementAnnotations ?? []);
+        this.annotations = new Map();
+        for (const [path, elements] of this.base) {
+            this.annotations.set(path, followAll(elements, this.edits.get(path) ?? []));
+        }
         this.changed.fire();
+    }
+
+    /**
+     * A run is about to read the saved sources: from here on its positions are the reference. What is on screen
+     * stays, at the positions it has been followed to, so the edits so far are folded into it and forgotten.
+     */
+    beginRun(): void {
+        this.base = this.annotations;
+        this.edits = new Map();
+        this.savedEdits = new Map();
+    }
+
+    /** Edits to a file: its annotations follow them, and so will those of a result that is still to come. */
+    edit(uri: vscode.Uri, changes: TextChange[]): void {
+        if (changes.length === 0) return;
+        const path = uri.fsPath;
+        const list = this.edits.get(path);
+        if (list) list.push(...changes);
+        else this.edits.set(path, [...changes]);
+        const shown = this.annotations.get(path);
+        if (shown) {
+            this.annotations.set(path, followAll(shown, changes));
+            this.changed.fire();
+        }
+    }
+
+    /** The file is saved: its edits so far are on disk, and survive the editor being closed. */
+    saved(uri: vscode.Uri): void {
+        this.savedEdits.set(uri.fsPath, this.edits.get(uri.fsPath)?.length ?? 0);
+    }
+
+    /**
+     * The editor is closed. Edits that were never saved are gone with it (the file reopens as it is on disk), so
+     * the annotations go back to following the saved ones only.
+     */
+    closed(uri: vscode.Uri): void {
+        const path = uri.fsPath;
+        const list = this.edits.get(path);
+        const saved = this.savedEdits.get(path) ?? 0;
+        if (!list || list.length <= saved) return;
+        list.length = saved;
+        const base = this.base.get(path);
+        if (base) {
+            this.annotations.set(path, followAll(base, list));
+            this.changed.fire();
+        }
     }
 
     clear(): void {
         this.provisional = false;
         this.latest = undefined;
         this.annotations = new Map();
+        this.base = new Map();
         this.changed.fire();
     }
 

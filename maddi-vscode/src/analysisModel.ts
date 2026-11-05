@@ -26,16 +26,39 @@ export interface ClasspathEntry {
     scope: string; // compile | test | runtime | test-runtime
 }
 
+/**
+ * One compiled unit of the project, with its own class path and its own direct dependencies, named. The
+ * structured alternative to the flat `sources` / `classpath` pair, which the daemon can only auto-wire: every
+ * source set to every class-path entry, which on a multi-module project is far more than javac ever opens, and
+ * which makes a module's own classes reachable as both source and bytecode. See `DaemonProtocol.ModuleSourceSet`.
+ */
+export interface ModuleSourceSet {
+    /** Stable identity, e.g. `my-module/main`; what `dependencies` refer to. */
+    name: string;
+    sourceDirectories: string[];
+    /** Where this set's class files live: its identity, never a class-path entry of another set. Absent: unknown. */
+    outputPath?: string;
+    test: boolean;
+    /** `--release` for this set; 0 when unknown (the daemon then uses the JDK maddi runs on). */
+    sourceRelease: number;
+    /** Names of the OTHER sets this one compiles against, direct only. */
+    dependencies: string[];
+    /** Jars and class directories for this set alone. */
+    classPath: string[];
+}
+
 export interface AnalyzeConfig {
     workingDirectory: string;
     sdkHome: string;
     sourceEncoding: string;
     jmods: string[];
+    /** The flat form; empty when {@link moduleSourceSets} carries the structure. */
     sources: SourceRoot[];
     classpath: ClasspathEntry[];
     restrictToPackages: string[];
     parallel: boolean;
     warnNearMisses: boolean;
+    moduleSourceSets?: ModuleSourceSet[];
 }
 
 /**
@@ -62,6 +85,25 @@ export interface Annotation {
     contextDefault: boolean;
 }
 
+/** One statement of a {@link Why}: where it is, and what it does. Line and column are 1-based; line 0: no place. */
+export interface WhyStep {
+    uri?: string;
+    line: number;
+    column: number;
+    text: string;
+}
+
+/**
+ * Why an annotation holds — or, when `negative`, why the element is NOT `@annotation` (not `@Container`): the
+ * statement responsible, followed into the callees, the element's own statement first.
+ */
+export interface Why {
+    /** The annotation's simple name, e.g. `Modified`. */
+    annotation: string;
+    steps: WhyStep[];
+    negative?: boolean;
+}
+
 export interface ElementAnnotation {
     uri: string;
     beginLine?: number;
@@ -73,6 +115,11 @@ export interface ElementAnnotation {
     displayAnnotations: string[];
     annotations: Annotation[];
     properties: Record<string, string>;
+    /** Absent from an older daemon's frames. */
+    whys?: Why[];
+    /** The declaring type and the name-based key of the element; absent from an older daemon's frames. */
+    owner?: string;
+    signature?: string;
 }
 
 export interface Result {
@@ -109,12 +156,20 @@ export function certaintyOf(result: Result | undefined): Certainty {
     return result.outcome === OUTCOME_CERTIFIED ? 'FINAL' : 'BEST_AVAILABLE';
 }
 
-/** A short phrase for a tooltip or status line; undefined when there is nothing worth saying. */
-export function certaintyLabel(certainty: Certainty): string | undefined {
+export const OUTCOME_INCREMENTAL = 'INCREMENTAL';
+
+/**
+ * A short phrase for a tooltip or status line; undefined when there is nothing worth saying. `outcome` tells the two
+ * kinds of best available apart: an incremental re-analysis reaches its fixpoint, but on the previous run's values
+ * and without the whole-project passes, so it is not certified for another reason than a run that stopped short.
+ */
+export function certaintyLabel(certainty: Certainty, outcome?: string): string | undefined {
     switch (certainty) {
         case 'PROVISIONAL': return 'provisional — the analysis is still running';
         case 'FINAL': return undefined; // the normal case; repeating it on every hint would be noise
-        case 'BEST_AVAILABLE': return 'best available — the analysis did not reach a fixpoint';
+        case 'BEST_AVAILABLE': return outcome === OUTCOME_INCREMENTAL
+            ? 'best available — an incremental re-analysis, not certified; turn incremental re-analysis off for a full run'
+            : 'best available — the analysis did not reach a fixpoint';
         case 'UNKNOWN': return 'no completed analysis';
     }
 }
