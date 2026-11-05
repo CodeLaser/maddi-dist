@@ -40,6 +40,12 @@ to the flat pair of all source roots and one union class path. The output channe
 - **Computed annotations** are inline hints. The hover says what IntelliJ's gutter and Eclipse's ruler say
   (`gutterText.ts`, a port of `GutterText`): each annotation's why, step by step with links to the statements,
   why a type close to `@Container` is not one, and for a method its parameters with theirs.
+- **Hints follow their declarations through edits.** IntelliJ and Eclipse find each declaration again by name
+  (`owner` and `signature`, an erased signature their compilers' bindings give); jdt.ls offers no bindings here, so
+  `edits.ts` moves the positions with every change VS Code reports, as a range marker does, and drops a hint whose
+  declaration was deleted. Edits never saved are forgotten when their editor closes.
+- **Analyze saves the Java editors first**: the daemon reads the files on disk. Asking again during a run that has
+  already saved runs once more when it ends.
 - **Stop maddi Analysis** (or the progress notification's cancel) kills the daemon, the one way out of a fixpoint
   iteration in progress. What the run streamed stays on screen, marked provisional; the next analysis starts a
   fresh daemon.
@@ -104,5 +110,4 @@ error.
 - **library files** — the JDK's and libraries' sources (`jdt://` editors) show no annotations yet. The daemon
   answers `libraryAnnotations`, but places them by erased signature, and jdt.ls's document symbols give only
   unerased simple names (`add(E)`).
-- not yet in step with the other front-ends: hints that follow their declarations after an edit (by `owner` and
-  `signature`), Kotlin sources, Translate to Kotlin, and a trigger during a run queuing one more run.
+- not in step with the other front-ends, by choice: Kotlin sources, and Translate to Kotlin.

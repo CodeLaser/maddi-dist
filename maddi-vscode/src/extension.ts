@@ -33,6 +33,10 @@ let store: ResultStore;
 let running = false;
 /** Set when the user stops the run in progress: its failure is then the stop, not an error. */
 let stopRequested = false;
+/** Set once the run in progress has saved the editors: from then on, it does not see what is typed. */
+let runHasSaved = false;
+/** Analyze was asked for again during a run that will not see the latest edits: one more run when it ends. */
+let rerunRequested = false;
 
 export function activate(context: vscode.ExtensionContext): void {
     diagnostics = vscode.languages.createDiagnosticCollection('maddi');
@@ -46,6 +50,20 @@ export function activate(context: vscode.ExtensionContext): void {
         store,
         hints,
         vscode.languages.registerInlayHintsProvider({ language: 'java' }, hints),
+        // the hints follow their declarations through edits (see edits.ts)
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            if (!isProjectJava(event.document)) return;
+            store.edit(event.document.uri, event.contentChanges.map((c) => ({
+                startLine: c.range.start.line, startCol: c.range.start.character,
+                endLine: c.range.end.line, endCol: c.range.end.character, text: c.text,
+            })));
+        }),
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (isProjectJava(document)) store.saved(document.uri);
+        }),
+        vscode.workspace.onDidCloseTextDocument((document) => {
+            if (isProjectJava(document)) store.closed(document.uri);
+        }),
         vscode.commands.registerCommand('maddi.analyze', () => analyzeCommand(context)),
         vscode.commands.registerCommand('maddi.stop', () => stopCommand()),
         // the daemon is a child process: it does not go away with the window unless it is killed
@@ -54,6 +72,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
     stopDaemon();
+}
+
+/** A Java source on disk: what the analysis reads, as opposed to a library's `jdt://` class file. */
+function isProjectJava(document: vscode.TextDocument): boolean {
+    return document.languageId === 'java' && document.uri.scheme === 'file';
 }
 
 function stopDaemon(): void {
@@ -74,13 +97,19 @@ function stopCommand(): void {
         return;
     }
     stopRequested = true;
+    rerunRequested = false; // stopping empties the queue, as in the other front-ends
     output.appendLine('stopping the analysis');
     stopDaemon();
 }
 
 async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     if (running) {
-        vscode.window.showInformationMessage('maddi is already analyzing.');
+        // Before the run has saved the editors, it will read what is there now: the request is part of it. After,
+        // it asks for one more run when this one ends, rather than being dropped (as the other front-ends do).
+        if (runHasSaved && !rerunRequested) {
+            rerunRequested = true;
+            vscode.window.showInformationMessage('maddi will analyze again when the current run ends.');
+        }
         return;
     }
     const folder = vscode.workspace.workspaceFolders?.[0];
@@ -99,6 +128,8 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
 
     running = true;
     stopRequested = false;
+    runHasSaved = false;
+    let again = false;
     void vscode.commands.executeCommand('setContext', 'maddi.running', true);
     try {
         await vscode.window.withProgress(
@@ -124,10 +155,14 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
         vscode.window.showErrorMessage(`maddi: ${message}`, 'Show log')
             .then((choice) => { if (choice) output.show(); });
     } finally {
+        again = rerunRequested && !stopRequested;
         running = false;
         stopRequested = false;
+        runHasSaved = false;
+        rerunRequested = false;
         void vscode.commands.executeCommand('setContext', 'maddi.running', false);
     }
+    if (again) void analyzeCommand(context);
 }
 
 async function analyze(
@@ -139,6 +174,15 @@ async function analyze(
 
     progress.report({ message: 'waiting for the Java language server' });
     await waitForStandardServer();
+
+    // The daemon reads the files on disk, and jdt.ls compiles them: an unsaved editor would be analysed as it was
+    // last saved, so a class still being typed showed nothing. As the other front-ends do since 0.9.6, save first.
+    progress.report({ message: 'saving' });
+    await saveJavaEditors();
+    runHasSaved = true;
+    // from here on, what the run reports is placed on the sources as saved now; edits made during the run are
+    // followed on top of it (see ResultStore.beginRun)
+    store.beginRun();
 
     // The parser reads .class files, so compile before asking for anything. jdt.ls autobuilds, but a file
     // saved a moment ago may still be in flight; this resolves only once the server's build has returned.
@@ -221,6 +265,13 @@ async function analyze(
     } finally {
         client.dispose();
     }
+}
+
+async function saveJavaEditors(): Promise<void> {
+    const dirty = vscode.workspace.textDocuments.filter((d) => d.isDirty && isProjectJava(d));
+    const saved = await Promise.all(dirty.map((d) => d.save()));
+    const failed = dirty.filter((_, i) => !saved[i]).map((d) => path.basename(d.uri.fsPath));
+    if (failed.length > 0) output.appendLine(`could not save ${failed.join(', ')}; analyzing them as on disk`);
 }
 
 function applyResult(result: Result): void {
