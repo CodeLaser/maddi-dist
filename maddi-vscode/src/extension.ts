@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { PARTIAL_RESULT, PartialResult, Result, merge } from './analysisModel';
 import { buildConfig } from './configBuilder';
 import { DaemonClient, Frame, PROTOCOL_VERSION } from './daemonClient';
-import { DaemonHandle, launchDaemon } from './daemonLauncher';
+import { DaemonHandle, killDaemon, launchDaemon } from './daemonLauncher';
 import { toDiagnostics } from './diagnostics';
 import { MaddiInlayHintsProvider } from './hints';
 import { CompileStatus, compileWorkspace, waitForStandardServer } from './javaLanguageServer';
@@ -31,6 +31,8 @@ let diagnostics: vscode.DiagnosticCollection;
 let output: vscode.OutputChannel;
 let store: ResultStore;
 let running = false;
+/** Set when the user stops the run in progress: its failure is then the stop, not an error. */
+let stopRequested = false;
 
 export function activate(context: vscode.ExtensionContext): void {
     diagnostics = vscode.languages.createDiagnosticCollection('maddi');
@@ -45,6 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
         hints,
         vscode.languages.registerInlayHintsProvider({ language: 'java' }, hints),
         vscode.commands.registerCommand('maddi.analyze', () => analyzeCommand(context)),
+        vscode.commands.registerCommand('maddi.stop', () => stopCommand()),
         // the daemon is a child process: it does not go away with the window unless it is killed
         { dispose: () => stopDaemon() });
 }
@@ -54,8 +57,25 @@ export function deactivate(): void {
 }
 
 function stopDaemon(): void {
-    daemon?.process.kill();
+    if (daemon) killDaemon(daemon);
     daemon = undefined;
+    void vscode.commands.executeCommand('setContext', 'maddi.running', false);
+}
+
+/**
+ * Stop the run in progress by killing the daemon, as the IntelliJ and Eclipse plugins do: it is the one way out of
+ * a fixpoint iteration in progress. The waiting analysis then fails with "daemon closed the connection", what the
+ * run streamed stays on screen, and the next analysis starts a fresh daemon. Nothing is lost that a new run does
+ * not rebuild, since every run builds its own model.
+ */
+function stopCommand(): void {
+    if (!running) {
+        vscode.window.showInformationMessage('maddi is not analyzing.');
+        return;
+    }
+    stopRequested = true;
+    output.appendLine('stopping the analysis');
+    stopDaemon();
 }
 
 async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
@@ -78,11 +98,23 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     }
 
     running = true;
+    stopRequested = false;
+    void vscode.commands.executeCommand('setContext', 'maddi.running', true);
     try {
         await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'maddi', cancellable: false },
-            (progress) => analyze(context, folder, jdkHome, settings, progress));
+            { location: vscode.ProgressLocation.Notification, title: 'maddi', cancellable: true },
+            (progress, token) => {
+                token.onCancellationRequested(() => stopCommand());
+                return analyze(context, folder, jdkHome, settings, progress);
+            });
     } catch (e) {
+        if (stopRequested) {
+            // What the run streamed stays: it is established, only possibly weaker than a finished run's, and the
+            // hover says so (provisional). Findings come only at the end of a run, so the previous run's stay too.
+            output.appendLine('analysis stopped');
+            vscode.window.showInformationMessage('maddi: analysis stopped. What it had established stays on screen.');
+            return;
+        }
         // Drop what is on screen: it came from a run that did not finish, and stale findings presented as
         // current are worse than none — they look like an answer.
         diagnostics.clear();
@@ -93,6 +125,8 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
             .then((choice) => { if (choice) output.show(); });
     } finally {
         running = false;
+        stopRequested = false;
+        void vscode.commands.executeCommand('setContext', 'maddi.running', false);
     }
 }
 

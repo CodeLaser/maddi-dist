@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -99,4 +99,16 @@ export async function launchDaemon(options: LaunchOptions): Promise<DaemonHandle
     });
 
     return { port, process: child };
+}
+
+/**
+ * Kill the daemon now, whatever it is doing. On Unix the launcher script `exec`s java, so the child IS the JVM; on
+ * Windows the `.bat` leaves java running as a grandchild, which only killing the tree reaches.
+ */
+export function killDaemon(handle: DaemonHandle): void {
+    const pid = handle.process.pid;
+    if (process.platform === 'win32' && pid !== undefined) {
+        spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true });
+    }
+    handle.process.kill('SIGKILL');
 }

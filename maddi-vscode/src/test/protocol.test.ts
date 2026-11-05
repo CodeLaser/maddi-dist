@@ -5,9 +5,10 @@
  */
 
 import * as assert from 'assert';
+import * as net from 'net';
 import { test } from 'node:test';
 import { ElementAnnotation, PartialResult, Result, isNearMiss, merge } from '../analysisModel';
-import { FrameReader } from '../daemonClient';
+import { DaemonClient, FrameReader } from '../daemonClient';
 
 /** NDJSON framing, and the merge that turns streamed passes into what the editor shows. */
 
@@ -92,4 +93,31 @@ test('merging keeps the findings already on screen', () => {
     const merged = merge(current, pass(2, element('TYPE', 'x.Box', '@Container')));
     assert.strictEqual(merged.findings.length, 1, 'a partial frame must not drop findings');
     assert.strictEqual(merged.hintsLoaded, 7);
+});
+
+test('a daemon that goes away mid-analysis fails the run at once, not at the timeout', async () => {
+    // how a run is stopped: the daemon is killed while the client waits for its next frame
+    const server = net.createServer((socket) => {
+        socket.setEncoding('utf8');
+        socket.once('data', () => {
+            socket.write('{"type":"status","phase":"analyze"}\n');
+            setTimeout(() => socket.destroy(), 20);
+        });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as net.AddressInfo).port;
+    const client = new DaemonClient(port, 60_000);
+    try {
+        await client.connect();
+        const seen: string[] = [];
+        const started = Date.now();
+        await assert.rejects(
+            client.analyze('r1', {} as never, (frame) => seen.push(String(frame.type))),
+            /closed the connection/);
+        assert.deepStrictEqual(seen, ['status']);
+        assert.ok(Date.now() - started < 5_000, 'rejected promptly');
+    } finally {
+        client.dispose();
+        server.close();
+    }
 });
