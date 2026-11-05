@@ -149,6 +149,45 @@ public class TestIncrementalReanalysis {
                 findings(second).toString().replace(warmDir.toUri().toString(), "DIR/"));
     }
 
+    private static final String COUNTER = """
+            package x;
+            public class Counter {
+                private int n;
+                public void inc() { n++; }
+                public int get() { return n; }
+            }
+            """;
+    private static final String PRINTER = """
+            package x;
+            public final class Printer {
+                public static void show(Counter c) {
+                    System.out.println(c.get());
+                    %s
+                }
+            }
+            """;
+
+    @DisplayName("a method nobody calls changes its summary: its callees do not see it, the cutoff holds")
+    @Test
+    public void uncalledMethodChanges(@TempDir Path warmDir, @TempDir Path coldDir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        DaemonProtocol.Result first = analyzeAll(warmDir, Map.of("x/Counter.java", COUNTER,
+                "x/Printer.java", PRINTER.formatted("c.inc();")), service, false);
+        // the parameter is modified, then no longer: what Printer.show says of it moves
+        DaemonProtocol.Result second = analyzeAll(warmDir, Map.of("x/Printer.java", PRINTER.formatted("// c.inc();")),
+                service, false);
+        assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, second.outcome());
+        int scope = service.lastIncrementalScope();
+        assertTrue(scope >= 0, "the cutoff held, no cold fallback");
+        assertTrue(scope <= 3, () -> "only Printer's elements were analysed, not " + scope);
+        assertNotEquals(annotations(first), annotations(second), "the edit shows");
+
+        DaemonProtocol.Result cold = analyzeAll(coldDir, Map.of("x/Counter.java", COUNTER,
+                "x/Printer.java", PRINTER.formatted("// c.inc();")), new WarmAnalysisService(null, false), false);
+        assertEquals(annotations(cold).toString().replace(coldDir.toString(), "DIR"),
+                annotations(second).toString().replace(warmDir.toString(), "DIR"));
+    }
+
     @DisplayName("an edit that moves a type to another package: a cold run, which analyses it")
     @Test
     public void packageChanged(@TempDir Path dir) throws Exception {
