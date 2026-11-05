@@ -163,8 +163,11 @@ async function analyze(
             warnNearMisses: settings.get<boolean>('warnNearMisses') ?? false,
             workingDirectory: folder.uri.fsPath,
         });
-    output.appendLine(
-        `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`);
+    const sets = config.moduleSourceSets ?? [];
+    output.appendLine(sets.length > 0
+        ? `analyzing ${sets.length} module source set(s): ${sets.map((s) => s.name).join(', ')}`
+        // the flat form: jdt.ls could not describe the workspace as source sets (see moduleSourceSets)
+        : `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`);
 
     const client = new DaemonClient(handle.port);
     try {

@@ -26,16 +26,39 @@ export interface ClasspathEntry {
     scope: string; // compile | test | runtime | test-runtime
 }
 
+/**
+ * One compiled unit of the project, with its own class path and its own direct dependencies, named. The
+ * structured alternative to the flat `sources` / `classpath` pair, which the daemon can only auto-wire: every
+ * source set to every class-path entry, which on a multi-module project is far more than javac ever opens, and
+ * which makes a module's own classes reachable as both source and bytecode. See `DaemonProtocol.ModuleSourceSet`.
+ */
+export interface ModuleSourceSet {
+    /** Stable identity, e.g. `my-module/main`; what `dependencies` refer to. */
+    name: string;
+    sourceDirectories: string[];
+    /** Where this set's class files live: its identity, never a class-path entry of another set. Absent: unknown. */
+    outputPath?: string;
+    test: boolean;
+    /** `--release` for this set; 0 when unknown (the daemon then uses the JDK maddi runs on). */
+    sourceRelease: number;
+    /** Names of the OTHER sets this one compiles against, direct only. */
+    dependencies: string[];
+    /** Jars and class directories for this set alone. */
+    classPath: string[];
+}
+
 export interface AnalyzeConfig {
     workingDirectory: string;
     sdkHome: string;
     sourceEncoding: string;
     jmods: string[];
+    /** The flat form; empty when {@link moduleSourceSets} carries the structure. */
     sources: SourceRoot[];
     classpath: ClasspathEntry[];
     restrictToPackages: string[];
     parallel: boolean;
     warnNearMisses: boolean;
+    moduleSourceSets?: ModuleSourceSet[];
 }
 
 /**
