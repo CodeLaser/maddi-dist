@@ -156,12 +156,20 @@ export function certaintyOf(result: Result | undefined): Certainty {
     return result.outcome === OUTCOME_CERTIFIED ? 'FINAL' : 'BEST_AVAILABLE';
 }
 
-/** A short phrase for a tooltip or status line; undefined when there is nothing worth saying. */
-export function certaintyLabel(certainty: Certainty): string | undefined {
+export const OUTCOME_INCREMENTAL = 'INCREMENTAL';
+
+/**
+ * A short phrase for a tooltip or status line; undefined when there is nothing worth saying. `outcome` tells the two
+ * kinds of best available apart: an incremental re-analysis reaches its fixpoint, but on the previous run's values
+ * and without the whole-project passes, so it is not certified for another reason than a run that stopped short.
+ */
+export function certaintyLabel(certainty: Certainty, outcome?: string): string | undefined {
     switch (certainty) {
         case 'PROVISIONAL': return 'provisional — the analysis is still running';
         case 'FINAL': return undefined; // the normal case; repeating it on every hint would be noise
-        case 'BEST_AVAILABLE': return 'best available — the analysis did not reach a fixpoint';
+        case 'BEST_AVAILABLE': return outcome === OUTCOME_INCREMENTAL
+            ? 'best available — an incremental re-analysis, not certified; turn incremental re-analysis off for a full run'
+            : 'best available — the analysis did not reach a fixpoint';
         case 'UNKNOWN': return 'no completed analysis';
     }
 }

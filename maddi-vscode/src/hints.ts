@@ -43,6 +43,7 @@ export class MaddiInlayHintsProvider implements vscode.InlayHintsProvider {
         // how settled these values are: the same annotations mean something different mid-run, or after a
         // run that never reached a fixpoint, and only this says which
         const certainty = this.store.certainty();
+        const outcome = this.store.current?.outcome;
 
         const hints: vscode.InlayHint[] = [];
         const all = this.store.annotationsFor(document.uri);
@@ -55,7 +56,7 @@ export class MaddiInlayHintsProvider implements vscode.InlayHintsProvider {
 
             const hint = new vscode.InlayHint(position, text, kindOf(element));
             hint.paddingRight = true; // it precedes the declaration, so it must not touch it
-            hint.tooltip = tooltip(element, all, certainty);
+            hint.tooltip = tooltip(element, all, certainty, outcome);
             hints.push(hint);
         }
         return hints;
@@ -93,10 +94,11 @@ function kindOf(element: ElementAnnotation): vscode.InlayHintKind {
  * annotation's why — and for a method, its parameters with theirs — then how settled it is, and the raw
  * properties, which include what the filter left out.
  */
-function tooltip(element: ElementAnnotation, all: ElementAnnotation[], certainty: Certainty): vscode.MarkdownString {
+function tooltip(element: ElementAnnotation, all: ElementAnnotation[], certainty: Certainty,
+                 outcome: string | undefined): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.appendMarkdown(`**${escape(element.fqn)}**\n\n`);
-    const caveat = certaintyLabel(certainty);
+    const caveat = certaintyLabel(certainty, outcome);
     if (caveat) md.appendMarkdown(`_${escape(caveat)}_\n\n`);
     const shown = lines(element, all);
     if (shown.length > 0) md.appendMarkdown(shown.map(render).join('  \n') + '\n\n');

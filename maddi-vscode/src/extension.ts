@@ -4,12 +4,13 @@
  * Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { PARTIAL_RESULT, PartialResult, Result, merge } from './analysisModel';
 import { buildConfig } from './configBuilder';
 import { DaemonClient, Frame, PROTOCOL_VERSION } from './daemonClient';
-import { DaemonHandle, killDaemon, launchDaemon } from './daemonLauncher';
+import { DaemonHandle, killDaemon, launchDaemon, launcherPath } from './daemonLauncher';
 import { toDiagnostics } from './diagnostics';
 import { MaddiInlayHintsProvider } from './hints';
 import { CompileStatus, compileWorkspace, waitForStandardServer } from './javaLanguageServer';
@@ -294,6 +295,16 @@ async function ensureDaemon(
     const installDir = configured && configured.length > 0
         ? configured
         : path.join(context.extensionPath, 'daemon');
+    // Say which setting to change: an override that holds no daemon is a stale setting, not a broken install, and
+    // the bare launcher path left the user to work that out (the IntelliJ plugin says the same since 0.9.6).
+    if (!fs.existsSync(launcherPath(installDir))) {
+        throw new Error(configured
+            ? `maddi.daemonInstall is set to ${installDir}, which holds no maddi daemon (no ${path.relative(installDir,
+                launcherPath(installDir))}). Clear the setting to use the daemon bundled with the extension, or point `
+              + 'it at a daemon distribution (the directory containing bin/ and lib/).'
+            : `the daemon bundled with the extension is missing from ${installDir}. Reinstall the extension, or set `
+              + 'maddi.daemonInstall to a daemon distribution.');
+    }
     output.appendLine(`starting the daemon from ${installDir} on ${jdkHome}`);
     daemon = await launchDaemon({
         installDir,

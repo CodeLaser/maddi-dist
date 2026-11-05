@@ -7,7 +7,7 @@
 import * as assert from 'assert';
 import * as net from 'net';
 import { test } from 'node:test';
-import { ElementAnnotation, PartialResult, Result, isNearMiss, merge } from '../analysisModel';
+import { ElementAnnotation, PartialResult, Result, certaintyLabel, certaintyOf, isNearMiss, merge } from '../analysisModel';
 import { DaemonClient, FrameReader } from '../daemonClient';
 
 /** NDJSON framing, and the merge that turns streamed passes into what the editor shows. */
@@ -120,4 +120,12 @@ test('a daemon that goes away mid-analysis fails the run at once, not at the tim
         client.dispose();
         server.close();
     }
+});
+
+test('an incremental result is best available, and says why differently from a run that stopped short', () => {
+    const incremental = { outcome: 'INCREMENTAL' } as Result;
+    assert.strictEqual(certaintyOf(incremental), 'BEST_AVAILABLE');
+    assert.match(certaintyLabel('BEST_AVAILABLE', 'INCREMENTAL')!, /incremental/);
+    assert.match(certaintyLabel('BEST_AVAILABLE', 'MAX_ITERATIONS')!, /did not reach a fixpoint/);
+    assert.strictEqual(certaintyLabel('FINAL', 'CERTIFIED'), undefined);
 });
