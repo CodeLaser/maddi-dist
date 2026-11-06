@@ -188,6 +188,40 @@ public class TestIncrementalReanalysis {
                 annotations(second).toString().replace(warmDir.toString(), "DIR"));
     }
 
+    private static final String FILLER = """
+            package x;
+            import java.util.List;
+            public class Filler {
+                private int n;
+                public void fill(List<Integer> l) { %s }
+            }
+            """;
+    private static final String FILL_USER = """
+            package x;
+            import java.util.List;
+            public class FillUser {
+                public void use(Filler f, List<Integer> l) { f.fill(l); }
+            }
+            """;
+
+    @DisplayName("a rewired dependent keeps its call sites' argument links: the cutoff's MODREACH sees what a cold run saw")
+    @Test
+    public void rewiredCallSitesKeepTheirLinks(@TempDir Path warmDir, @TempDir Path coldDir) throws Exception {
+        WarmAnalysisService service = new WarmAnalysisService(null, true);
+        analyzeAll(warmDir, Map.of("x/Filler.java", FILLER.formatted("l.add(n);"), "x/FillUser.java", FILL_USER),
+                service, false);
+        // the same summary: fill still modifies l, so FillUser.use still modifies its l through the call
+        DaemonProtocol.Result second = analyzeAll(warmDir, Map.of("x/Filler.java",
+                FILLER.formatted("int m = n; l.add(m);")), service, false);
+        assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, second.outcome());
+        assertTrue(service.lastIncrementalScope() >= 0, "the cutoff held, no cold fallback");
+
+        DaemonProtocol.Result cold = analyzeAll(coldDir, Map.of("x/Filler.java", FILLER.formatted("int m = n; l.add(m);"),
+                "x/FillUser.java", FILL_USER), new WarmAnalysisService(null, false), false);
+        assertEquals(annotations(cold).toString().replace(coldDir.toString(), "DIR"),
+                annotations(second).toString().replace(warmDir.toString(), "DIR"));
+    }
+
     @DisplayName("an edit that moves a type to another package: a cold run, which analyses it")
     @Test
     public void packageChanged(@TempDir Path dir) throws Exception {
