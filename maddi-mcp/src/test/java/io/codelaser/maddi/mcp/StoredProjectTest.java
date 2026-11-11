@@ -255,6 +255,24 @@ public class StoredProjectTest {
         }
     }
 
+    /*
+     * the stop can come between the build's start and its hand-over (its pid already written): the build attached
+     * after the stop is killed at once, not left running (gate 2026-11-11 on laser1, stoppedWhileRegenerating)
+     */
+    @Test
+    public void buildAttachedAfterTheStop() throws Exception {
+        AnalysisRun run = new AnalysisRun("run-1", "p");
+        run.stop();
+        assertEquals(AnalysisRun.State.STOPPED, run.state());
+        Process build = new ProcessBuilder("sleep", "300").start();
+        try {
+            run.attach(build);
+            assertTrue(build.waitFor(10, java.util.concurrent.TimeUnit.SECONDS), "the build was killed");
+        } finally {
+            build.destroyForcibly();
+        }
+    }
+
     @Test
     public void staleWithoutACommand(@TempDir Path dir) throws Exception {
         Path project = Files.createDirectories(dir.resolve("p"));

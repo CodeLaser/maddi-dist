@@ -197,9 +197,18 @@ public final class AnalysisRun {
         configuration = note;
     }
 
-    /** The process this run waits for before the analysis, which {@link #stop()} must end too; null when done. */
+    /**
+     * The process this run waits for before the analysis, which {@link #stop()} must end too; null when done. One
+     * handed over after the stop (it started before, the stop came before its hand-over) is killed at once.
+     */
     synchronized void attach(Process process) {
         this.process = process;
+        if (process != null && state == State.STOPPED) kill(process);
+    }
+
+    private static void kill(Process process) {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
     }
 
     /** The terminal frame: {@code result} or {@code error}. */
@@ -239,10 +248,7 @@ public final class AnalysisRun {
     /** Called before the daemon is killed, so the failure the kill causes reads as the stop it is. */
     synchronized void stop() {
         if (state != State.RUNNING) return;
-        if (process != null) {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
-        }
+        if (process != null) kill(process);
         state = State.STOPPED;
         ended();
         notifyAll();
