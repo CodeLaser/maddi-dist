@@ -73,6 +73,10 @@
 # both types survived every run, with byte-identical survivor sets and no ECRETRACT line. So they flip at the same
 # revision: moved to eventual-survivor-wobble.txt, 351 -> 349. Predefined's eventual verdict was already marginal
 # (lost on 2026-09-25 when its only label went, back on 2026-10-24).
+# 2026-11-11, the maddi slowTest gate 42980371461 on laser1 (maddi c16436110, maddi-mod b458d03a, maddi-dist
+# 5b8ff6c), then two runs (identical sets) on the Mac: 349 -> 353, 4 new and none lost. The new ones are anonymous
+# classes of the CST implementation: RecordPatternImpl.$1, ParameterizedTypeImpl.$11, TypeParameterImpl.$0,
+# FieldReferenceImpl.$0. Not bisected. The three wobble types survived in both runs and stay in the wobble.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -269,6 +273,7 @@ io.codelaser.maddi.cst.impl.element.ModuleInfoImpl.RequiresImpl
 io.codelaser.maddi.cst.impl.element.ModuleInfoImpl.UsesImpl
 io.codelaser.maddi.cst.impl.element.MultiLineCommentImpl
 io.codelaser.maddi.cst.impl.element.RecordPatternImpl
+io.codelaser.maddi.cst.impl.element.RecordPatternImpl.$1
 io.codelaser.maddi.cst.impl.element.SingleLineCommentImpl
 io.codelaser.maddi.cst.impl.element.SourceImpl
 io.codelaser.maddi.cst.impl.expression.AndImpl
@@ -415,10 +420,13 @@ io.codelaser.maddi.cst.impl.type.IsAssignableFrom2
 io.codelaser.maddi.cst.impl.type.IsAssignableFrom2.Pair
 io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl
 io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl.$0
+io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl.$11
 io.codelaser.maddi.cst.impl.type.ParameterizedTypePrinter.TypeAndParameters
 io.codelaser.maddi.cst.impl.type.TypeParameterImpl
+io.codelaser.maddi.cst.impl.type.TypeParameterImpl.$0
 io.codelaser.maddi.cst.impl.variable.DependentVariableImpl
 io.codelaser.maddi.cst.impl.variable.FieldReferenceImpl
+io.codelaser.maddi.cst.impl.variable.FieldReferenceImpl.$0
 io.codelaser.maddi.cst.impl.variable.LocalVariableImpl
 io.codelaser.maddi.cst.impl.variable.ThisImpl
 io.codelaser.maddi.cst.impl.variable.VariableImpl
