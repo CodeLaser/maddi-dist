@@ -98,8 +98,9 @@ import io.codelaser.maddi.kotlin.realm.K2Realm;
  * is stored, and a request whose inputs did not change since a stored result (the engine, the JDK, the class path, the
  * sources: {@link ResultStore}) is answered with it instead of a cold run, its outcome as it was. That holds across a
  * restart of the daemon and across a switch to another project and back. Only the result is stored, not the model:
- * the next edit after a result read back is analysed cold, and a request that needs the model builds it first.
- * {@code cold} on the request skips the store.
+ * a warm daemon builds the model behind a result read back in the background, after answering, so that the next
+ * edit is re-analysed incrementally; the next request waits for it. A daemon that is not warm builds it when a
+ * request needs it ({@code libraryAnnotations}, {@code translate}). {@code cold} on the request skips the store.
  */
 public class WarmAnalysisService implements AnalyzeHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(WarmAnalysisService.class);
@@ -201,20 +202,62 @@ public class WarmAnalysisService implements AnalyzeHandler {
      */
     private DaemonProtocol.AnalyzeProject restoredRequest;
 
+    /*
+     A warm daemon whose result was read back from the store builds the model behind it on this thread, after
+     answering, so that the next edit is re-analysed incrementally rather than cold. Every request waits for it first:
+     maddi's work stays on one thread at a time, and the join hands the model over to the request's thread.
+     */
+    private volatile Thread rebuild;
+
     /* for tests: how many elements the last incremental run analysed; -1 when it fell back to the cold analysis */
     private int lastIncrementalScope;
+
+    /* for tests: whether the last result was read back from the store */
+    private boolean lastResultRestored;
 
     int lastIncrementalScope() {
         return lastIncrementalScope;
     }
 
-    /* for tests: whether the last result was read back from the store */
     boolean lastResultRestored() {
-        return restoredRequest != null;
+        return lastResultRestored;
+    }
+
+    /* for tests: wait for the background rebuild, if any; true when a warm state is there afterwards */
+    boolean awaitRebuildForTest() throws InterruptedException {
+        awaitRebuild();
+        return warmState != null;
+    }
+
+    /* wait for the background rebuild of the model; not from that thread itself */
+    private void awaitRebuild() throws InterruptedException {
+        Thread t = rebuild;
+        if (t == null || t == Thread.currentThread()) return;
+        if (t.isAlive()) LOGGER.info("persist: waiting for the model to be built after the stored result");
+        t.join();
+        rebuild = null;
+    }
+
+    private void startRebuild(DaemonProtocol.AnalyzeProject request) {
+        Thread t = new Thread(() -> {
+            long start = System.currentTimeMillis();
+            try {
+                analyze(new DaemonProtocol.AnalyzeProject(request.requestId() + "-rebuild", request.config(), true),
+                        status -> { });
+                LOGGER.info("persist: the model behind the stored result is built ({} ms); the next edit is "
+                            + "re-analysed incrementally", System.currentTimeMillis() - start);
+            } catch (Exception | AssertionError e) {
+                LOGGER.warn("persist: cannot build the model behind the stored result; the next run is cold", e);
+            }
+        }, "maddi-rebuild");
+        t.setDaemon(true);
+        rebuild = t;
+        t.start();
     }
 
     /* the model of the last run; after a result read back from the store, a cold run of its request makes one */
     private LastRun lastRunOrRebuild() throws Exception {
+        awaitRebuild();
         if (lastRun == null && restoredRequest != null) {
             DaemonProtocol.AnalyzeProject request = restoredRequest;
             LOGGER.info("persist: the stored result has no model; analysing again to build one");
@@ -305,6 +348,12 @@ public class WarmAnalysisService implements AnalyzeHandler {
 
     @Override
     public DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception {
+        if (rebuild != null && rebuild != Thread.currentThread()) {
+            emit(status, request.requestId(), "initialize", "waiting for the model behind the stored result", null,
+                    null);
+            awaitRebuild();
+        }
+        lastResultRestored = false;
         long start = System.currentTimeMillis();
         // -Dmaddi.daemon.persist: the request's key, taken before anything reads a source (see ResultStore)
         String configuration = null;
@@ -347,6 +396,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 LOGGER.info("persist: the inputs did not change, the stored result stands ({} ms, {})", elapsed,
                         stored.outcome());
                 restoredRequest = request;
+                lastResultRestored = true;
+                // a warm daemon builds the model now, in the background, for the edit that is likely to follow
+                if (warm) startRebuild(request);
                 return new DaemonProtocol.Result(requestId, stored.findings(), stored.elementAnnotations(),
                         stored.initializationProblems(), stored.parseErrorCount(), stored.hintsLoaded(), elapsed,
                         stored.outcome());

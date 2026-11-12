@@ -109,6 +109,29 @@ public class TestPersistedResults {
         assertSameResult(cold, fresh);
     }
 
+    @DisplayName("a warm daemon started again builds the model in the background: the first edit is incremental")
+    @Test
+    public void warmRestart(@TempDir Path projectDir, @TempDir Path coldDir, @TempDir Path storeDir)
+            throws Exception {
+        analyzeAll(projectDir, Map.of("x/Box.java", BOX, "x/Bad.java", BAD),
+                new WarmAnalysisService(null, true, new ResultStore(storeDir)), false);
+
+        WarmAnalysisService restarted = new WarmAnalysisService(null, true, new ResultStore(storeDir));
+        DaemonProtocol.Result restored = analyzeAll(projectDir, Map.of(), restarted, false);
+        assertTrue(restarted.lastResultRestored());
+        assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, restored.outcome());
+        assertTrue(restarted.awaitRebuildForTest(), "the model behind the stored result is built");
+
+        DaemonProtocol.Result edited = analyzeAll(projectDir, Map.of("x/Box.java", BOX_MODIFYING), restarted, false);
+        assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, edited.outcome(), "the first edit after the restart");
+        DaemonProtocol.Result cold = analyzeAll(coldDir, Map.of("x/Box.java", BOX_MODIFYING, "x/Bad.java", BAD),
+                new WarmAnalysisService(null, false), false);
+        assertEquals(cold.elementAnnotations().toString().replace(coldDir.toString(), "DIR"),
+                edited.elementAnnotations().toString().replace(projectDir.toString(), "DIR"));
+        assertEquals(cold.findings().stream().map(f -> f.category() + " " + f.message()).sorted().toList(),
+                edited.findings().stream().map(f -> f.category() + " " + f.message()).sorted().toList());
+    }
+
     @DisplayName("an edit, or another setting, makes the stored result miss")
     @Test
     public void edit(@TempDir Path projectDir, @TempDir Path otherDir, @TempDir Path storeDir) throws Exception {
