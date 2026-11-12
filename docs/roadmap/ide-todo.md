@@ -26,7 +26,13 @@ project and back. Only the result is stored, not the model. A warm daemon builds
 back in the background, right after answering (a cold run), so that the first edit after a restart is re-analysed
 incrementally; a request that comes earlier waits for it (`TestPersistedResults.warmRestart`). Not stored: the
 analysis values and the link artifacts (per-variable links, call-site argument links), which would make that
-background run shorter; the checkpoint codec writes the element-level values only, and restores about 85% of them.
+background run shorter. Preloading the element-level values does not (measured 2026-11-12, fernflower, the CLI's
+`CHECKPOINT` / `CHECKPOINT_RESTORE`, sequential): cold 488 s and 441 s, preloaded 433 s, 31 iterations against 38,
+each pass as long as a cold one, since the link computer runs again whatever is preloaded. 65 of 229 checkpoint
+files did not load (55 NullPointerException, 3 marker-variable definitions not found, 1 unsupported value), and the
+preloaded run certified one verdict differently (`IVariableNameProvider` `@Independent(hc=true)` against
+`@Independent`). A background run that is short needs the link artifacts themselves on disk: a codec for the
+statement- and expression-level values, which does not exist.
 
 **Why:** on larger projects the analysis is slow, and today *every* trigger re-analyses the whole project
 from scratch. A one-line edit costs a full run. This is the single biggest win available.
