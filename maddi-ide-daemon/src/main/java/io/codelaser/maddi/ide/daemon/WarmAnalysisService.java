@@ -398,7 +398,10 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 restoredRequest = request;
                 lastResultRestored = true;
                 // a warm daemon builds the model now, in the background, for the edit that is likely to follow
-                if (warm) startRebuild(request);
+                // (not for a project with Kotlin sources: a mixed parse keeps no model to re-analyse incrementally)
+                if (warm && !DetectKotlinSources.in(assembler.build(request.config())).found()) {
+                    startRebuild(request);
+                }
                 return new DaemonProtocol.Result(requestId, stored.findings(), stored.elementAnnotations(),
                         stored.initializationProblems(), stored.parseErrorCount(), stored.hintsLoaded(), elapsed,
                         stored.outcome());

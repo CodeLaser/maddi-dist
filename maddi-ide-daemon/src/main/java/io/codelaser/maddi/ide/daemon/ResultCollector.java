@@ -20,11 +20,11 @@ package io.codelaser.maddi.ide.daemon;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import io.codelaser.maddi.analysis.api.AnalysisEngine;
@@ -174,7 +174,8 @@ public class ResultCollector {
         List<DaemonProtocol.Annotation> annotations = tagger.tag(info);
         List<String> displayAnnotations = annotations.stream().map(DaemonProtocol.Annotation::text).toList();
 
-        Map<String, String> properties = new LinkedHashMap<>();
+        // by key: the order in which the analysis wrote them differs between a cold and an incremental run
+        Map<String, String> properties = new TreeMap<>();
         info.analysis().propertyValueStream()
                 // the engine's bookkeeping properties (prep's PREPPED) are per-run state, not a result: showing it would put a property on
                 // every prepped type and defeat the "nothing to show → skip" test just below
@@ -232,7 +233,8 @@ public class ResultCollector {
         if (info.isSynthetic()) return;
         List<DaemonProtocol.Annotation> annotations = tagger.tag(info);
         if (annotations.isEmpty()) return;
-        Map<String, String> properties = new LinkedHashMap<>();
+        // by key: the order in which the analysis wrote them differs between a cold and an incremental run
+        Map<String, String> properties = new TreeMap<>();
         info.analysis().propertyValueStream()
                 .filter(pv -> !bookkeeping.contains(pv.property()) && !isCulprit(pv.property()))
                 .forEach(pv -> properties.put(pv.property().key(), String.valueOf(pv.value())));
