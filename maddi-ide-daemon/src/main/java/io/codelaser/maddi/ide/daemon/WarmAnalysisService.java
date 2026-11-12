@@ -93,6 +93,13 @@ import io.codelaser.maddi.kotlin.realm.K2Realm;
  * with them. Such a result is {@link DaemonProtocol#OUTCOME_INCREMENTAL}: a seeded analysis does not run MODREACH and
  * the eventual pass, so it is best available, never certified. A cold run is the fallback for anything else: the
  * first request, another configuration, Kotlin sources, a partial parse, a file added or removed, any exception.
+ * <p>
+ * With {@code -Dmaddi.daemon.persist} (a directory, or {@code true} for {@code ~/.maddi/daemon-results}) every result
+ * is stored, and a request whose inputs did not change since a stored result (the engine, the JDK, the class path, the
+ * sources: {@link ResultStore}) is answered with it instead of a cold run, its outcome as it was. That holds across a
+ * restart of the daemon and across a switch to another project and back. Only the result is stored, not the model:
+ * the next edit after a result read back is analysed cold, and a request that needs the model builds it first.
+ * {@code cold} on the request skips the store.
  */
 public class WarmAnalysisService implements AnalyzeHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(WarmAnalysisService.class);
@@ -114,20 +121,29 @@ public class WarmAnalysisService implements AnalyzeHandler {
     private final boolean warm;
     /** The static-side-effect analysis for this service's runs; null keeps the analyzer's default. */
     private final Boolean staticSideEffects;
+    /** -Dmaddi.daemon.persist: the results of earlier runs on disk; null when off. */
+    private final ResultStore store;
 
     public WarmAnalysisService() {
-        this(null, WARM);
+        this(null, WARM, ResultStore.fromSystemProperty());
     }
 
     /** For tests: switch the static-side-effect analysis on or off for every run of this service. */
     WarmAnalysisService(Boolean staticSideEffects) {
-        this(staticSideEffects, WARM);
+        this(staticSideEffects, WARM, null);
     }
 
     /** For tests: also whether the model stays for an incremental re-analysis. */
     WarmAnalysisService(Boolean staticSideEffects, boolean warm) {
+        this(staticSideEffects, warm, null);
+    }
+
+    /** For tests: also where earlier results are stored (-Dmaddi.daemon.persist); null: nowhere. */
+    WarmAnalysisService(Boolean staticSideEffects, boolean warm, ResultStore store) {
         this.staticSideEffects = staticSideEffects;
         this.warm = warm;
+        this.store = store;
+        if (store != null) LOGGER.info("persist: results are stored in {}", store.directory());
     }
 
     /** What either parse path hands to the shared tail. */
@@ -179,6 +195,12 @@ public class WarmAnalysisService implements AnalyzeHandler {
 
     private LastRun lastRun;
 
+    /*
+     The request whose result was read back from the store (-Dmaddi.daemon.persist): there is no model behind it, and
+     a request that needs one (libraryAnnotations, translate) builds it with a cold run of this request first.
+     */
+    private DaemonProtocol.AnalyzeProject restoredRequest;
+
     /* for tests: how many elements the last incremental run analysed; -1 when it fell back to the cold analysis */
     private int lastIncrementalScope;
 
@@ -186,9 +208,30 @@ public class WarmAnalysisService implements AnalyzeHandler {
         return lastIncrementalScope;
     }
 
+    /* for tests: whether the last result was read back from the store */
+    boolean lastResultRestored() {
+        return restoredRequest != null;
+    }
+
+    /* the model of the last run; after a result read back from the store, a cold run of its request makes one */
+    private LastRun lastRunOrRebuild() throws Exception {
+        if (lastRun == null && restoredRequest != null) {
+            DaemonProtocol.AnalyzeProject request = restoredRequest;
+            LOGGER.info("persist: the stored result has no model; analysing again to build one");
+            analyze(new DaemonProtocol.AnalyzeProject(request.requestId(), request.config(), true), status -> { });
+        }
+        return lastRun;
+    }
+
     @Override
     public DaemonProtocol.LibraryResult libraryAnnotations(DaemonProtocol.LibraryAnnotations request) {
-        LastRun run = lastRun;
+        LastRun run;
+        try {
+            run = lastRunOrRebuild();
+        } catch (Exception e) {
+            LOGGER.warn("persist: cannot build the model again", e);
+            run = null;
+        }
         if (run == null) return new DaemonProtocol.LibraryResult(request.requestId(), List.of(), request.types());
         List<DaemonProtocol.LibraryElement> elements = new ArrayList<>();
         List<String> unknown = new ArrayList<>();
@@ -209,7 +252,14 @@ public class WarmAnalysisService implements AnalyzeHandler {
      */
     @Override
     public DaemonProtocol.TranslateResult translate(DaemonProtocol.Translate request) throws IOException {
-        LastRun run = lastRun;
+        LastRun run;
+        try {
+            run = lastRunOrRebuild();
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
         if (run == null) {
             return new DaemonProtocol.TranslateResult(request.requestId(), List.of(), List.of(), List.of(),
                     request.types());
@@ -256,6 +306,18 @@ public class WarmAnalysisService implements AnalyzeHandler {
     @Override
     public DaemonProtocol.Result analyze(DaemonProtocol.AnalyzeProject request, StatusSink status) throws Exception {
         long start = System.currentTimeMillis();
+        // -Dmaddi.daemon.persist: the request's key, taken before anything reads a source (see ResultStore)
+        String configuration = null;
+        ResultStore.Key key = null;
+        if (store != null) {
+            try {
+                configuration = store.configuration(request.config(), "staticSideEffects=" + staticSideEffects);
+                key = store.key(request.config());
+            } catch (IOException | RuntimeException e) {
+                LOGGER.warn("persist: cannot compute the key of this request, not using the store: {}", e.toString());
+                key = null;
+            }
+        }
         if (warm && warmState != null && request.cold()) {
             LOGGER.info("incremental: the client asked for a cold run, analysing from scratch");
         } else if (warm && warmState != null) {
@@ -263,14 +325,33 @@ public class WarmAnalysisService implements AnalyzeHandler {
             warmState = null; // whatever happens below, a failed attempt leaves nothing behind
             try {
                 DaemonProtocol.Result result = analyzeIncrementally(state, request, status, start);
-                if (result != null) return result;
+                if (result != null) {
+                    // nothing changed: the previous result, returned as it is, was stored already
+                    boolean same = result.elementAnnotations() == state.result().elementAnnotations();
+                    if (key != null && !same) store.save(configuration, key, result);
+                    return result;
+                }
             } catch (Exception | AssertionError e) {
                 LOGGER.warn("incremental re-analysis failed, analysing from scratch", e);
             }
         }
         warmState = null;
         lastRun = null;
+        restoredRequest = null;
         String requestId = request.requestId();
+        if (key != null && !request.cold()) {
+            emit(status, requestId, "initialize", "looking for a stored result", null, null);
+            DaemonProtocol.Result stored = store.lookup(configuration, key);
+            if (stored != null) {
+                long elapsed = System.currentTimeMillis() - start;
+                LOGGER.info("persist: the inputs did not change, the stored result stands ({} ms, {})", elapsed,
+                        stored.outcome());
+                restoredRequest = request;
+                return new DaemonProtocol.Result(requestId, stored.findings(), stored.elementAnnotations(),
+                        stored.initializationProblems(), stored.parseErrorCount(), stored.hintsLoaded(), elapsed,
+                        stored.outcome());
+            }
+        }
         boolean parallel = request.config().parallel();
 
         emit(status, requestId, "initialize", "building inspector", null, null);
@@ -367,6 +448,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
                     parsed.sourceSetOfRequest(), summary.parseResult(), parsed.moduleInfos(), ccg.graph(),
                     contributions, analysisFindings, result);
         }
+        if (key != null) store.save(configuration, key, result);
         return result;
     }
 

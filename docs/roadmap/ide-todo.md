@@ -17,6 +17,16 @@ terminal passes, so an incremental result is never certified. Switched on by the
 (experimental)" setting (IntelliJ, Eclipse, VS Code; `MaddiDaemonProcess.incrementalJvmArgs`), by the MCP server's
 `--incremental`, or through the start script's environment: `MADDI_IDE_DAEMON_OPTS=-Dmaddi.daemon.warm=true`.
 
+**The first request after a restart (2026-11-12): stored results behind `-Dmaddi.daemon.persist`** (a directory, or
+`true` for `~/.maddi/daemon-results`; the MCP server's `--persist`). Every result is written to disk, keyed by the
+configuration; a request whose inputs did not change (the daemon's own jars by content, the JDK, the project's class
+path, every file under the source directories) gets the stored result back, outcome included, in tens of
+milliseconds (`ResultStore`, `TestPersistedResults`). It holds across a restart and across a switch to another
+project and back. Only the result is stored, not the model: an edit after a restart still costs a cold run, and so
+does the first `libraryAnnotations` or `translate` after a result read back. Not yet: storing the analysis values
+and the link artifacts (per-variable links, call-site argument links) so that the first edit after a restart takes
+the warm path; the checkpoint codec writes the element-level values only, and restores about 85% of them.
+
 **Why:** on larger projects the analysis is slow, and today *every* trigger re-analyses the whole project
 from scratch. A one-line edit costs a full run. This is the single biggest win available.
 

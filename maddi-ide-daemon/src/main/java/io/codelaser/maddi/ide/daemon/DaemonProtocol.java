@@ -204,6 +204,7 @@ public final class DaemonProtocol {
      * @param cold analyse from scratch, dropping what a warm daemon ({@code -Dmaddi.daemon.warm}) kept of the last run:
      *             an incremental result is never certified, a cold one can be. The run's own state is kept as usual,
      *             for the next request. Absent (an older client): false. A daemon that is not warm runs cold anyway.
+     *             It also skips a result stored by an earlier run ({@code -Dmaddi.daemon.persist}).
      */
     public record AnalyzeProject(String requestId, AnalyzeConfig config, boolean cold) {
         public AnalyzeProject(String requestId, AnalyzeConfig config) {

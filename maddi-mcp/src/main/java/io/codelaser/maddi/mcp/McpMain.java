@@ -44,6 +44,9 @@ import io.modelcontextprotocol.spec.McpSchema;
  *   --store DIR            MADDI_MCP_STORE        where configured projects are kept; default: ~/.maddi/mcp
  *   --incremental BOOL     MADDI_INCREMENTAL      after an edit, re-analyse only what changed (never certified;
  *                                                 analyze with cold for a full run); default: false
+ *   --persist BOOL         MADDI_PERSIST          the daemon stores its results under the store's daemon-results/,
+ *                                                 and answers a project whose inputs did not change with the stored
+ *                                                 one, across restarts (analyze with cold skips it); default: false
  * </pre>
  * stdout carries the protocol and nothing else: everything else goes to stderr or the log.
  */
@@ -61,7 +64,9 @@ public final class McpMain {
             return;
         }
         System.err.println("maddi-mcp: daemon " + settings.installDir() + " on " + settings.jdkHome()
-                           + (settings.incremental() ? ", incremental" : "") + ", log " + settings.logFile());
+                           + (settings.incremental() ? ", incremental" : "")
+                           + (settings.persistDirectory() != null ? ", results stored in " + settings.persistDirectory()
+                : "") + ", log " + settings.logFile());
         // the client ends the session by closing stdin; the daemon exits with this process (MADDI_PARENT_PID)
         CountDownLatch closed = new CountDownLatch(1);
         InputStream in = new FilterInputStream(System.in) {
@@ -80,9 +85,7 @@ public final class McpMain {
                 return n;
             }
         };
-        String storeOption = option(args, "--store", "MADDI_MCP_STORE");
-        Path store = storeOption != null ? Path.of(storeOption)
-                : Path.of(System.getProperty("user.home"), ".maddi", "mcp");
+        Path store = store(args);
         MaddiService service = new MaddiService(settings, store);
         System.err.println("maddi-mcp: projects stored in " + store);
         McpSyncServer server = start(service, in, System.out);
@@ -115,6 +118,12 @@ public final class McpMain {
         if (incremental != null && !incremental.equals("true") && !incremental.equals("false")) {
             throw new IllegalArgumentException("--incremental is true or false, not '" + incremental + "'");
         }
+        String persist = option(args, "--persist", "MADDI_PERSIST");
+        if (persist != null && !persist.equals("true") && !persist.equals("false")) {
+            throw new IllegalArgumentException("--persist is true or false, not '" + persist + "'");
+        }
+        Path persistDirectory = Boolean.parseBoolean(persist)
+                ? store(args).resolve("daemon-results").toAbsolutePath() : null;
 
         Path installDir = install != null ? Path.of(install) : bundledDaemon();
         if (installDir == null || !Files.isDirectory(installDir.resolve("lib"))) {
@@ -129,7 +138,13 @@ public final class McpMain {
         Path logFile = log != null ? Path.of(log)
                 : Path.of(System.getProperty("java.io.tmpdir"), "maddi-mcp-daemon-" + ProcessHandle.current().pid() + ".log");
         return new MaddiService.DaemonSettings(installDir.toAbsolutePath(), jdkHome.toAbsolutePath(),
-                xmx == null ? 0 : Integer.parseInt(xmx), logFile, Boolean.parseBoolean(incremental));
+                xmx == null ? 0 : Integer.parseInt(xmx), logFile, Boolean.parseBoolean(incremental), persistDirectory);
+    }
+
+    /* where configured projects are kept */
+    static Path store(String[] args) {
+        String storeOption = option(args, "--store", "MADDI_MCP_STORE");
+        return storeOption != null ? Path.of(storeOption) : Path.of(System.getProperty("user.home"), ".maddi", "mcp");
     }
 
     private static String option(String[] args, String name, String environment) {

@@ -55,20 +55,32 @@ public final class MaddiService implements Closeable {
      * How the daemon is launched. {@code xmxMb} 0: the JVM's default heap. {@code incremental}: the daemon keeps the
      * last run's state ({@code -Dmaddi.daemon.warm}), and a run of the same project and scope after an edit
      * re-analyses only what changed and depends on it; such a result is never certified, which an analyze with
-     * {@code cold} restores.
+     * {@code cold} restores. {@code persistDirectory}: where the daemon stores its results
+     * ({@code -Dmaddi.daemon.persist}), so that a project whose inputs did not change is not analysed again after the
+     * daemon restarts or after a run of another project; null: nowhere.
      */
-    public record DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile, boolean incremental) {
+    public record DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile, boolean incremental,
+                                 Path persistDirectory) {
         public DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile) {
             this(installDir, jdkHome, xmxMb, logFile, false);
         }
 
+        public DaemonSettings(Path installDir, Path jdkHome, int xmxMb, Path logFile, boolean incremental) {
+            this(installDir, jdkHome, xmxMb, logFile, incremental, null);
+        }
+
         List<String> daemonJvmArgs() {
-            return incremental ? List.of("-D" + WARM_PROPERTY + "=true") : List.of();
+            List<String> args = new ArrayList<>();
+            if (incremental) args.add("-D" + WARM_PROPERTY + "=true");
+            if (persistDirectory != null) args.add("-D" + PERSIST_PROPERTY + "=" + persistDirectory);
+            return List.copyOf(args);
         }
     }
 
     /** The daemon's switch for {@link DaemonSettings#incremental()}: WarmAnalysisService. */
     static final String WARM_PROPERTY = "maddi.daemon.warm";
+    /** The daemon's switch for {@link DaemonSettings#persistDirectory()}: ResultStore. */
+    static final String PERSIST_PROPERTY = "maddi.daemon.persist";
 
     private final DaemonSettings settings;
     private final MaddiDaemonProcess daemon = new MaddiDaemonProcess();
