@@ -121,6 +121,8 @@ public class TestPersistedResults {
         assertTrue(restarted.lastResultRestored());
         assertNotEquals(DaemonProtocol.OUTCOME_INCREMENTAL, restored.outcome());
         assertTrue(restarted.awaitRebuildForTest(), "the model behind the stored result is built");
+        // the rebuild runs through analyze(..) too; it raced the line above for this flag (gate run 43403539895)
+        assertTrue(restarted.lastResultRestored(), "the background rebuild leaves the request's flag alone");
 
         DaemonProtocol.Result edited = analyzeAll(projectDir, Map.of("x/Box.java", BOX_MODIFYING), restarted, false);
         assertEquals(DaemonProtocol.OUTCOME_INCREMENTAL, edited.outcome(), "the first edit after the restart");

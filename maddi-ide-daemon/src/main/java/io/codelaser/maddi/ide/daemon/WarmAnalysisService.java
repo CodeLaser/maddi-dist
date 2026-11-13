@@ -213,7 +213,7 @@ public class WarmAnalysisService implements AnalyzeHandler {
     private int lastIncrementalScope;
 
     /* for tests: whether the last result was read back from the store */
-    private boolean lastResultRestored;
+    private volatile boolean lastResultRestored;
 
     int lastIncrementalScope() {
         return lastIncrementalScope;
@@ -353,7 +353,9 @@ public class WarmAnalysisService implements AnalyzeHandler {
                     null);
             awaitRebuild();
         }
-        lastResultRestored = false;
+        // the background rebuild runs through here too: it must not clear the flag of the request that started it,
+        // which the request's caller may not have read yet
+        if (rebuild != Thread.currentThread()) lastResultRestored = false;
         long start = System.currentTimeMillis();
         // -Dmaddi.daemon.persist: the request's key, taken before anything reads a source (see ResultStore)
         String configuration = null;
