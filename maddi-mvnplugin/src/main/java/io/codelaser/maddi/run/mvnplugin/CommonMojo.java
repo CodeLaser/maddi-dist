@@ -215,7 +215,7 @@ public abstract class CommonMojo extends AbstractMojo {
                         if (e instanceof MethodCall mc &&
                             !parseResult.primaryTypes().contains(mc.methodInfo().typeInfo().primaryType())) {
                             methodInfo = mc.methodInfo();
-                        } else if (e instanceof ConstructorCall cc && cc.constructor() != null
+                        } else if (e instanceof ConstructorCall cc && cc.callsConstructorOfCreatedType()
                                    && !parseResult.primaryTypes().contains(cc.constructor().typeInfo().primaryType())) {
                             methodInfo = cc.constructor();
                         }
