@@ -72,6 +72,12 @@
           "default": false,
           "markdownDescription": "Report types and methods that narrowly miss a property, e.g. one modifying method away from `@Container`. Advisory; expect noise on code not curated for it."
         },
+        "maddi.closedWorld": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "**This folder is an application (closed world).** No code outside it calls its public methods, so maddi's ownership analysis (`@Owned`, `@Borrowed`, `@Fresh`) may treat a parameter every caller hands over as owned. Leave off for a library."
+        },
         "maddi.incrementalReanalysis": {
           "type": "boolean",
           "default": false,

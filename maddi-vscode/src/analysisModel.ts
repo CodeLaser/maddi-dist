@@ -59,6 +59,8 @@ export interface AnalyzeConfig {
     parallel: boolean;
     warnNearMisses: boolean;
     moduleSourceSets?: ModuleSourceSet[];
+    /** The project is an application: the ownership pass's closed world. Absent: an open world (a library). */
+    closedWorld?: boolean;
 }
 
 /**

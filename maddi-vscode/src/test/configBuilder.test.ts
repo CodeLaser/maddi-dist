@@ -261,3 +261,16 @@ test('test-root detection covers the common layouts', () => {
     // a project that merely lives under a directory called "latest" is not a test root
     assert.ok(!looksLikeTestRoot('/w/latest/src/main/java'));
 });
+
+test('closedWorld: off unless the folder says it is an application', async () => {
+    const responses = {
+        'java.project.getAll': [PROJECT],
+        'getClasspaths:runtime': { projectRoot: PROJECT, classpaths: [], modulepaths: [] },
+        'getClasspaths:test': { projectRoot: PROJECT, classpaths: [], modulepaths: [] },
+        'java.project.listSourcePaths': { data: [] },
+    };
+    const open = await buildConfig(jdtls(responses).execute, OPTIONS);
+    assert.equal(open.closedWorld, false);
+    const closed = await buildConfig(jdtls(responses).execute, { ...OPTIONS, closedWorld: true });
+    assert.equal(closed.closedWorld, true);
+});

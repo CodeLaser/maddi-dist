@@ -69,6 +69,18 @@ public class DaemonAnalyzeRoundTripTest {
                     public void add(Mutable m) { m.set(3); } // violates @Container
                 }
 
+                // a list every caller hands over to a public constructor: @Owned only when closedWorld crosses the wire
+                class Palette {
+                    private final java.util.List<String> colors;
+                    public Palette(java.util.List<String> colors) { this.colors = colors; }
+                    static Palette of(String s) {
+                        java.util.List<String> list = new java.util.ArrayList<>();
+                        list.add(s);
+                        return new Palette(list);
+                    }
+                    String color(int i) { return colors.get(i); }
+                }
+
                 // one modifying slot short of @Container: only reported when warnNearMisses crosses the wire
                 class Surface {
                     public int read0(StringBuilder sb) { return sb.length(); }
@@ -91,8 +103,9 @@ public class DaemonAnalyzeRoundTripTest {
                 List.of(), // no user classpath: the e2immu annotations come from the daemon's own classpath
                 List.of(),
                 false,
-                true); // warnNearMisses: the client and daemon declare AnalyzeConfig separately, matched only
+                true) // warnNearMisses: the client and daemon declare AnalyzeConfig separately, matched only
                        // by field name over JSON, so a skew here would silently drop the flag
+                .withClosedWorld(true); // the same for the ownership pass's closed world
 
         DaemonLauncher launcher = new DaemonLauncher();
         Path logFile = projectDir.resolve("daemon.log");
@@ -129,6 +142,13 @@ public class DaemonAnalyzeRoundTripTest {
             assertNotNull(violation.uri());
             assertNotNull(violation.beginLine());
             assertFalse(violation.causes() == null || violation.causes().isEmpty(), "expected a why-chain");
+
+            // proves closedWorld survived the JSON hop: only in a closed world is the constructor's list owned
+            assertTrue(result.elementAnnotations().stream()
+                            .filter(e -> e.fqn() != null && e.fqn().endsWith("Palette.colors"))
+                            .flatMap(e -> e.annotations().stream())
+                            .anyMatch(a -> a.text().startsWith("@Owned")),
+                    "expected @Owned on Palette.colors: the closedWorld flag must cross the wire");
 
             // proves warnNearMisses survived the JSON hop into the daemon's analyzer configuration
             AnalysisModel.Finding nearMiss = result.findings().stream()

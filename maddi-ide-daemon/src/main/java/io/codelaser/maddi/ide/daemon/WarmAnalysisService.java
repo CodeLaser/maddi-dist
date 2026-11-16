@@ -705,7 +705,10 @@ public class WarmAnalysisService implements AnalyzeHandler {
                 // the nullability pass after the fixpoint, writing NULLABILITY_* for the @NotNull/@Nullable hints
                 .withNullability(true)
                 // beside a verdict, the first statement responsible for it, for the "why?" in the gutter tooltip
-                .withCulprits(true);
+                .withCulprits(true)
+                // the ownership pass (@Fresh, @Borrowed, @Owned), in the world the front-end's setting says: an
+                // application is a closed world, anything else an open one
+                .withOwnership(true, config.isClosedWorld());
     }
 
 

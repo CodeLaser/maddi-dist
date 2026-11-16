@@ -65,7 +65,9 @@ public class AnnotationTagger {
     // @Immutable(hc=true) on the result, but a guarantee all the same: nothing is added or removed through it.
     private static final Set<String> POSITIVE_NAMES = Set.of(
             "NotModified", "Immutable", "ImmutableContainer", "Container", "Independent", "NotNull", "Final",
-            "UnmodifiableView", "FinalFields");
+            "UnmodifiableView", "FinalFields",
+            // ownership (road-to-immutability §055): who holds an object, guarantees as much as the others are
+            "Fresh", "Borrowed", "Owned");
     // the four baseline "absence of a safety guarantee" concepts, plus @StaticSideEffects: not a missing
     // guarantee but a genuine outward effect (this method reaches into global/static state) the designer should
     // always see, so it is rendered with the same attention polarity rather than carried as neutral
@@ -230,6 +232,9 @@ public class AnnotationTagger {
             // immutable ⇒ all methods non-modifying; container/immutable ⇒ params non-modified
             case "NotModified" -> info instanceof MethodInfo ? immutable : (container || immutable);
             case "Independent" -> immutable; // immutable ⇒ independent
+            // a borrowed String, record or other immutable argument: holding it or not changes nothing a caller can
+            // observe in Java, so the guarantee is clutter under the default filter
+            case "Borrowed" -> info instanceof ParameterInfo pi && immutableParameterType(pi);
             default -> false;
         };
     }
@@ -268,6 +273,18 @@ public class AnnotationTagger {
         if (POSITIVE_NAMES.contains(name)) return POSITIVE;
         if (NEGATIVE_NAMES.contains(name)) return NEGATIVE;
         return NEUTRAL;
+    }
+
+    // the argument's type is immutable (at least with hidden content): its own verdict, else its type's
+    private static boolean immutableParameterType(ParameterInfo pi) {
+        Value.Immutable v = pi.analysis().getOrNull(PropertyImpl.IMMUTABLE_PARAMETER, ValueImpl.ImmutableImpl.class);
+        if (v != null) return v.isAtLeastImmutableHC();
+        ParameterizedType type = pi.parameterizedType();
+        if (type.isPrimitiveStringClass()) return true;
+        TypeInfo typeInfo = type.arrays() == 0 ? type.typeInfo() : null;
+        if (typeInfo == null) return false;
+        Value.Immutable ofType = typeInfo.analysis().getOrNull(PropertyImpl.IMMUTABLE_TYPE, ValueImpl.ImmutableImpl.class);
+        return ofType != null && ofType.isAtLeastImmutableHC();
     }
 
     /** "@Immutable(hc=true)" → "Immutable". */

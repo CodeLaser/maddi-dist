@@ -228,7 +228,8 @@ public final class MaddiAnalysis {
 
         progress.subTask("building the project model");
         AnalysisModel.AnalyzeConfig config = new MaddiEclipseConfigBuilder()
-                .build(javaProject, jdkHome, MaddiPreferences.warnNearMisses());
+                .build(javaProject, jdkHome, MaddiPreferences.warnNearMisses())
+                .withClosedWorld(MaddiPreferences.closedWorld());
         MaddiRun.get().started(javaProject.getElementName(), install.toString(), daemon.buildStamp(),
                 !MaddiResults.get().findings().isEmpty());
         if (reveal) revealFindingsView();

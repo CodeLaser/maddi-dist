@@ -34,6 +34,7 @@ public class MaddiPreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(MaddiPreferences.HINT_FILTER, MaddiPreferences.DEFAULT_HINT_FILTER.name());
         store.setDefault(MaddiPreferences.AUTO_ANALYZE_ON_BUILD, false);
         store.setDefault(MaddiPreferences.WARN_NEAR_MISSES, false);
+        store.setDefault(MaddiPreferences.CLOSED_WORLD, false);
         store.setDefault(MaddiPreferences.INLINE_HINTS, true);
         store.setDefault(MaddiPreferences.HINT_PLACEMENT, MaddiPreferences.DEFAULT_HINT_PLACEMENT.name());
         store.setDefault(MaddiPreferences.SHOW_GUARD_FINDINGS, true);

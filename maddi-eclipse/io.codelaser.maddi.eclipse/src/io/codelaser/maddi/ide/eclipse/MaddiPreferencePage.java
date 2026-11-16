@@ -75,6 +75,9 @@ public class MaddiPreferencePage extends FieldEditorPreferencePage implements IW
 
         addField(new BooleanFieldEditor(MaddiPreferences.WARN_NEAR_MISSES,
                 "Warn about near misses (types/methods that narrowly miss a property)", getFieldEditorParent()));
+        addField(new BooleanFieldEditor(MaddiPreferences.CLOSED_WORLD,
+                "The projects are applications (closed world): ownership may assume no outside callers",
+                getFieldEditorParent()));
         addField(new BooleanFieldEditor(MaddiPreferences.INCREMENTAL_REANALYSIS,
                 "Incremental re-analysis (experimental: after an edit, only what changed; never certified)",
                 getFieldEditorParent()));

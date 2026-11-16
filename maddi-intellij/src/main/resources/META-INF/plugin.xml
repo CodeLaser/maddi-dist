@@ -80,6 +80,12 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="RefactoringMenu" anchor="last"/>
         </action>
+        <action id="maddi.ClosedWorld"
+                class="io.codelaser.maddi.ide.plugin.action.ClosedWorldToggleAction"
+                text="maddi: Project Is an Application (Closed World)"
+                description="Per project: no code outside this project calls its public methods, so maddi's ownership analysis may treat a parameter every caller hands over as owned. Leave off for a library.">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
         <action id="maddi.StopAnalysis"
                 class="io.codelaser.maddi.ide.plugin.action.StopMaddiAnalysisAction"
                 text="Stop maddi Analysis"

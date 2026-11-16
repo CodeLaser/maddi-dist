@@ -62,13 +62,33 @@ public final class AnalysisModel {
                                 boolean parallel,
                                 boolean warnNearMisses,
                                 List<ModuleSourceSet> moduleSourceSets,
-                                Integer containerWhyMaxSlots) {
+                                Integer containerWhyMaxSlots,
+                                Boolean closedWorld) {
 
         /**
          * Why a type is not {@code @Container} is sent only when at most this many parameters stand in its way: a
          * type close to a container is worth the explanation, one that modifies everything it is given is not.
          */
         public static final int DEFAULT_CONTAINER_WHY_MAX_SLOTS = 2;
+
+        /** In an open world (null {@link #closedWorld}): the ownership pass assumes outside callers, as for a library. */
+        public AnalyzeConfig(String workingDirectory, String sdkHome, String sourceEncoding, List<String> jmods,
+                             List<SourceRoot> sources, List<ClasspathEntry> classpath,
+                             List<String> restrictToPackages, boolean parallel, boolean warnNearMisses,
+                             List<ModuleSourceSet> moduleSourceSets, Integer containerWhyMaxSlots) {
+            this(workingDirectory, sdkHome, sourceEncoding, jmods, sources, classpath, restrictToPackages,
+                    parallel, warnNearMisses, moduleSourceSets, containerWhyMaxSlots, null);
+        }
+
+        /**
+         * This configuration for an application ({@code true}): no code outside the project calls its public
+         * methods, so the ownership pass may count a parameter every caller hands over as owned
+         * (road-to-immutability §055, "Transfer"). For a library, {@code false}.
+         */
+        public AnalyzeConfig withClosedWorld(boolean closedWorld) {
+            return new AnalyzeConfig(workingDirectory, sdkHome, sourceEncoding, jmods, sources, classpath,
+                    restrictToPackages, parallel, warnNearMisses, moduleSourceSets, containerWhyMaxSlots, closedWorld);
+        }
 
         public AnalyzeConfig(String workingDirectory, String sdkHome, String sourceEncoding, List<String> jmods,
                              List<SourceRoot> sources, List<ClasspathEntry> classpath,
@@ -81,7 +101,7 @@ public final class AnalysisModel {
         /** This configuration, explaining a non-container with up to {@code max} modified parameters. */
         public AnalyzeConfig withContainerWhyMaxSlots(Integer max) {
             return new AnalyzeConfig(workingDirectory, sdkHome, sourceEncoding, jmods, sources, classpath,
-                    restrictToPackages, parallel, warnNearMisses, moduleSourceSets, max);
+                    restrictToPackages, parallel, warnNearMisses, moduleSourceSets, max, closedWorld);
         }
 
         /** {@link #containerWhyMaxSlots}, or its default when the front-end did not say. */

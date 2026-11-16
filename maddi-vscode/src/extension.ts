@@ -206,6 +206,8 @@ async function analyze(
         {
             jdkHome,
             warnNearMisses: settings.get<boolean>('warnNearMisses') ?? false,
+            // per folder: a workspace may hold a library beside an application
+            closedWorld: vscode.workspace.getConfiguration('maddi', folder.uri).get<boolean>('closedWorld') ?? false,
             workingDirectory: folder.uri.fsPath,
         });
     const sets = config.moduleSourceSets ?? [];

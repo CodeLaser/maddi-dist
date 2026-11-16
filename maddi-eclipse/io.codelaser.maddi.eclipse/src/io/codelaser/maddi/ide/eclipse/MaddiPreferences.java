@@ -33,6 +33,7 @@ public final class MaddiPreferences {
     public static final String HINT_FILTER = "maddi.hintFilter";
     public static final String AUTO_ANALYZE_ON_BUILD = "maddi.autoAnalyzeOnBuild";
     public static final String WARN_NEAR_MISSES = "maddi.warnNearMisses";
+    public static final String CLOSED_WORLD = "maddi.closedWorld";
     public static final String INLINE_HINTS = "maddi.inlineHints";
     public static final String HINT_PLACEMENT = "maddi.hintPlacement";
     public static final String SHOW_GUARD_FINDINGS = "maddi.showGuardFindings";
@@ -91,6 +92,15 @@ public final class MaddiPreferences {
      */
     public static boolean warnNearMisses() {
         return store().getBoolean(WARN_NEAR_MISSES);
+    }
+
+    /**
+     * The analysed projects are applications (road-to-immutability §055, "Transfer"): no code outside them calls
+     * their public methods, so the ownership pass may count a parameter every caller hands over as owned. A
+     * workspace preference, off by default: a library's public methods have callers maddi cannot see.
+     */
+    public static boolean closedWorld() {
+        return store().getBoolean(CLOSED_WORLD);
     }
 
     /**

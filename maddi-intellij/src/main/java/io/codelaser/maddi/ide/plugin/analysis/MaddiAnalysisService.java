@@ -245,8 +245,11 @@ public final class MaddiAnalysisService implements Disposable {
         indicator.setText("maddi: building configuration");
         String resolvedJdkHome = jdkHome;
         boolean warnNearMisses = settings.warnNearMisses;
+        // the ownership pass's world: an application (closed) or a library (open), as the project's toggle says
+        boolean closedWorld = io.codelaser.maddi.ide.plugin.action.ClosedWorldToggleAction.isClosedWorld(project);
         AnalysisModel.AnalyzeConfig config = ReadAction.compute(
-                () -> new MaddiConfigBuilder().build(project, resolvedJdkHome, warnNearMisses));
+                () -> new MaddiConfigBuilder().build(project, resolvedJdkHome, warnNearMisses)
+                        .withClosedWorld(closedWorld));
         if (kotlinFrontEnd == null) {
             MaddiKotlinFrontEnd.offerIfNeeded(project, config, installDir, this::analyzeInBackground);
         }

@@ -62,6 +62,19 @@ public final class DaemonAnalysisFixture {
     private static DaemonProtocol.Result analyze(Path projectDir, String relativePath, String source,
                                                  boolean warnNearMisses, AnalyzeHandler.StatusSink sink,
                                                  WarmAnalysisService service) throws Exception {
+        return analyze(projectDir, relativePath, source, warnNearMisses, sink, service, null);
+    }
+
+    /** As {@link #analyze(Path, String, String)}, in the ownership pass's closed world (an application) or not. */
+    public static DaemonProtocol.Result analyzeInWorld(Path projectDir, String relativePath, String source,
+                                                      boolean closedWorld) throws Exception {
+        return analyze(projectDir, relativePath, source, false, status -> { }, new WarmAnalysisService(),
+                closedWorld);
+    }
+
+    private static DaemonProtocol.Result analyze(Path projectDir, String relativePath, String source,
+                                                 boolean warnNearMisses, AnalyzeHandler.StatusSink sink,
+                                                 WarmAnalysisService service, Boolean closedWorld) throws Exception {
         Path file = projectDir.resolve("src").resolve(relativePath);
         Files.createDirectories(file.getParent());
         Files.writeString(file, source);
@@ -74,7 +87,10 @@ public final class DaemonAnalysisFixture {
                 List.of(),
                 List.of(),
                 false,
-                warnNearMisses);
+                warnNearMisses,
+                List.of(),
+                null,
+                closedWorld);
         return service.analyze(new DaemonProtocol.AnalyzeProject("test", config), sink);
     }
 

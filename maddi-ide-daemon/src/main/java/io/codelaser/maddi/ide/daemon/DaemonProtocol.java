@@ -166,13 +166,31 @@ public final class DaemonProtocol {
                                 boolean parallel,
                                 boolean warnNearMisses,
                                 List<ModuleSourceSet> moduleSourceSets,
-                                Integer containerWhyMaxSlots) {
+                                Integer containerWhyMaxSlots,
+                                Boolean closedWorld) {
 
         /**
          * Why a type is not {@code @Container} is sent only when at most this many parameters stand in its way: a
          * type close to a container is worth the explanation, one that modifies everything it is given is not.
          */
         public static final int DEFAULT_CONTAINER_WHY_MAX_SLOTS = 2;
+
+        /**
+         * Without {@link #closedWorld}: an open world, the ownership pass assuming outside callers of every public
+         * method (a library). A client older than the field sends none, and Jackson leaves it null: the same.
+         */
+        public AnalyzeConfig(String workingDirectory, String sdkHome, String sourceEncoding, List<String> jmods,
+                             List<SourceRoot> sources, List<ClasspathEntry> classpath,
+                             List<String> restrictToPackages, boolean parallel, boolean warnNearMisses,
+                             List<ModuleSourceSet> moduleSourceSets, Integer containerWhyMaxSlots) {
+            this(workingDirectory, sdkHome, sourceEncoding, jmods, sources, classpath, restrictToPackages,
+                    parallel, warnNearMisses, moduleSourceSets, containerWhyMaxSlots, null);
+        }
+
+        /** The project is an application: no code outside it calls its public methods (the ownership pass's closed world). */
+        public boolean isClosedWorld() {
+            return Boolean.TRUE.equals(closedWorld);
+        }
 
         public AnalyzeConfig(String workingDirectory, String sdkHome, String sourceEncoding, List<String> jmods,
                              List<SourceRoot> sources, List<ClasspathEntry> classpath,

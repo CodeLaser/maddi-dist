@@ -69,6 +69,8 @@ export interface BuildOptions {
     /** Home of the maddi JDK (25+): the analysis SDK, NOT the JDK the project targets. */
     jdkHome: string;
     warnNearMisses: boolean;
+    /** The folder is an application: the ownership pass's closed world (no outside callers of public methods). */
+    closedWorld?: boolean;
     /** Absolute path of the folder being analysed; becomes the working directory. */
     workingDirectory: string;
 }
@@ -101,6 +103,7 @@ export async function buildConfig(execute: ExecuteCommand, options: BuildOptions
             parallel: true,
             warnNearMisses: options.warnNearMisses,
             moduleSourceSets: sets,
+            closedWorld: options.closedWorld ?? false,
         };
     }
     return flatConfig(execute, projects, sourcePaths, options);
@@ -142,6 +145,7 @@ async function flatConfig(execute: ExecuteCommand, projects: string[], sourcePat
         restrictToPackages: [],
         parallel: true,
         warnNearMisses: options.warnNearMisses,
+        closedWorld: options.closedWorld ?? false,
     };
 }
 
