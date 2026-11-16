@@ -59,6 +59,13 @@ public class TestOwnershipAnnotations {
                     }
                     public String color(int i) { return colors.get(i); }
                 }
+                public static final class Shared {
+                    private final List<String> items = new ArrayList<>();
+                    private List<String> kept;
+                    public List<String> items() { return items; }
+                    public void keep(List<String> list) { kept = list; }
+                    public int size() { return kept.size(); }
+                }
             }
             """;
 
@@ -95,6 +102,32 @@ public class TestOwnershipAnnotations {
         // a public constructor: in an open world the caller may keep the list
         assertTrue(none(annotationsFor(r, "FIELD", "Palette.colors"), "@Owned"),
                 annotationsFor(r, "FIELD", "Palette.colors").toString());
+    }
+
+    private static DaemonProtocol.Why whyNot(DaemonProtocol.Result r, String kind, String fqnPart, String annotation) {
+        List<DaemonProtocol.Why> whys = r.elementAnnotations().stream()
+                .filter(e -> kind.equals(e.kind()) && e.fqn() != null && e.fqn().contains(fqnPart))
+                .flatMap(e -> e.whys().stream()).filter(w -> annotation.equals(w.annotation())).toList();
+        assertEquals(1, whys.size(), () -> "one why for @" + annotation + " on " + fqnPart + ": " + whys);
+        DaemonProtocol.Why why = whys.getFirst();
+        assertTrue(why.negates(), why::toString);
+        assertEquals(1, why.steps().size(), why::toString);
+        assertFalse(why.steps().getFirst().text().isBlank(), why::toString);
+        return why;
+    }
+
+    @DisplayName("a negative verdict explains itself: not @Fresh, not @Borrowed, not @Owned, with the pass's reason")
+    @Test
+    public void whyNot(@TempDir Path dir) throws Exception {
+        DaemonProtocol.Result r = analyzeInWorld(dir, "x/X.java", SOURCE, false);
+        assertEquals(0, r.parseErrorCount(), "unexpected parse errors");
+        whyNot(r, "METHOD", "Shared.items(", "Fresh");
+        whyNot(r, "PARAMETER", "Shared.keep(", "Borrowed");
+        whyNot(r, "FIELD", "Shared.items", "Owned");
+        // a positive verdict has no why-not
+        assertTrue(r.elementAnnotations().stream()
+                .filter(e -> e.fqn() != null && e.fqn().contains("Lines.copy("))
+                .flatMap(e -> e.whys().stream()).noneMatch(w -> "Fresh".equals(w.annotation())));
     }
 
     @DisplayName("closed world: the public constructor's handed-over list is @Owned, and the type immutable")

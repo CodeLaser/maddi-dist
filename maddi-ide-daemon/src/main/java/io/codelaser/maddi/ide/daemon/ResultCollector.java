@@ -281,7 +281,7 @@ public class ResultCollector {
      */
     private static boolean isCulprit(Property property) {
         return CULPRITS.containsKey(property) || property == PropertyImpl.IMMUTABLE_CULPRIT
-               || property == PropertyImpl.CONTAINER_CULPRIT;
+               || property == PropertyImpl.CONTAINER_CULPRIT || property == PropertyImpl.OWNERSHIP_CULPRIT;
     }
 
     private List<DaemonProtocol.Why> whys(Info info, List<String> displayAnnotations) {
@@ -310,6 +310,21 @@ public class ResultCollector {
         if (container != null && !container.steps().isEmpty() && container.steps().size() <= containerWhyMaxSlots
             && displayAnnotations.stream().noneMatch(a -> a.equals("@Container") || a.startsWith("@Container("))) {
             whys.add(new DaemonProtocol.Why("Container", container.steps().stream()
+                    .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList(), true));
+        }
+        // why a method is not @Fresh, a parameter not @Borrowed, a field not @Owned: the ownership pass's first reason
+        ValueImpl.CulpritImpl ownership = info.analysis().getOrNull(PropertyImpl.OWNERSHIP_CULPRIT,
+                ValueImpl.CulpritImpl.class);
+        String ownershipAnnotation = switch (info) {
+            case MethodInfo _ -> "Fresh";
+            case ParameterInfo _ -> "Borrowed";
+            case FieldInfo _ -> "Owned";
+            default -> null;
+        };
+        if (ownership != null && !ownership.steps().isEmpty() && ownershipAnnotation != null
+            && displayAnnotations.stream().noneMatch(a -> a.equals("@" + ownershipAnnotation)
+                                                          || a.startsWith("@" + ownershipAnnotation + "("))) {
+            whys.add(new DaemonProtocol.Why(ownershipAnnotation, ownership.steps().stream()
                     .map(s -> new DaemonProtocol.WhyStep(s.uri(), s.line(), s.column(), s.text())).toList(), true));
         }
         return whys;
