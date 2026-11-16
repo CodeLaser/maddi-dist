@@ -68,6 +68,13 @@ public class AnalyzerExtension {
     public String analysisSteps;
     public boolean quiet;
     public boolean warnNearMisses;
+    /** Run the ownership pass: {@code @Fresh}, {@code @Borrowed}, {@code @Owned} (road-to-immutability §055). */
+    public boolean ownership;
+    /**
+     * With {@link #ownership}: the project is an application, no code outside it calls its public methods, so a
+     * parameter every caller hands over may be {@code @Owned}. Off for a library, whose callers maddi cannot see.
+     */
+    public boolean closedWorld;
     /**
      * Analyze the Java sources of a project that also holds Kotlin, accepting that the Kotlin is not read.
      * Unset (the default) the analyzer task FAILS on a {@code .kt} file rather than skipping it silently: this

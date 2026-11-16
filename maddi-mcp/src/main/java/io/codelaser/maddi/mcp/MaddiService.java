@@ -132,8 +132,15 @@ public final class MaddiService implements Closeable {
      */
     public synchronized Map<String, Object> configure(String name, ProjectConfigurator.Way way, String daemonJdk)
             throws IOException, InterruptedException {
+        return configure(name, way, daemonJdk, null);
+    }
+
+    /** @param closedWorld null: what the project had, if it was configured before (else an open world) */
+    public synchronized Map<String, Object> configure(String name, ProjectConfigurator.Way way, String daemonJdk,
+                                                      Boolean closedWorld) throws IOException, InterruptedException {
         ProjectStore.StoredProject previous = projects.get(name);
         if (daemonJdk == null && previous != null) daemonJdk = previous.daemonJdk(); // the JDK it needs stays
+        if (closedWorld == null && previous != null) closedWorld = previous.closedWorld();
         if (daemonJdk != null) checkJdk(Path.of(daemonJdk));
         AnalysisModel.AnalyzeConfig config = switch (way) {
             case ProjectConfigurator.FromFile f -> ProjectConfigs.fromInputConfiguration(
@@ -153,7 +160,7 @@ public final class MaddiService implements Closeable {
         } else {
             record = configurator.configure(name, way, CaptureListener.NONE);
         }
-        ProjectStore.StoredProject stored = ProjectStore.StoredProject.of(record, daemonJdk);
+        ProjectStore.StoredProject stored = ProjectStore.StoredProject.of(record, daemonJdk, closedWorld);
         if (config != null) stored = stored.with(config, BuildFileCheck.buildFilesOf(record.inputConfiguration()));
         store.save(stored);
         projects.put(name, stored);
@@ -166,6 +173,19 @@ public final class MaddiService implements Closeable {
         if (project == null) throw new IllegalArgumentException("no project '" + name + "'; configure it first");
         if (jdk != null) checkJdk(Path.of(jdk));
         ProjectStore.StoredProject changed = project.withDaemonJdk(jdk);
+        store.save(changed);
+        projects.put(name, changed);
+        return describeProject(changed);
+    }
+
+    /**
+     * Whether this project is an application (closed world: the ownership pass may assume no outside callers),
+     * keeping its configuration. The next run differs in configuration, so it is analysed from scratch.
+     */
+    public synchronized Map<String, Object> setClosedWorld(String name, boolean closedWorld) throws IOException {
+        ProjectStore.StoredProject project = projects.get(name);
+        if (project == null) throw new IllegalArgumentException("no project '" + name + "'; configure it first");
+        ProjectStore.StoredProject changed = project.withClosedWorld(closedWorld);
         store.save(changed);
         projects.put(name, changed);
         return describeProject(changed);
@@ -220,6 +240,7 @@ public final class MaddiService implements Closeable {
         out.put("from", project.sourceFile() != null ? project.sourceFile() : project.kind());
         out.put("configuredAt", project.configuredAt());
         if (project.daemonJdk() != null) out.put("daemonJdk", project.daemonJdk());
+        out.put("closedWorld", project.isClosedWorld());
         out.put("regenerate", project.regenerate() == null ? "none: configure again when the build changes"
                 : project.regenerate().describe());
         if (config == null) {
@@ -337,7 +358,8 @@ public final class MaddiService implements Closeable {
             }
             // an IDE explains only a type close to @Container; asked here, every non-container is explained
             AnalysisModel.AnalyzeConfig request = ProjectConfigs.part(project.config(), sourceSets, packages)
-                    .withContainerWhyMaxSlots(Integer.MAX_VALUE);
+                    .withContainerWhyMaxSlots(Integer.MAX_VALUE)
+                    .withClosedWorld(project.isClosedWorld());
             run.phase("analyze", "starting the daemon on " + daemonJdkOf(project));
             daemon.ensureStarted(settings.installDir(), daemonJdkOf(project), settings.xmxMb(), null,
                     settings.daemonJvmArgs(), settings.logFile());
@@ -491,7 +513,8 @@ public final class MaddiService implements Closeable {
         AnalysisModel.AnalyzeConfig config = withJdkModules(ProjectConfigs.fromInputConfiguration(file, mapper),
                 project.daemonJdk());
         ProjectConfigs.check(config);
-        ProjectStore.StoredProject fresh = ProjectStore.StoredProject.of(opened.record(), project.daemonJdk())
+        ProjectStore.StoredProject fresh = ProjectStore.StoredProject.of(opened.record(), project.daemonJdk(),
+                        project.closedWorld())
                 .with(config, BuildFileCheck.buildFilesOf(file));
         synchronized (this) {
             store.save(fresh);

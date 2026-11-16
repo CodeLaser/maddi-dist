@@ -94,6 +94,7 @@ public final class McpTools {
                         {"type":"object","properties":{
                           "project":{"type":"string","description":"a name for later calls; default 'default'"},
                           "daemonJdk":{"type":"string","description":"a JDK 25+ to run the daemon on for this project, when the server's does not suit it (an annotation processor such as Lombok that does not support it). Given with project alone: changes only that, keeping the configuration"},
+                          "closedWorld":{"type":"boolean","description":"true when the project is an application: no code outside it calls its public methods, so a parameter every caller hands over may be @Owned. Default false, for a library, whose callers maddi cannot see. Kept when the project is configured again; given with project alone: changes only that"},
                           "build":{"type":"string","enum":["gradle","maven","compileLog"],"description":"make the configuration by capturing this build's javac invocations; default when only workingDirectory is given and it holds a Gradle (else a Maven) build"},
                           "buildJdk":{"type":"string","description":"build gradle or maven: the JDK the build runs on (Gradle's -Dorg.gradle.java.home, Maven's JAVA_HOME), when the default one is newer than the build supports; default: the build tool's own choice"},
                           "compileCommand":{"type":"array","items":{"type":"string"},"description":"build compileLog: the command that compiles, run in workingDirectory; its output must show javac's command lines"},
@@ -161,7 +162,8 @@ public final class McpTools {
                         }}""", this::overview));
         out.add(tool("verdicts", """
                         The analyzer's annotations on elements: @Modified/@NotModified methods, fields and parameters, \
-                        @Immutable/@FinalFields/@Container types, @Independent, @NotNull, ... Select by element (a \
+                        @Immutable/@FinalFields/@Container types, @Independent, @NotNull, ownership's @Fresh methods, \
+                        @Borrowed parameters and @Owned fields, ... Select by element (a \
                         fully qualified name: a type selects its members too, and 'a.b.' a whole package; methods \
                         read 'a.b.C.m(String)', parameters 'a.b.C.m(String):0:s'), kind, file \
                         or annotation text.""",
@@ -267,8 +269,13 @@ public final class McpTools {
         String project = a.string("project", "default");
         String inputConfiguration = a.string("inputConfiguration");
         String daemonJdk = a.string("daemonJdk");
-        if (daemonJdk != null && inputConfiguration == null && a.string("workingDirectory") == null) {
-            return service.setDaemonJdk(project, daemonJdk);
+        Boolean closedWorld = a.optionalBool("closedWorld");
+        if ((daemonJdk != null || closedWorld != null) && inputConfiguration == null
+            && a.string("workingDirectory") == null) {
+            Map<String, Object> out = null;
+            if (daemonJdk != null) out = service.setDaemonJdk(project, daemonJdk);
+            if (closedWorld != null) out = service.setClosedWorld(project, closedWorld);
+            return out;
         }
         if (inputConfiguration != null) {
             Path file = Path.of(inputConfiguration).toAbsolutePath().normalize();
@@ -281,7 +288,8 @@ public final class McpTools {
                         : buildFiles != null && buildFiles.root() != null ? buildFiles.root()
                         : ProjectConfigs.fromInputConfiguration(file, service.mapper()).workingDirectory()));
             }
-            return service.configure(project, new ProjectConfigurator.FromFile(file, regenerate), daemonJdk);
+            return service.configure(project, new ProjectConfigurator.FromFile(file, regenerate), daemonJdk,
+                    closedWorld);
         }
         String build = a.string("build");
         String workingDirectoryArg = a.string("workingDirectory");
@@ -322,7 +330,7 @@ public final class McpTools {
                 }
                 default -> throw new IllegalArgumentException("unknown build '" + build + "'");
             };
-            return service.configure(project, new ProjectConfigurator.FromCapture(spec), daemonJdk);
+            return service.configure(project, new ProjectConfigurator.FromCapture(spec), daemonJdk, closedWorld);
         }
         if (workingDirectoryArg == null) {
             throw new IllegalArgumentException("give inputConfiguration, or workingDirectory and sourceDirectories");
@@ -331,7 +339,8 @@ public final class McpTools {
                 a.strings("sourceDirectories"), a.strings("testSourceDirectories"), a.strings("classPath"),
                 a.strings("testClassPath"), a.string("outputDirectory"), a.integer("sourceRelease", 0),
                 a.string("sdkHome"), a.strings("jdkModules"), a.string("sourceEncoding"));
-        return service.configure(project, new ProjectConfigurator.FromDirectories(directories), daemonJdk);
+        return service.configure(project, new ProjectConfigurator.FromDirectories(directories), daemonJdk,
+                closedWorld);
     }
 
     private Object analyze(Args a, McpSyncServerExchange x, Object token) throws Exception {
@@ -510,6 +519,13 @@ public final class McpTools {
             if (value instanceof Number n) return n.intValue();
             if (value instanceof String s && !s.isBlank()) return Integer.parseInt(s.strip());
             return orElse;
+        }
+
+        /** null when the argument is absent: "keep what it was". */
+        Boolean optionalBool(String key) {
+            Object value = map.get(key);
+            if (value == null) return null;
+            return value instanceof Boolean b ? b : Boolean.parseBoolean(value.toString());
         }
 
         boolean bool(String key) {

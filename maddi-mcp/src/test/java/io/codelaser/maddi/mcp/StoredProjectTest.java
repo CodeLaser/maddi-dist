@@ -157,6 +157,60 @@ public class StoredProjectTest {
         }
     }
 
+    private static boolean owned(AnalysisRun run) {
+        return run.result().elementAnnotations().stream()
+                .filter(e -> "FIELD".equals(e.kind()) && e.fqn().endsWith("Palette.colors"))
+                .anyMatch(e -> e.displayAnnotations().stream().anyMatch(a -> a.startsWith("@Owned")));
+    }
+
+    /*
+     The closed world is a choice about the project, like its daemon JDK: off by default, changed with the project
+     alone, kept when the project is configured again and across a restart, and sent with every run, where a public
+     constructor's handed-over list becomes @Owned.
+     */
+    @Test
+    public void aProjectsClosedWorld(@TempDir Path dir) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("p"));
+        Files.createDirectories(project.resolve("src/x"));
+        Files.writeString(project.resolve("src/x/Palette.java"), """
+                package x;
+                import java.util.ArrayList;
+                import java.util.List;
+                public final class Palette {
+                    private final List<String> colors;
+                    public Palette(List<String> colors) { this.colors = colors; }
+                    public static Palette of(String s) {
+                        List<String> list = new ArrayList<>();
+                        list.add(s);
+                        return new Palette(list);
+                    }
+                    public String color(int i) { return colors.get(i); }
+                }
+                """);
+        ProjectConfigurator.Way config = new ProjectConfigurator.FromDirectories(new Directories(project, List.of("src"), List.of(), List.of(), List.of(),
+                null, 0, null, List.of("java.base"), null));
+        Path store = dir.resolve("store");
+        try (MaddiService service = new MaddiService(settings(dir), store)) {
+            service.configure("p", config, null);
+            assertEquals(false, service.projects().getFirst().get("closedWorld"));
+            AnalysisRun open = service.await(service.analyze("p", List.of(), List.of(), false).id(), 300, null);
+            assertEquals(AnalysisRun.State.FINISHED, open.state(), () -> open.describe().toString());
+            assertFalse(owned(open), "an open world: the caller may keep the list");
+
+            assertEquals(true, service.setClosedWorld("p", true).get("closedWorld"));
+            service.configure("p", config, null); // configured again without it: it stays
+            AnalysisRun closed = service.await(service.analyze("p", List.of(), List.of(), false).id(), 300, null);
+            assertEquals(AnalysisRun.State.FINISHED, closed.state(), () -> closed.describe().toString());
+            assertTrue(owned(closed), "a closed world: every caller hands its list over");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> fields = (Map<String, Object>) Overview.of(closed.result(), null, 30).get("fields");
+            assertEquals(1L, fields.get("owned"), "the overview counts it");
+        }
+        try (MaddiService service = new MaddiService(settings(dir), store)) {
+            assertEquals(true, service.projects().getFirst().get("closedWorld"), "stored");
+        }
+    }
+
     /*
      A store as the server wrote it before it kept maddi-project-config's records: a directories project without a
      configuration file (its build files hashed in the project itself), a Gradle capture as the built-in "gradle",

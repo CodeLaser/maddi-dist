@@ -69,13 +69,17 @@ public final class ProjectStore implements ProjectRecords {
      * @param daemonJdk  the JDK the daemon runs on for this project; null for the server's. What a project needs can
      *                   differ: an annotation processor (Lombok) runs inside the daemon's javac, and may not support
      *                   the newest JDK
+     * @param closedWorld true: the project is an application, no code outside it calls its public methods, so the
+     *                   ownership pass may count a parameter every caller hands over as {@code @Owned}; null or
+     *                   false: an open world, as for a library. Like {@code daemonJdk}, a choice about the project
+     *                   that outlives a new configuration
      * @param buildFiles the build files {@code sourceFile} recorded when {@code config} was read from it: when they
      *                   differ, a build tool wrote it again, and it is read again; null when unknown
      * @param regenerate null when there is no way to compute it again
      */
     public record StoredProject(String name, String kind, String sourceFile, Regenerate regenerate,
                                 BuildFiles buildFiles, String configuredAt, AnalysisModel.AnalyzeConfig config,
-                                String daemonJdk) {
+                                String daemonJdk, Boolean closedWorld) {
         public static final String INPUT_CONFIGURATION = "inputConfiguration";
         public static final String DIRECTORIES = "directories";
         public static final String GRADLE = "gradle";
@@ -83,10 +87,14 @@ public final class ProjectStore implements ProjectRecords {
         public static final String COMPILE_LOG = "compileLog";
 
         /** The record as maddi-project-config knows it, with {@link #config} still to be made. */
-        static StoredProject of(ProjectRecord record, String daemonJdk) {
+        static StoredProject of(ProjectRecord record, String daemonJdk, Boolean closedWorld) {
             return new StoredProject(record.name(), kindOf(record.configuredBy()),
                     record.inputConfiguration() == null ? null : record.inputConfiguration().toString(),
-                    record.regenerate(), null, record.configuredAt().toString(), null, daemonJdk);
+                    record.regenerate(), null, record.configuredAt().toString(), null, daemonJdk, closedWorld);
+        }
+
+        public boolean isClosedWorld() {
+            return Boolean.TRUE.equals(closedWorld);
         }
 
         public ProjectRecord record() {
@@ -97,11 +105,17 @@ public final class ProjectStore implements ProjectRecords {
         /** Its configuration as read from {@code sourceFile}, which recorded {@code fileBuildFiles}. */
         public StoredProject with(AnalysisModel.AnalyzeConfig newConfig, BuildFiles fileBuildFiles) {
             return new StoredProject(name, kind, sourceFile, regenerate, fileBuildFiles, configuredAt, newConfig,
-                    daemonJdk);
+                    daemonJdk, closedWorld);
         }
 
         public StoredProject withDaemonJdk(String jdk) {
-            return new StoredProject(name, kind, sourceFile, regenerate, buildFiles, configuredAt, config, jdk);
+            return new StoredProject(name, kind, sourceFile, regenerate, buildFiles, configuredAt, config, jdk,
+                    closedWorld);
+        }
+
+        public StoredProject withClosedWorld(Boolean closed) {
+            return new StoredProject(name, kind, sourceFile, regenerate, buildFiles, configuredAt, config, daemonJdk,
+                    closed);
         }
 
         private static String kindOf(ConfiguredBy by) {
@@ -153,11 +167,15 @@ public final class ProjectStore implements ProjectRecords {
         return loadAllStored(problems).stream().map(StoredProject::record).toList();
     }
 
-    /** A record made (again) by maddi-project-config: its configuration is to be read anew; the JDK stays. */
+    /**
+     * A record made (again) by maddi-project-config: its configuration is to be read anew; the JDK and the closed
+     * world stay.
+     */
     @Override
     public void save(ProjectRecord record) throws IOException {
-        String daemonJdk = loadStored(record.name()).map(StoredProject::daemonJdk).orElse(null);
-        save(StoredProject.of(record, daemonJdk));
+        Optional<StoredProject> previous = loadStored(record.name());
+        save(StoredProject.of(record, previous.map(StoredProject::daemonJdk).orElse(null),
+                previous.map(StoredProject::closedWorld).orElse(null)));
     }
 
     @Override

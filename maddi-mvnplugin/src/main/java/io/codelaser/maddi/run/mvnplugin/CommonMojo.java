@@ -93,6 +93,14 @@ public abstract class CommonMojo extends AbstractMojo {
     @Parameter(property = "warnNearMisses", defaultValue = "false")
     private boolean warnNearMisses;
 
+    /** Run the ownership pass: {@code @Fresh}, {@code @Borrowed}, {@code @Owned} (road-to-immutability §055). */
+    @Parameter(property = "ownership", defaultValue = "false")
+    private boolean ownership;
+
+    /** With {@code ownership}: an application, whose public methods no outside code calls. */
+    @Parameter(property = "closedWorld", defaultValue = "false")
+    private boolean closedWorld;
+
     /**
      * Analyze the Java sources of a project that also holds Kotlin, accepting that the Kotlin is not read.
      * Unset (the default) the goal FAILS on a {@code .kt} file rather than skipping it silently.
@@ -145,7 +153,7 @@ public abstract class CommonMojo extends AbstractMojo {
     private Map<String, String> makeGeneralConfigMap() {
         return PluginOptions.generalConfigMap(incrementalAnalysis, analysisResultsDir,
                 new File(project.getBuild().getDirectory(), "maddi"), parallel, analysisSteps, debug, quiet,
-                warnNearMisses, skipKotlinSources);
+                warnNearMisses, skipKotlinSources, ownership, closedWorld);
     }
 
     private Map<String, String> makeAnalysisHintsMap() {

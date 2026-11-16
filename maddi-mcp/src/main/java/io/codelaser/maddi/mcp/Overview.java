@@ -58,6 +58,7 @@ public final class Overview {
         List<String> modifying = new ArrayList<>();
         List<String> hiddenContentOnly = new ArrayList<>();
         int notModified = 0;
+        int fresh = 0;
         int methods = 0;
         for (AnalysisModel.ElementAnnotation m : ofKind(selected, "METHOD")) {
             if (m.fqn().contains(".<init>(")) continue; // a constructor modifies the object it builds, by definition
@@ -66,12 +67,14 @@ public final class Overview {
             if (annotations.stream().anyMatch(a -> a.startsWith("@Modified(hc=true"))) hiddenContentOnly.add(m.fqn());
             else if (annotations.stream().anyMatch(a -> a.startsWith("@Modified"))) modifying.add(m.fqn());
             else if (annotations.contains("@NotModified")) notModified++;
+            if (has(m, "@Fresh")) fresh++;
         }
         Map<String, Object> methodsOut = new LinkedHashMap<>();
         methodsOut.put("total", methods);
         methodsOut.put("modifying", group(modifying, limit));
         methodsOut.put("modifyingHiddenContentOnly", group(hiddenContentOnly, limit));
         methodsOut.put("notModified", notModified);
+        methodsOut.put("fresh", fresh); // ownership (road-to-immutability §055): every object returned is new
         out.put("methods", methodsOut);
 
         List<AnalysisModel.ElementAnnotation> fields = ofKind(selected, "FIELD");
@@ -79,9 +82,11 @@ public final class Overview {
         fieldsOut.put("total", fields.size());
         fieldsOut.put("modified", group(fields.stream().filter(Overview::modified)
                 .map(AnalysisModel.ElementAnnotation::fqn).toList(), limit));
+        fieldsOut.put("owned", fields.stream().filter(f -> has(f, "@Owned")).count());
         out.put("fields", fieldsOut);
         out.put("modifiedParameters", group(ofKind(selected, "PARAMETER").stream().filter(Overview::modified)
                 .map(AnalysisModel.ElementAnnotation::fqn).toList(), limit));
+        out.put("borrowedParameters", ofKind(selected, "PARAMETER").stream().filter(p -> has(p, "@Borrowed")).count());
 
         Map<String, Integer> findings = new TreeMap<>();
         for (AnalysisModel.Finding f : Verdicts.findings(result, null, null, null, element)) {
@@ -147,6 +152,10 @@ public final class Overview {
             if (level.startsWith("@Mutable")) counts.merge("mutable", 1, Integer::sum);
         }
         return out;
+    }
+
+    private static boolean has(AnalysisModel.ElementAnnotation e, String annotation) {
+        return annotations(e).stream().anyMatch(a -> a.equals(annotation) || a.startsWith(annotation + "("));
     }
 
     private static boolean modified(AnalysisModel.ElementAnnotation e) {
