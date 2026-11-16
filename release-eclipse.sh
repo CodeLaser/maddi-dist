@@ -12,8 +12,9 @@
 #      link the marketplace listings and the plugins name. Rendered by GitHub's Markdown API.
 #
 # Usage:     ./release-eclipse.sh <tag>          e.g.  ./release-eclipse.sh v0.9.6
-# Requires:  an authenticated `gh`, git push rights on the site repository, a JDK on PATH, and Maven 3.9 (Maven
-#            3.10 breaks Tycho 5.0.3; MVN=/path/to/mvn points at another one). The release <tag> must already exist
+# Requires:  an authenticated `gh`, git push rights on the site repository, and a JDK on PATH. Maven comes from
+#            maddi-eclipse/mvnw, pinned to 3.9 (3.10 breaks Tycho 5.0.x, maddi-dist#12); MVN=/path/to/mvn points at
+#            another one, which must be a 3.9 too. The release <tag> must already exist
 #            on maddi (release-cli.sh creates it).
 # Optional:  MADDI_ECLIPSE_SITE_REPO (default CodeLaser/maddi-dist) is the repository whose gh-pages branch serves the
 #            site; MADDI_RELEASE_REPO (default CodeLaser/maddi) the one holding the release.
@@ -51,11 +52,11 @@ if [[ "$CLIENT_VERSION" != "$VERSION" ]]; then
     exit 2
 fi
 
-MVN="${MVN:-mvn}"
+MVN="${MVN:-$PWD/maddi-eclipse/mvnw}"
 MAVEN_VERSION=$("$MVN" -v | sed -n 's/^Apache Maven \([0-9.]*\).*/\1/p')
 case "$MAVEN_VERSION" in
     3.9.*) ;;
-    *) echo "Maven $MAVEN_VERSION: Tycho 5.0.3 needs Maven 3.9 (3.10 fails with 'Invalid Collect Request')." \
+    *) echo "Maven $MAVEN_VERSION: Tycho 5.0.x needs Maven 3.9 (3.10 fails with 'Invalid Collect Request')." \
             "Point MVN at a 3.9 installation." >&2
        exit 2 ;;
 esac

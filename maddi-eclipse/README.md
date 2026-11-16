@@ -52,7 +52,7 @@ built PDE-style. Two prerequisites come from the Gradle side, so build them firs
 
 ```bash
 ./gradlew :maddi-ide-client:jar :maddi-ide-daemon:installDist
-cd maddi-eclipse && mvn clean verify
+cd maddi-eclipse && ./mvnw clean verify
 ```
 
 - `maddi-ide-client` is copied from `maddi-ide-client/build/libs` and embedded on the bundle classpath, with

@@ -109,7 +109,7 @@ tasks:
     dir: '{{.ROOT}}/maddi-eclipse'
     cmds:
       - { task: gradle-ide } # client jar -> ~/.m2, daemon dist copied into the bundle at process-resources
-      - mvn clean verify
+      - ./mvnw clean verify # Maven 3.9, pinned: 3.10 breaks Tycho (maddi-dist#12)
       - 'echo ">> p2 site:  {{.ROOT}}/maddi-eclipse/io.codelaser.maddi.eclipse.repository/target/repository"'
       - 'echo ">> install in Eclipse: Help -> Install New Software -> Add -> Local... (see maddi-eclipse/README.md)"'
 
