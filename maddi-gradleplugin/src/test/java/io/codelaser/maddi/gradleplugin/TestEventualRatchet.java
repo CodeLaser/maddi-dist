@@ -110,6 +110,18 @@ public class TestEventualRatchet {
             "io.codelaser.maddi.cst.impl.info.TypeInfoImpl");
 
     /**
+     * Keystones known to sit at {@code @FinalFields} after the mark, each with the reason. Such a keystone may not
+     * drop further; when it reaches {@code @Immutable(hc=true)} again the test fails until its entry is removed, so
+     * the ratchet tightens by itself.
+     */
+    private static final Map<String, String> KNOWN_BELOW_HC = Map.of(
+            "io.codelaser.maddi.cst.api.info.TypeInfo",
+            "CodeLaser/maddi-mod#133: superTypesExcludingJavaLangObject() returns the committed inspection's"
+            + " Collections.unmodifiableSet over a fresh HashSet; the analysis cannot see through"
+            + " inspection.get(), the Builder/product ternary and the constructor parameter that it is unmodifiable,"
+            + " so TypeInfo is @Dependent after the mark");
+
+    /**
      * Without these three the annotated-API results are not loaded, {@code List.copyOf} has no
      * {@code immutableMethod}, and the survivor count reads far too low — the trap documented in
      * {@code dogfood/README.md}. A missing directory is a hard failure, not a warning: the whole point
@@ -168,10 +180,15 @@ public class TestEventualRatchet {
 
         List<String> belowHc = HC_KEYSTONES.stream()
                 .filter(t -> verdicts.get(t) == null || !verdicts.get(t).immutableAfterMark().isAtLeastImmutableHC())
+                .filter(t -> !KNOWN_BELOW_HC.containsKey(t) || verdicts.get(t) == null
+                             || !verdicts.get(t).immutableAfterMark().isFinalFields())
                 .map(t -> t + " = " + verdicts.get(t))
                 .toList();
+        List<String> knownNowAtHc = KNOWN_BELOW_HC.keySet().stream().sorted()
+                .filter(t -> verdicts.get(t) != null && verdicts.get(t).immutableAfterMark().isAtLeastImmutableHC())
+                .toList();
 
-        if (!missing.isEmpty() || !added.isEmpty() || !belowHc.isEmpty()) {
+        if (!missing.isEmpty() || !added.isEmpty() || !belowHc.isEmpty() || !knownNowAtHc.isEmpty()) {
             StringBuilder sb = new StringBuilder("The eventual ratchet moved: survivor set and/or keystone levels.\n");
             if (!missing.isEmpty()) {
                 sb.append("LOST (").append(missing.size()).append(") — a commit has cost these types their")
@@ -193,6 +210,11 @@ public class TestEventualRatchet {
                         .append(" EC_TYPE_DEBUG=<fqn>: the ECTYPE 'MUTABLE: ... not excused' / 'DEPENDENT: ...'")
                         .append(" lines name the blocker:\n");
                 belowHc.forEach(t -> sb.append("    ").append(t).append('\n'));
+            }
+            if (!knownNowAtHc.isEmpty()) {
+                sb.append("KNOWN BELOW HC, NOW AT HC (").append(knownNowAtHc.size()).append(") -- progress: remove")
+                        .append(" these from KNOWN_BELOW_HC:\n");
+                knownNowAtHc.forEach(t -> sb.append("    ").append(t).append('\n'));
             }
             fail(sb.toString());
         }
