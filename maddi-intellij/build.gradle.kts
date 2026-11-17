@@ -107,10 +107,12 @@ intellijPlatform {
         // it: the Marketplace review refuses a plugin that uses any (0.9.6, 2026-11-03, for
         // DeclarativeInlayHintsPassFactory.Companion.resetModificationStamp(); scheduleRecompute is the public
         // way to recompute inlays, see MaddiAnalysisService.recomputeHints). Still accepted:
-        //   EXPERIMENTAL AboveLineIndentedPosition -- the above-line hint placement; no stable counterpart.
-        //   DEPRECATED   ReadAction.compute(ThrowableComputable), deprecated in 2026.1. Replacing it means
-        //                NonBlockingReadAction and different cancellation semantics -- a real change, not
-        //                an import swap, so it is deliberately still open.
+        //   EXPERIMENTAL AboveLineIndentedPosition -- the above-line hint placement; no stable counterpart (still
+        //                experimental in 2026.2).
+        // No DEPRECATED usage is left: ReadAction.compute (deprecated in 2026.1; its successor computeBlocking is
+        // not in 2025.3) became Application.runReadAction (ReadActions), FileEditorManager.openFile(file, focus)
+        // (deprecated in 2026.3) became OpenFileDescriptor.navigate. Keep it that way: the Marketplace page
+        // shows every deprecated usage as a warning.
         failureLevel = listOf(
             FailureLevel.COMPATIBILITY_PROBLEMS,
             FailureLevel.COMPATIBILITY_WARNINGS,

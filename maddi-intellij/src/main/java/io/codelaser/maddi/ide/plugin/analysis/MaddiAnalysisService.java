@@ -45,7 +45,6 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
@@ -201,7 +200,7 @@ public final class MaddiAnalysisService implements Disposable {
     private void analyze(ProgressIndicator indicator) throws Exception {
         MaddiSettings.State settings = MaddiSettings.getInstance().getState();
         // the settings' JDK, else the IDE's default JDK when it is 25 or later, else the newest registered one
-        String jdkHome = ReadAction.compute(() -> MaddiJdks.effectiveHome(settings));
+        String jdkHome = ReadActions.compute(() -> MaddiJdks.effectiveHome(settings));
         if (jdkHome.isEmpty()) {
             jdkHome = System.getProperty("maddi.jdk.home", "").trim(); // dev fallback (runIde)
         }
@@ -247,7 +246,7 @@ public final class MaddiAnalysisService implements Disposable {
         boolean warnNearMisses = settings.warnNearMisses;
         // the ownership pass's world: an application (closed) or a library (open), as the project's toggle says
         boolean closedWorld = io.codelaser.maddi.ide.plugin.action.ClosedWorldToggleAction.isClosedWorld(project);
-        AnalysisModel.AnalyzeConfig config = ReadAction.compute(
+        AnalysisModel.AnalyzeConfig config = ReadActions.compute(
                 () -> new MaddiConfigBuilder().build(project, resolvedJdkHome, warnNearMisses)
                         .withClosedWorld(closedWorld));
         if (kotlinFrontEnd == null) {

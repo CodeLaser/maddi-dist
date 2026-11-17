@@ -39,12 +39,11 @@ import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.module.Module;
@@ -96,7 +95,7 @@ public final class MaddiTranslation {
 
     /** The selection of an action: a module (its main sources), else the Java files among the files; null for none. */
     public static @Nullable Selection of(Project project, @Nullable Module module, VirtualFile @Nullable [] files) {
-        return ReadAction.compute(() -> {
+        return ReadActions.compute(() -> {
             List<VirtualFile> javaFiles = new ArrayList<>();
             if (module != null) {
                 for (VirtualFile root : ModuleRootManager.getInstance(module).getSourceRoots(false)) {
@@ -224,7 +223,7 @@ public final class MaddiTranslation {
         notification.addAction(NotificationAction.createSimple("Open the report", () -> {
             VirtualFile report = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(
                     out.resolve("translation-report.txt"));
-            if (report != null) FileEditorManager.getInstance(project).openFile(report, true);
+            if (report != null) new OpenFileDescriptor(project, report).navigate(true); // openFile(file, focus): deprecated
         }));
         notification.addAction(NotificationAction.createSimpleExpiring("Replace the Java sources…",
                 () -> replace(project, selection, result)));
