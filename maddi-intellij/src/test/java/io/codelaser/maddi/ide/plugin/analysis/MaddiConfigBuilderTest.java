@@ -29,7 +29,6 @@ import org.jetbrains.kotlin.config.SourceKotlinRootType;
 import org.jetbrains.kotlin.config.TestSourceKotlinRootType;
 
 import com.intellij.openapi.application.AccessToken;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -97,7 +96,7 @@ public class MaddiConfigBuilderTest extends LightJavaCodeInsightFixtureTestCase 
     }
 
     private AnalysisModel.AnalyzeConfig build() {
-        return ReadAction.compute(() -> new MaddiConfigBuilder().build(getProject(), JDK_HOME, false));
+        return ReadActions.compute(() -> new MaddiConfigBuilder().build(getProject(), JDK_HOME, false));
     }
 
     private Module module() {
