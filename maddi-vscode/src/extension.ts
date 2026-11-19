@@ -40,6 +40,10 @@ let runHasSaved = false;
 let rerunRequested = false;
 /** What the run in progress told the output channel about its input and its result, for {@link RunOutcome}. */
 let runSummary: string[] = [];
+/** The daemon's progress messages during the run in progress, for {@link RunOutcome}. */
+let runSteps: string[] = [];
+/** The outcome of the result of the run in progress, for {@link RunOutcome}. */
+let runResultOutcome: string | undefined;
 /** How the last Analyze ended; see {@link MaddiApi}. */
 let lastRun: RunOutcome | undefined;
 
@@ -50,6 +54,10 @@ let lastRun: RunOutcome | undefined;
 export interface RunOutcome {
     outcome: 'finished' | 'failed' | 'stopped' | 'notStarted';
     message?: string;
+    /** The outcome the daemon gave the result, e.g. {@link OUTCOME_INCREMENTAL}; for a finished run. */
+    resultOutcome?: string;
+    /** What the daemon said it was doing, in order, each once: `parse: re-parsing 1 changed type(s)`. */
+    steps?: string[];
 }
 
 /**
@@ -157,6 +165,8 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     runHasSaved = false;
     lastRun = undefined;
     runSummary = [];
+    runSteps = [];
+    runResultOutcome = undefined;
     let again = false;
     void vscode.commands.executeCommand('setContext', 'maddi.running', true);
     try {
@@ -166,7 +176,7 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
                 token.onCancellationRequested(() => stopCommand());
                 return analyze(context, folder, jdkHome, settings, progress);
             });
-        lastRun = { outcome: 'finished', message: runSummary.join('; ') };
+        lastRun = { outcome: 'finished', message: runSummary.join('; '), resultOutcome: runResultOutcome, steps: runSteps };
     } catch (e) {
         if (stopRequested) {
             // What the run streamed stays: it is established, only possibly weaker than a finished run's, and the
@@ -285,6 +295,8 @@ async function analyze(
                 // is alive rather than hung
                 const phase = String(streamed.phase ?? 'analyzing');
                 const message = String(streamed.message ?? '');
+                const step = message.length > 0 ? `${phase}: ${message}` : phase;
+                if (runSteps[runSteps.length - 1] !== step) runSteps.push(step);
                 progress.report({ message: message.length > 0 ? `${phase}: ${message}` : phase });
             }
         });
@@ -293,6 +305,7 @@ async function analyze(
             throw new Error(String(frame.message ?? 'the daemon reported an error'));
         }
         const result = frame as unknown as Result;
+        runResultOutcome = result.outcome;
         applyResult(result);
         const done = `done in ${result.elapsedMillis} ms: ${result.findings.length} finding(s), ` +
             `${result.elementAnnotations.length} annotated element(s), ${result.hintsLoaded} hints loaded`;
