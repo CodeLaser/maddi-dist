@@ -83,3 +83,11 @@ application {
     mainClass = "io.codelaser.maddi.run.kotlinmain.Main"
     applicationDefaultJvmArgs = javacAddExports
 }
+
+// `-PjvmArgs="-Xmx40g ..."` for `:maddi-cli-kotlin:run`, as maddi-cli has it: without it a large project (quarkus's
+// reactor) ran out of the default heap, and only JAVA_TOOL_OPTIONS got past it
+// ⚠ appended to applicationDefaultJvmArgs, not given to the task: `jvmArgs(...)` on `run` REPLACES that convention,
+// and the javac --add-exports went with it (IllegalAccessError on BasicJavacTask)
+if (project.hasProperty("jvmArgs")) {
+    application.applicationDefaultJvmArgs += (project.property("jvmArgs") as String).split("\\s+")
+}
