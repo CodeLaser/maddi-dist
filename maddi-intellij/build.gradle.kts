@@ -206,4 +206,12 @@ tasks.test {
     // Pass the Gradle daemon JVM (25+) so the daemon runs on it and uses it as the analysis SDK.
     systemProperty("maddi.test.jdkHome", System.getProperty("java.home"))
     useJUnitPlatform()
+    // The UI tests (src/test/java/.../uitest): a project on disk, compiled and analysed on a real daemon through the
+    // action, read back from the editor. A minute or two, so only on request: ./gradlew :maddi-intellij:test -PuiTest
+    // runs them, and only them.
+    if (providers.gradleProperty("uiTest").isPresent) {
+        filter.includeTestsMatching("io.codelaser.maddi.ide.plugin.uitest.*")
+    } else {
+        exclude("io/codelaser/maddi/ide/plugin/uitest/**")
+    }
 }

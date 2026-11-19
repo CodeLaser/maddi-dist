@@ -31,6 +31,17 @@
         <module>io.codelaser.maddi.eclipse.repository</module>
     </modules>
 
+    <!-- The UI tests run the analysis for real, in a workbench, on a daemon and a JDK 25+ of this machine: not part
+         of the default build or of a release. ./mvnw -Puitest verify -pl io.codelaser.maddi.eclipse,io.codelaser.maddi.eclipse.uitests -->
+    <profiles>
+        <profile>
+            <id>uitest</id>
+            <modules>
+                <module>io.codelaser.maddi.eclipse.uitests</module>
+            </modules>
+        </profile>
+    </profiles>
+
     <!-- The target platform: a current Eclipse release train (2025-09), which runs on Java 21+. Bump the
          version in this single URL to move the baseline. -->
     <repositories>

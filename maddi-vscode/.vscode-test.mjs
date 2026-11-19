@@ -5,10 +5,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// jdt.ls writes into the project (bin/, its metadata) and the tests edit the sources: work on a fresh copy
-// realpath: on macOS the temporary directory is reached through a symlink (/var -> /private/var), and the daemon
-// reports the real path of what it analysed
-const workspace = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'maddi-vscode-uitest-')));
+// jdt.ls writes into the project (bin/, its metadata) and the tests edit the sources: work on a fresh copy.
+// Deliberately NOT through realpath: on macOS the temporary directory is reached through a symbolic link
+// (/var -> /private/var) and the daemon reports real paths, which the extension must spell back (src/paths.ts).
+const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'maddi-vscode-uitest-'));
 fs.cpSync(path.resolve('uitest-fixture/Demo'), workspace, { recursive: true });
 
 export default defineConfig({

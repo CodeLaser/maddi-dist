@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  UI tests: a real Eclipse workbench with the Java editor, in which the tests import a small Java project, run
+  "Analyze with maddi" through its command, and read what the editor shows (hints, problem markers, ruler icons).
+  The analysis runs for real, on a daemon launched on a JDK 25+, so these tests are not part of the default build:
+
+      ./mvnw -Puitest verify -pl io.codelaser.maddi.eclipse,io.codelaser.maddi.eclipse.uitests
+
+  (task eclipse:uitest). They need the daemon's installDist (./gradlew :maddi-ide-daemon:installDist, from the
+  repository root), which they run directly rather than the copy bundled into the plugin, and a JDK 25 or later:
+  MADDI_JDK_HOME, else `/usr/libexec/java_home -v 25+`, else JAVA_HOME.
+
+  JUnit 5, as the headless test bundle. useUIThread=false: the tests run on their own thread and wait for the
+  analysis job there, while the workbench keeps its event loop; they reach the UI through Display.syncExec.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.codelaser.maddi.eclipse</groupId>
+        <artifactId>maddi-eclipse-parent</artifactId>
+        <version>0.9.6-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>io.codelaser.maddi.eclipse.uitests</artifactId>
+    <packaging>eclipse-test-plugin</packaging>
+
+    <properties>
+        <maddi.uitest.daemonInstall>${project.basedir}/../../maddi-ide-daemon/build/install/maddi-ide-daemon</maddi.uitest.daemonInstall>
+        <ui.argLine></ui.argLine>
+    </properties>
+
+    <!-- SWT on macOS must run on the process's first thread; Tycho does not add the flag by itself, and without it
+         the workbench fails at start with "Invalid thread access" (exit code 13) -->
+    <profiles>
+        <profile>
+            <id>macos</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <properties>
+                <ui.argLine>-XstartOnFirstThread</ui.argLine>
+            </properties>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <!-- what the workbench needs besides what the bundles require: the IDE application, the Java editor,
+                 and the platform feature (the e4 renderers and services, which nothing requires by name) -->
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>target-platform-configuration</artifactId>
+                <version>${tycho.version}</version>
+                <configuration>
+                    <dependency-resolution>
+                        <extraRequirements>
+                            <requirement>
+                                <type>eclipse-feature</type>
+                                <id>org.eclipse.platform</id>
+                                <versionRange>0.0.0</versionRange>
+                            </requirement>
+                            <requirement>
+                                <type>eclipse-plugin</type>
+                                <id>org.eclipse.ui.ide.application</id>
+                                <versionRange>0.0.0</versionRange>
+                            </requirement>
+                            <requirement>
+                                <type>eclipse-plugin</type>
+                                <id>org.eclipse.jdt.ui</id>
+                                <versionRange>0.0.0</versionRange>
+                            </requirement>
+                        </extraRequirements>
+                    </dependency-resolution>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-surefire-plugin</artifactId>
+                <version>${tycho.version}</version>
+                <configuration>
+                    <useUIHarness>true</useUIHarness>
+                    <useUIThread>false</useUIThread>
+                    <application>org.eclipse.ui.ide.workbench</application>
+                    <argLine>${ui.argLine}</argLine>
+                    <forkedProcessTimeoutInSeconds>1200</forkedProcessTimeoutInSeconds>
+                    <systemProperties>
+                        <maddi.uitest.daemonInstall>${maddi.uitest.daemonInstall}</maddi.uitest.daemonInstall>
+                        <maddi.uitest.fixture>${project.basedir}/fixture</maddi.uitest.fixture>
+                    </systemProperties>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
