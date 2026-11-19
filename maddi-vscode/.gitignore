@@ -3,3 +3,4 @@ out/
 daemon/
 *.vsix
 package-lock.json
+.vscode-test/

@@ -95,6 +95,19 @@ The config-builder tests drive the mapping with canned jdt.ls responses in the e
 returns. That is the part worth pinning: a wrong mapping produces an analysis of nothing rather than an
 error.
 
+## Tests
+
+- `npm test` (`task vscode:test`): unit tests of the modules that do not need VS Code, on Node's test runner.
+- `npm run uitest` (`task vscode:uitest`): the UI tests in `src/uitest`. `@vscode/test-cli` downloads a VS Code into
+  `.vscode-test/`, installs `redhat.java` there, and opens a copy of `uitest-fixture/Demo`, a small Eclipse project.
+  The tests run inside that VS Code: they run *Analyze with maddi*, then read the inline hints
+  (`vscode.executeInlayHintProvider`) and the diagnostics, as the editor shows them, and check that the hints follow an
+  edit. A window opens while they run; on Linux without a display, run them under `xvfb-run`.
+  They need a JDK 25 or later for the daemon (`MADDI_JDK_HOME`, else `java_home -v 25+` on macOS, else `JAVA_HOME`)
+  and a daemon distribution (`MADDI_DAEMON_INSTALL`, else the bundled `daemon/`, else `maddi-ide-daemon`'s
+  `installDist`, which `task gradle-ide` builds). `VSCODE_TEST_VERSION` picks the VS Code version, `stable` by default.
+  The extension exports `lastRun()` for them: how the last *Analyze* ended, with its summary line.
+
 ## What is missing
 
 - **packaging** — no `.vsix` is produced by this module's own scripts (the repo-root `Taskfile.yml` has a

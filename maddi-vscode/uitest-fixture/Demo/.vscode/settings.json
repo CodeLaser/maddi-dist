@@ -1,0 +1,9 @@
+{
+    "java.server.launchMode": "Standard",
+    "java.configuration.detectJdksAtStart": false,
+    "java.import.gradle.enabled": false,
+    "java.import.maven.enabled": false,
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.inlayHints.parameterNames.enabled": "none",
+    "redhat.telemetry.enabled": false
+}
