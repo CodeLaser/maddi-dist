@@ -120,6 +120,13 @@ tasks:
       - { task: gradle-ide } # the client jar the bundle embeds, and the daemon installDist the tests run
       - ./mvnw -Puitest verify -pl io.codelaser.maddi.eclipse,io.codelaser.maddi.eclipse.uitests
 
+  # ------------------------------------------------------------- IntelliJ plugin (maddi-intellij/, Gradle)
+
+  intellij:uitest:
+    desc: 'Run the IntelliJ UI tests: a project on disk, compiled and analysed through the action on a real daemon, read back from the editor (headless)'
+    dir: '{{.ROOT}}'
+    cmds: [./gradlew :maddi-intellij:test -PuiTest]
+
   eclipse:run:
     desc: 'Open Eclipse so you can install the built p2 site and try the plugin'
     cmds:
