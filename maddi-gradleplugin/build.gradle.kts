@@ -223,7 +223,9 @@ tasks.named<Test>("test") {
         "--add-exports", "jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED",
         "--add-exports", "jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED",
         "--add-exports", "jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED",
-        "--add-exports", "jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED"
+        "--add-exports", "jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED",
+        // SharedArchives: one shared copy of each jar across javac file managers (Quarkus: 1,680 source sets)
+        "--add-exports", "jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED"
     )
 }
 
