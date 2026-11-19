@@ -4,6 +4,9 @@
 .vscode-test/**
 src/**
 out/test/**
+out/uitest/**
+uitest-fixture/**
+.vscode-test.mjs
 out/**/*.map
 **/tsconfig.json
 .gitignore

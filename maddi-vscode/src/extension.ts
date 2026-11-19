@@ -38,8 +38,37 @@ let stopRequested = false;
 let runHasSaved = false;
 /** Analyze was asked for again during a run that will not see the latest edits: one more run when it ends. */
 let rerunRequested = false;
+/** What the run in progress told the output channel about its input and its result, for {@link RunOutcome}. */
+let runSummary: string[] = [];
+/** The daemon's progress messages during the run in progress, for {@link RunOutcome}. */
+let runSteps: string[] = [];
+/** The outcome of the result of the run in progress, for {@link RunOutcome}. */
+let runResultOutcome: string | undefined;
+/** How the last Analyze ended; see {@link MaddiApi}. */
+let lastRun: RunOutcome | undefined;
 
-export function activate(context: vscode.ExtensionContext): void {
+/**
+ * How an Analyze command ended. `notStarted`: it returned before running, with a message to the user (no folder, no
+ * JDK, already running).
+ */
+export interface RunOutcome {
+    outcome: 'finished' | 'failed' | 'stopped' | 'notStarted';
+    message?: string;
+    /** The outcome the daemon gave the result, e.g. {@link OUTCOME_INCREMENTAL}; for a finished run. */
+    resultOutcome?: string;
+    /** What the daemon said it was doing, in order, each once: `parse: re-parsing 1 changed type(s)`. */
+    steps?: string[];
+}
+
+/**
+ * What the extension exports to other extensions, which is to say to the UI tests (src/uitest): how a run ended is
+ * otherwise only told in notifications, which a test cannot read.
+ */
+export interface MaddiApi {
+    lastRun(): RunOutcome | undefined;
+}
+
+export function activate(context: vscode.ExtensionContext): MaddiApi {
     diagnostics = vscode.languages.createDiagnosticCollection('maddi');
     output = vscode.window.createOutputChannel('maddi');
     store = new ResultStore();
@@ -69,6 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('maddi.stop', () => stopCommand()),
         // the daemon is a child process: it does not go away with the window unless it is killed
         { dispose: () => stopDaemon() });
+    return { lastRun: () => lastRun };
 }
 
 export function deactivate(): void {
@@ -107,6 +137,7 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     if (running) {
         // Before the run has saved the editors, it will read what is there now: the request is part of it. After,
         // it asks for one more run when this one ends, rather than being dropped (as the other front-ends do).
+        lastRun = { outcome: 'notStarted', message: 'a run is in progress' };
         if (runHasSaved && !rerunRequested) {
             rerunRequested = true;
             vscode.window.showInformationMessage('maddi will analyze again when the current run ends.');
@@ -115,12 +146,14 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     }
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
+        lastRun = { outcome: 'notStarted', message: 'no folder open' };
         vscode.window.showWarningMessage('maddi: open a folder containing a Java project first.');
         return;
     }
     const settings = vscode.workspace.getConfiguration('maddi');
     const jdkHome = settings.get<string>('jdkHome')?.trim();
     if (!jdkHome) {
+        lastRun = { outcome: 'notStarted', message: 'maddi.jdkHome is not set' };
         const choice = await vscode.window.showWarningMessage(
             'maddi needs a JDK 25 or later to run the analysis on.', 'Open settings');
         if (choice) await vscode.commands.executeCommand('workbench.action.openSettings', 'maddi.jdkHome');
@@ -130,6 +163,10 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
     running = true;
     stopRequested = false;
     runHasSaved = false;
+    lastRun = undefined;
+    runSummary = [];
+    runSteps = [];
+    runResultOutcome = undefined;
     let again = false;
     void vscode.commands.executeCommand('setContext', 'maddi.running', true);
     try {
@@ -139,10 +176,12 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
                 token.onCancellationRequested(() => stopCommand());
                 return analyze(context, folder, jdkHome, settings, progress);
             });
+        lastRun = { outcome: 'finished', message: runSummary.join('; '), resultOutcome: runResultOutcome, steps: runSteps };
     } catch (e) {
         if (stopRequested) {
             // What the run streamed stays: it is established, only possibly weaker than a finished run's, and the
             // hover says so (provisional). Findings come only at the end of a run, so the previous run's stay too.
+            lastRun = { outcome: 'stopped' };
             output.appendLine('analysis stopped');
             vscode.window.showInformationMessage('maddi: analysis stopped. What it had established stays on screen.');
             return;
@@ -152,6 +191,7 @@ async function analyzeCommand(context: vscode.ExtensionContext): Promise<void> {
         diagnostics.clear();
         store.clear();
         const message = e instanceof Error ? e.message : String(e);
+        lastRun = { outcome: 'failed', message };
         output.appendLine(`analysis failed: ${message}`);
         vscode.window.showErrorMessage(`maddi: ${message}`, 'Show log')
             .then((choice) => { if (choice) output.show(); });
@@ -211,10 +251,12 @@ async function analyze(
             workingDirectory: folder.uri.fsPath,
         });
     const sets = config.moduleSourceSets ?? [];
-    output.appendLine(sets.length > 0
+    const input = sets.length > 0
         ? `analyzing ${sets.length} module source set(s): ${sets.map((s) => s.name).join(', ')}`
         // the flat form: jdt.ls could not describe the workspace as source sets (see moduleSourceSets)
-        : `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`);
+        : `analyzing ${config.sources.length} source root(s), ${config.classpath.length} classpath entr(ies)`;
+    output.appendLine(input);
+    runSummary.push(input);
 
     const client = new DaemonClient(handle.port);
     try {
@@ -253,6 +295,8 @@ async function analyze(
                 // is alive rather than hung
                 const phase = String(streamed.phase ?? 'analyzing');
                 const message = String(streamed.message ?? '');
+                const step = message.length > 0 ? `${phase}: ${message}` : phase;
+                if (runSteps[runSteps.length - 1] !== step) runSteps.push(step);
                 progress.report({ message: message.length > 0 ? `${phase}: ${message}` : phase });
             }
         });
@@ -261,10 +305,12 @@ async function analyze(
             throw new Error(String(frame.message ?? 'the daemon reported an error'));
         }
         const result = frame as unknown as Result;
+        runResultOutcome = result.outcome;
         applyResult(result);
-        output.appendLine(
-            `done in ${result.elapsedMillis} ms: ${result.findings.length} finding(s), ` +
-            `${result.elementAnnotations.length} annotated element(s), ${result.hintsLoaded} hints loaded`);
+        const done = `done in ${result.elapsedMillis} ms: ${result.findings.length} finding(s), ` +
+            `${result.elementAnnotations.length} annotated element(s), ${result.hintsLoaded} hints loaded`;
+        output.appendLine(done);
+        runSummary.push(done);
     } finally {
         client.dispose();
     }

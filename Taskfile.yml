@@ -140,6 +140,13 @@ tasks:
       - { task: vscode:deps }
       - npm test
 
+  vscode:uitest:
+    desc: 'Run the VS Code UI tests: a downloaded VS Code with redhat.java, on maddi-vscode/uitest-fixture (opens a window)'
+    dir: '{{.ROOT}}/maddi-vscode'
+    cmds:
+      - { task: vscode:deps }
+      - npm run uitest
+
   vscode:daemon:
     desc: 'Copy the built daemon distribution into maddi-vscode/daemon/ (bundled by vscode:package)'
     dir: '{{.ROOT}}/maddi-vscode'
