@@ -1,0 +1,23 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: maddi Eclipse UI tests
+Bundle-SymbolicName: io.codelaser.maddi.eclipse.uitests
+Bundle-Version: 0.9.6.qualifier
+Bundle-Vendor: CodeLaser
+Automatic-Module-Name: io.codelaser.maddi.eclipse.uitests
+Bundle-RequiredExecutionEnvironment: JavaSE-21
+Require-Bundle: junit-jupiter-api,
+ io.codelaser.maddi.eclipse,
+ org.eclipse.core.runtime,
+ org.eclipse.core.resources,
+ org.eclipse.core.commands,
+ org.eclipse.jdt.core,
+ org.eclipse.jdt.launching,
+ org.eclipse.jdt.ui,
+ org.eclipse.jface,
+ org.eclipse.jface.text,
+ org.eclipse.swt,
+ org.eclipse.ui,
+ org.eclipse.ui.ide,
+ org.eclipse.ui.editors,
+ org.eclipse.ui.workbench.texteditor

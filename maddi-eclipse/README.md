@@ -69,7 +69,30 @@ Use **Maven 3.9**: Maven 3.10's resolver rejects the system-scoped bundle depend
 ("Invalid Collect Request: null -> [...]") before anything compiles.
 
 Modules: the **bundle**, a headless **test** bundle (a real Equinox runtime with JDT, no workbench), the
-**feature** (what a user installs), and the **repository** (the p2 site).
+**feature** (what a user installs), and the **repository** (the p2 site). A fifth, the **UI tests**, is only in
+the `uitest` profile (below).
+
+## Tests
+
+- **Headless** (`io.codelaser.maddi.eclipse.tests`, part of `./mvnw verify`): the config builder against real JDT
+  projects, markers, document positions, the code-mining registration. No daemon, no window.
+- **UI** (`io.codelaser.maddi.eclipse.uitests`): a real workbench with the Java editor. The tests import a small
+  project (`fixture/demo`), run **Analyze with maddi** through its command, and read what the editor shows: the
+  hints from the plugin's code-mining provider in the editor's own viewer, the ruler icons, the near miss in the
+  Problems view, hints that follow an edit above them. A second class turns on incremental re-analysis and edits
+  `Box` between `Cell` (which it depends on) and `Shelf` (which uses both and is rewired): the run must be
+  `INCREMENTAL` and re-parse one type, carry the change into `Shelf`, hold the early cutoff for an edit `Shelf`
+  cannot see, and agree with a cold run.
+
+  ```bash
+  ./gradlew :maddi-ide-client:jar :maddi-ide-daemon:installDist     # from maddi-dist
+  cd maddi-eclipse && ./mvnw -Puitest verify -pl io.codelaser.maddi.eclipse,io.codelaser.maddi.eclipse.uitests
+  ```
+
+  or `task eclipse:uitest`. It opens a window, and runs the analysis for real: on the daemon's `installDist` (not
+  the copy bundled into the plugin, which is as old as the last plugin build; `MADDI_DAEMON_INSTALL` overrides),
+  on `MADDI_JDK_HOME`, else the newest JDK 25+ `java_home` knows, else `JAVA_HOME`. Rebuild the `installDist` after
+  a daemon change. Not in the default build nor in a release, for that reason.
 
 Resolution needs network access to the 2025-09 p2 release train the first time; after that Tycho caches it
 under `~/.m2/repository/.cache/tycho`.

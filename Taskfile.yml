@@ -113,6 +113,13 @@ tasks:
       - 'echo ">> p2 site:  {{.ROOT}}/maddi-eclipse/io.codelaser.maddi.eclipse.repository/target/repository"'
       - 'echo ">> install in Eclipse: Help -> Install New Software -> Add -> Local... (see maddi-eclipse/README.md)"'
 
+  eclipse:uitest:
+    desc: 'Run the Eclipse UI tests: a workbench with the Java editor, on maddi-eclipse/io.codelaser.maddi.eclipse.uitests/fixture (opens a window)'
+    dir: '{{.ROOT}}/maddi-eclipse'
+    cmds:
+      - { task: gradle-ide } # the client jar the bundle embeds, and the daemon installDist the tests run
+      - ./mvnw -Puitest verify -pl io.codelaser.maddi.eclipse,io.codelaser.maddi.eclipse.uitests
+
   eclipse:run:
     desc: 'Open Eclipse so you can install the built p2 site and try the plugin'
     cmds:
