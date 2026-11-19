@@ -14,6 +14,7 @@ import { DaemonHandle, killDaemon, launchDaemon, launcherPath } from './daemonLa
 import { toDiagnostics } from './diagnostics';
 import { MaddiInlayHintsProvider } from './hints';
 import { CompileStatus, compileWorkspace, waitForStandardServer } from './javaLanguageServer';
+import { folderSpellings, respellAll } from './paths';
 import { ResultStore } from './results';
 
 /**
@@ -278,9 +279,11 @@ async function analyze(
         // Values established by each analysis pass arrive before the run ends, so findings and hints appear
         // progressively instead of the editor staying blank until the last pass.
         let displayed: Result | undefined;
+        // the daemon reports real paths; a folder opened through a symbolic link spells them otherwise
+        const spellings = folderSpellings((vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath));
         const frame = await client.analyze(`req-${Date.now()}`, config, (streamed: Frame) => {
             if (streamed.type === PARTIAL_RESULT) {
-                const partial = streamed as unknown as PartialResult;
+                const partial = respellAll(streamed as unknown as PartialResult, spellings);
                 displayed = merge(displayed, partial);
                 // show them as they arrive: on a large project this is the difference between an annotated
                 // file in seconds and a blank one until the last pass
@@ -304,7 +307,7 @@ async function analyze(
         if (frame.type === 'error') {
             throw new Error(String(frame.message ?? 'the daemon reported an error'));
         }
-        const result = frame as unknown as Result;
+        const result = respellAll(frame as unknown as Result, spellings);
         runResultOutcome = result.outcome;
         applyResult(result);
         const done = `done in ${result.elapsedMillis} ms: ${result.findings.length} finding(s), ` +
