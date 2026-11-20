@@ -77,10 +77,25 @@ public class AnalyzerExtension {
     public boolean closedWorld;
     /**
      * Analyze the Java sources of a project that also holds Kotlin, accepting that the Kotlin is not read.
-     * Unset (the default) the analyzer task FAILS on a {@code .kt} file rather than skipping it silently: this
-     * plugin collects the Kotlin source directories but forks a Java-only analyzer.
+     * Unset (the default) a project with {@code .kt} files is analyzed whole, by the Kotlin-capable analyzer
+     * (see {@link #kotlinDistribution}); set, the Java-only analyzer runs and the Kotlin sources are ignored.
      */
     public boolean skipKotlinSources;
+
+    /* The Kotlin-capable analyzer, run when the sources hold Kotlin and skipKotlinSources is not set */
+    /**
+     * The {@code maddi-kotlin} CLI distribution to run: an unpacked directory (holding {@code lib/} and
+     * {@code lib-k2/}) or its zip. Unset, the distribution of this plugin's own maddi version is downloaded from the
+     * GitHub release, checked against its published SHA-256, and cached under the Gradle user home. The Kotlin
+     * compiler cannot be published to Maven Central, which is why it is not simply a dependency of this plugin.
+     */
+    public String kotlinDistribution;
+    /** The JDK that runs the Kotlin-capable analyzer. Unset, a Gradle toolchain of {@link #kotlinJavaVersion}. */
+    public String kotlinJavaHome;
+    /** The Java version of the toolchain that runs the Kotlin-capable analyzer; it needs 26 or later. */
+    public int kotlinJavaVersion = 26;
+    /** Extra JVM options for the Kotlin-capable analyzer's process, space-separated, e.g. {@code -Xmx8g}. */
+    public String kotlinJvmArgs;
     public String debugTargets;
 
     /* InputConfiguration */

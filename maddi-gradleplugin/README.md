@@ -32,6 +32,24 @@ Input sources
   - which Java modules to add to the classpath
   - when absent, the default modules are added. This is a very short list.
 
+Kotlin sources
+--------------
+
+A project whose source directories hold a `.kt` file is analyzed whole, Java and Kotlin together, by the
+Kotlin-capable analyzer. The Kotlin compiler cannot be published to Maven Central, so it is not in this plugin's
+jar: the task runs the `maddi-kotlin` CLI distribution of the plugin's own maddi version as a child process. On
+first use that distribution is downloaded from the GitHub release, checked against its published SHA-256, and
+cached under `<gradle user home>/caches/maddi-kotlin`. It needs JDK 26 or later.
+
+- `skipKotlinSources` (boolean): analyze the Java sources alone with the Java-only analyzer, and ignore the Kotlin.
+- `kotlinDistribution` (single string): a local `maddi-kotlin` distribution, either unpacked (a directory holding
+  `lib/` and `lib-k2/`) or its zip, used instead of the download. This is for offline builds and for maddi's
+  own development.
+- `kotlinJavaHome` (single string): the JDK that runs the Kotlin-capable analyzer. When absent, a Gradle toolchain
+  of `kotlinJavaVersion` is used.
+- `kotlinJavaVersion` (integer, default 26): the version of that toolchain.
+- `kotlinJvmArgs` (single string): extra JVM options for the analyzer process, space-separated, e.g. `-Xmx8g`.
+
 Analysis hints
 --------------
 

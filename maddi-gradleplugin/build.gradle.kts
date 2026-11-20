@@ -100,6 +100,8 @@ dependencies {
 
     shade("ch.qos.logback:logback-classic")
     shade("com.fasterxml.jackson.core:jackson-databind")
+    // KotlinFrontEndInstaller: download, check and unpack the maddi-kotlin distribution the Kotlin path forks
+    shade(project(":maddi-ide-client"))
 
     // TestEventualRatchet (slowTest): parses the dogfood input itself and runs the analysis through the engine
     // interface; the engine is on the test run-time class path through shadeRuntime
@@ -112,6 +114,22 @@ dependencies {
     testImplementation(gradleTestKit())
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+}
+
+// The maddi release whose Kotlin distribution the plugin downloads (PluginVersion), next to the class that reads it.
+// A single declared output FILE, so a stale stamp cannot linger beside a new one.
+val maddiVersionFile = layout.buildDirectory.file("generated/maddiVersion/maddi-version.properties")
+val generateMaddiVersion = tasks.register("generateMaddiVersion") {
+    inputs.property("maddiVersion", maddiVersion)
+    outputs.file(maddiVersionFile)
+    doLast {
+        val f = maddiVersionFile.get().asFile
+        f.parentFile.mkdirs()
+        f.writeText("maddiVersion=$maddiVersion\n")
+    }
+}
+tasks.named<ProcessResources>("processResources") {
+    from(generateMaddiVersion) { into("io/codelaser/maddi/gradleplugin") }
 }
 
 tasks.shadowJar {
@@ -211,6 +229,12 @@ tasks.named<Test>("test") {
     dependsOn(":maddi-ide-daemon:installDist", "publishAllPublicationsToLocalPluginRepoRepository")
     systemProperty("maddi.projectVersion", project.version.toString())
     systemProperty("maddi.rootDir", rootDir.absolutePath)
+    // TestAnalyzerPluginKotlin: the Kotlin-capable analyzer from the locally built distribution (no download), on
+    // the JDK this build runs on (its classes target 26, like the distribution's)
+    dependsOn(":maddi-cli-kotlin:installDist")
+    systemProperty("maddi.test.kotlinDistribution",
+            project(":maddi-cli-kotlin").layout.buildDirectory.dir("install/maddi-kotlin").get().asFile.absolutePath)
+    systemProperty("maddi.test.kotlinJavaHome", System.getProperty("java.home"))
     systemProperty("maddi.daemonInstall",
             project(":maddi-ide-daemon").layout.buildDirectory.dir("install/maddi-ide-daemon").get()
                     .asFile.absolutePath)

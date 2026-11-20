@@ -87,6 +87,7 @@ public class AnalyzerPlugin implements Plugin<Project> {
             // the forked analyzer resolves relative source-set paths against this directory
             task.getWorkingDirectory().fileProvider(project.provider(() -> workingDirectory(project)));
             task.getAnalysisResultsDir().fileProvider(project.provider(() -> analysisResultsDir(project)));
+            wireKotlinAnalyzer(task, project);
             wireAnalyzedInputs(task, project);
             dependOnCompileTasks(task, project);
         });
@@ -151,6 +152,21 @@ public class AnalyzerPlugin implements Plugin<Project> {
         }
         // a directory that is not there would be published as a missing artifact, which fails resolution
         return srcDirs.stream().filter(File::canRead).toList();
+    }
+
+    /** What the Kotlin-capable analyzer needs, should the sources turn out to hold Kotlin (see AnalyzerTask). */
+    private static void wireKotlinAnalyzer(AnalyzerTask task, Project project) {
+        task.getMaddiVersion().set(PluginVersion.maddiVersion());
+        task.getKotlinDistribution().set(project.provider(() -> extension(project).kotlinDistribution));
+        task.getKotlinJavaHome().set(project.provider(() -> extension(project).kotlinJavaHome));
+        task.getKotlinJavaVersion().set(project.provider(() -> extension(project).kotlinJavaVersion));
+        task.getKotlinJvmArgs().set(project.provider(() -> extension(project).kotlinJvmArgs));
+        task.getKotlinCacheDirectory().set(
+                new File(project.getGradle().getGradleUserHomeDir(), "caches/maddi-kotlin"));
+    }
+
+    private static AnalyzerExtension extension(Project project) {
+        return project.getExtensions().getByType(AnalyzerExtension.class);
     }
 
     /** The analyzer's source files and compile classpath, for up-to-date checking. Both are Gradle-managed lazy
