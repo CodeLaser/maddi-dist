@@ -37,7 +37,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.LongConsumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -64,6 +66,8 @@ public final class KotlinFrontEndInstaller {
     private static final String LIB_K2 = "lib-k2/";
     /** The one jar every valid K2 directory must hold: the front end itself, which the realm finds by service. */
     public static final String FRONT_END_JAR_PREFIX = "maddi-kotlin-k2";
+    /** The one jar every distribution's {@code lib/} must hold: the mixed Java+Kotlin driver. */
+    public static final String DRIVER_JAR_PREFIX = "maddi-run-kotlin";
     private static final String COMPLETE_MARKER = ".complete";
 
     private final Path cacheRoot;
@@ -109,49 +113,148 @@ public final class KotlinFrontEndInstaller {
      *                     the Kotlin front end could be downloaded)
      */
     public Path install(String version, URI zip, LongConsumer bytesRead) throws IOException {
-        Path home = homeFor(version);
         String expected = publishedChecksum(version, zip);
+        return extract(zip, expected, homeFor(version), KotlinFrontEndInstaller::k2Entry,
+                KotlinFrontEndInstaller::holdsFrontEnd, version + "\n", bytesRead,
+                "the maddi " + version + " Kotlin distribution at " + zip,
+                "holds no Kotlin front end (no " + FRONT_END_JAR_PREFIX + " jar under lib-k2/); it may predate"
+                + " downloadable Kotlin support");
+    }
+
+    /** The directory for a whole distribution of {@code version}, whether or not it is installed. */
+    public Path distributionHomeFor(String version) {
+        return cacheRoot.resolve("dist-" + version);
+    }
+
+    /**
+     * The installed CLI distribution of {@code version} ({@link #installDistribution(String, URI, LongConsumer)}),
+     * or {@code null} when it is not (completely) there.
+     */
+    public Path installedDistribution(String version) {
+        return installedDistributionAt(distributionHomeFor(version));
+    }
+
+    private static Path installedDistributionAt(Path home) {
+        return Files.isRegularFile(home.resolve(COMPLETE_MARKER)) && holdsDistribution(home) ? home : null;
+    }
+
+    /** Download the release zip for {@code version} and install it whole; see {@link #installDistribution(String, URI, LongConsumer)}. */
+    public Path installDistribution(String version, LongConsumer bytesRead) throws IOException {
+        return installDistribution(version, releaseZip(version), bytesRead);
+    }
+
+    /**
+     * Install the whole CLI distribution at {@code zip}, for a client that runs the Kotlin analyzer itself rather
+     * than through the daemon (the Gradle plugin): its {@code lib/} (the driver and engine, the launcher's class
+     * path) and its {@code lib-k2/} (the realm), as {@code <home>/lib} and {@code <home>/lib-k2}. The checksum, the
+     * streaming and the all-or-nothing move are those of {@link #install(String, URI, LongConsumer)}; only jars
+     * directly inside a directory named {@code lib} or {@code lib-k2} are kept, each by its file name.
+     *
+     * @return the installed home, holding {@code lib/} and {@code lib-k2/}
+     */
+    public Path installDistribution(String version, URI zip, LongConsumer bytesRead) throws IOException {
+        String expected = publishedChecksum(version, zip);
+        return extract(zip, expected, distributionHomeFor(version), KotlinFrontEndInstaller::distributionEntry,
+                KotlinFrontEndInstaller::holdsDistribution, version + "\n", bytesRead,
+                "the maddi " + version + " Kotlin distribution at " + zip, DISTRIBUTION_SHAPE);
+    }
+
+    /**
+     * Install a distribution zip from the local file system: one the user built or downloaded and pointed at, so
+     * there is no published checksum to hold it to. It is installed under its own SHA-256, which makes a rebuilt
+     * zip a new install and an unchanged one a cache hit.
+     */
+    public Path installDistribution(Path zipFile) throws IOException {
+        String sha = sha256Of(zipFile);
+        Path home = cacheRoot.resolve("local-" + sha.substring(0, 16));
+        Path installed = installedDistributionAt(home);
+        if (installed != null) return installed;
+        return extract(zipFile.toUri(), sha, home, KotlinFrontEndInstaller::distributionEntry,
+                KotlinFrontEndInstaller::holdsDistribution, zipFile + "\n", null,
+                "the Kotlin distribution " + zipFile, DISTRIBUTION_SHAPE);
+    }
+
+    private static final String DISTRIBUTION_SHAPE = "is not a maddi Kotlin distribution (it needs "
+            + DRIVER_JAR_PREFIX + "*.jar under lib/ and " + FRONT_END_JAR_PREFIX + "*.jar under lib-k2/)";
+
+    /**
+     * Whether {@code home} has the shape of an unpacked CLI distribution: the mixed driver in {@code lib/} and the
+     * front end in {@code lib-k2/}. Also the check on a directory the user points at directly.
+     */
+    public static boolean holdsDistribution(Path home) {
+        return holdsJar(home.resolve("lib"), DRIVER_JAR_PREFIX) && holdsFrontEnd(home.resolve("lib-k2"));
+    }
+
+    /** K2 mode: {@code .../lib-k2/X.jar} becomes {@code X.jar}. */
+    private static String k2Entry(String name) {
+        int at = name.lastIndexOf(LIB_K2);
+        if (at < 0 || !name.endsWith(".jar")) return null;
+        String fileName = name.substring(at + LIB_K2.length());
+        return fileName.isEmpty() || fileName.contains("/") || fileName.contains("\\") ? null : fileName;
+    }
+
+    /** Distribution mode: {@code .../lib/X.jar} and {@code .../lib-k2/X.jar} keep their directory and file name. */
+    private static String distributionEntry(String name) {
+        if (!name.endsWith(".jar") || name.contains("\\")) return null;
+        String[] segments = name.split("/");
+        if (segments.length < 2) return null;
+        String dir = segments[segments.length - 2];
+        String fileName = segments[segments.length - 1];
+        if (fileName.isEmpty() || !("lib".equals(dir) || "lib-k2".equals(dir))) return null;
+        return dir + "/" + fileName;
+    }
+
+    /**
+     * The shared core: stream {@code zip}, keep the entries {@code target} maps to a relative path (never more than
+     * {@code dir/name}, so nothing lands outside the staging directory), check the whole file against
+     * {@code expected}, check the result with {@code valid}, and only then move it into place as {@code home}.
+     */
+    private Path extract(URI zip, String expected, Path home, Function<String, String> target, Predicate<Path> valid,
+                         String marker, LongConsumer bytesRead, String what, String invalid) throws IOException {
         Files.createDirectories(cacheRoot);
-        Path staging = Files.createTempDirectory(cacheRoot, "k2-" + version + "-");
+        Path staging = Files.createTempDirectory(cacheRoot, home.getFileName() + "-");
         try {
             MessageDigest sha256 = sha256();
-            int jars = 0;
             try (InputStream raw = open(zip);
                  DigestInputStream digest = new DigestInputStream(raw, sha256);
                  ZipInputStream in = new ZipInputStream(new CountingInputStream(digest, bytesRead))) {
                 ZipEntry entry;
                 while ((entry = in.getNextEntry()) != null) {
-                    String name = entry.getName();
-                    int at = name.lastIndexOf(LIB_K2);
-                    if (entry.isDirectory() || at < 0 || !name.endsWith(".jar")) continue;
-                    String fileName = name.substring(at + LIB_K2.length());
-                    if (fileName.isEmpty() || fileName.contains("/") || fileName.contains("\\")) continue;
-                    Files.copy(in, staging.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
-                    jars++;
+                    if (entry.isDirectory()) continue;
+                    String relative = target.apply(entry.getName());
+                    if (relative == null) continue;
+                    Path file = staging.resolve(relative);
+                    Files.createDirectories(file.getParent());
+                    Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
                 }
                 // the zip reader stops before the central directory; the checksum is over the whole file
                 digest.transferTo(OutputStream.nullOutputStream());
             }
             String actual = HexFormat.of().formatHex(sha256.digest());
             if (!actual.equalsIgnoreCase(expected)) {
-                throw new IOException("the maddi " + version + " Kotlin distribution at " + zip
-                                      + " does not match its published SHA-256 (expected " + expected + ", got " + actual
-                                      + "); nothing was installed");
+                throw new IOException(what + " does not match its published SHA-256 (expected " + expected + ", got "
+                                      + actual + "); nothing was installed");
             }
-            if (!holdsFrontEnd(staging)) {
-                throw new IOException("the maddi " + version + " distribution at " + zip + " holds no Kotlin front end ("
-                                      + jars + " jar(s) under lib-k2/, none of them " + FRONT_END_JAR_PREFIX
-                                      + "); it may predate downloadable Kotlin support");
+            if (!valid.test(staging)) {
+                throw new IOException(what + " " + invalid);
             }
-            Files.writeString(staging.resolve(COMPLETE_MARKER), version + "\n");
+            Files.writeString(staging.resolve(COMPLETE_MARKER), marker);
             deleteRecursively(home);
             Files.move(staging, home, StandardCopyOption.ATOMIC_MOVE);
             return home;
         } catch (FileNotFoundException e) {
-            throw new IOException("no maddi " + version + " Kotlin distribution at " + zip, e);
+            throw new IOException("no " + what.replaceFirst("^the ", ""), e);
         } finally {
             deleteRecursively(staging);
         }
+    }
+
+    private static String sha256Of(Path file) throws IOException {
+        MessageDigest sha256 = sha256();
+        try (InputStream in = new DigestInputStream(Files.newInputStream(file), sha256)) {
+            in.transferTo(OutputStream.nullOutputStream());
+        }
+        return HexFormat.of().formatHex(sha256.digest());
     }
 
     /** The hex digest in {@code <zip>.sha256}: its first token, as {@code sha256sum} writes it. */
@@ -187,10 +290,14 @@ public final class KotlinFrontEndInstaller {
     }
 
     private static boolean holdsFrontEnd(Path dir) {
+        return holdsJar(dir, FRONT_END_JAR_PREFIX);
+    }
+
+    private static boolean holdsJar(Path dir, String prefix) {
         if (!Files.isDirectory(dir)) return false;
         try (Stream<Path> files = Files.list(dir)) {
             return files.map(p -> p.getFileName().toString())
-                    .anyMatch(n -> n.startsWith(FRONT_END_JAR_PREFIX) && n.endsWith(".jar"));
+                    .anyMatch(n -> n.startsWith(prefix) && n.endsWith(".jar"));
         } catch (IOException e) {
             return false;
         }

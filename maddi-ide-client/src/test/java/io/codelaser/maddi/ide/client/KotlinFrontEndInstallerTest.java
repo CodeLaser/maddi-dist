@@ -133,6 +133,66 @@ public class KotlinFrontEndInstallerTest {
         assertTrue(e.getMessage().contains("no checksum published"), e.getMessage());
     }
 
+    @Test
+    public void installsAWholeDistribution(@TempDir Path tmp) throws Exception {
+        Path zip = zip(tmp.resolve("d.zip"),
+                "maddi-kotlin-1.2.3/bin/maddi-kotlin",
+                "maddi-kotlin-1.2.3/lib/maddi-run-kotlin-1.2.3.jar",
+                "maddi-kotlin-1.2.3/lib/maddi-run-analysis-1.2.3.jar",
+                "maddi-kotlin-1.2.3/lib-k2/maddi-kotlin-k2-1.2.3.jar",
+                "maddi-kotlin-1.2.3/lib-k2/../../escape.jar",
+                "maddi-kotlin-1.2.3/lib/sub/nested.jar");
+        KotlinFrontEndInstaller installer = new KotlinFrontEndInstaller(tmp.resolve("cache"));
+        assertNull(installer.installedDistribution("1.2.3"));
+
+        Path home = installer.installDistribution("1.2.3", zip.toUri(), null);
+
+        assertEquals(home, installer.installedDistribution("1.2.3"));
+        assertTrue(KotlinFrontEndInstaller.holdsDistribution(home));
+        assertEquals(List.of("lib-k2/maddi-kotlin-k2-1.2.3.jar", "lib/maddi-run-analysis-1.2.3.jar",
+                "lib/maddi-run-kotlin-1.2.3.jar"), jars(home));
+        assertNull(installer.installed("1.2.3"), "a distribution is not a K2-only install");
+    }
+
+    @Test
+    public void aDistributionWithoutTheDriverIsRefused(@TempDir Path tmp) throws Exception {
+        Path zip = zip(tmp.resolve("d.zip"), "maddi-kotlin-1.2.3/lib-k2/maddi-kotlin-k2-1.2.3.jar");
+        KotlinFrontEndInstaller installer = new KotlinFrontEndInstaller(tmp.resolve("cache"));
+        IOException e = assertThrows(IOException.class,
+                () -> installer.installDistribution("1.2.3", zip.toUri(), null));
+        assertTrue(e.getMessage().contains("is not a maddi Kotlin distribution"), e.getMessage());
+        assertNull(installer.installedDistribution("1.2.3"));
+    }
+
+    @Test
+    public void aLocalZipNeedsNoChecksumAndIsCachedByContent(@TempDir Path tmp) throws Exception {
+        Path zip = zip(tmp.resolve("d.zip"),
+                "maddi-kotlin-1.2.3/lib/maddi-run-kotlin-1.2.3.jar",
+                "maddi-kotlin-1.2.3/lib-k2/maddi-kotlin-k2-1.2.3.jar");
+        Files.delete(tmp.resolve("d.zip.sha256"));
+        KotlinFrontEndInstaller installer = new KotlinFrontEndInstaller(tmp.resolve("cache"));
+
+        Path home = installer.installDistribution(zip);
+        assertTrue(KotlinFrontEndInstaller.holdsDistribution(home));
+        Path marker = home.resolve("lib/maddi-run-kotlin-1.2.3.jar");
+        long before = Files.getLastModifiedTime(marker).toMillis();
+        assertEquals(home, installer.installDistribution(zip), "an unchanged zip is a cache hit");
+        assertEquals(before, Files.getLastModifiedTime(marker).toMillis(), "and is not unpacked again");
+
+        zip(zip, "maddi-kotlin-1.2.4/lib/maddi-run-kotlin-1.2.4.jar",
+                "maddi-kotlin-1.2.4/lib-k2/maddi-kotlin-k2-1.2.4.jar");
+        Path rebuilt = installer.installDistribution(zip);
+        assertFalse(home.equals(rebuilt), "a rebuilt zip is a new install");
+        assertEquals(List.of("lib-k2/maddi-kotlin-k2-1.2.4.jar", "lib/maddi-run-kotlin-1.2.4.jar"), jars(rebuilt));
+    }
+
+    private static List<String> jars(Path home) throws IOException {
+        try (Stream<Path> files = Files.walk(home)) {
+            return files.filter(p -> p.toString().endsWith(".jar"))
+                    .map(p -> home.relativize(p).toString().replace('\\', '/')).sorted().toList();
+        }
+    }
+
     /** A zip with the given (empty-ish) entries, and its {@code .sha256} beside it as release-cli.sh writes it. */
     private static Path zip(Path target, String... entries) throws Exception {
         try (OutputStream out = Files.newOutputStream(target); ZipOutputStream zip = new ZipOutputStream(out)) {
