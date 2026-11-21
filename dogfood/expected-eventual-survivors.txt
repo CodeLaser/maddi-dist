@@ -77,6 +77,19 @@
 # 5b8ff6c), then two runs (identical sets) on the Mac: 349 -> 353, 4 new and none lost. The new ones are anonymous
 # classes of the CST implementation: RecordPatternImpl.$1, ParameterizedTypeImpl.$11, TypeParameterImpl.$0,
 # FieldReferenceImpl.$0. Not bisected. The three wobble types survived in both runs and stay in the wobble.
+# 2026-11-21, the maddi slowTest gate 44885559618 on laser1 (maddi 5d911d486, maddi-mod cf819f77, maddi-dist 4070f0b),
+# then the same set at devel on laser1 and at four bisect points on laser3: 362 -> 363, 3 new and 2 lost, no
+# keystone below hc. Bisected with maddi fixed at 5d911d486, maddi-mod walked from f58f8cdd (the 11-17 pin):
+#   FieldReferenceImpl.$0 is FieldReferenceImpl.$2, the same lambda (rewired's '() -> rewireUncached(infoMap)')
+#   renumbered after the two visitor lambdas of content()/owner() in front of it (maddi 8b97610d2, a2cc271ff).
+#   LambdaImpl.$1 and MethodCallImpl.$5 are new with maddi-mod 5ffe2c8f (#147 in the fixpoint engine).
+#   InspectionImpl leaves with maddi-mod e88c75c2 (#147 in the reachability pass). Inspection now forms an
+#   eventual @FinalFields(after=[access, annotations, comments, javaDoc, source]) whose union holds
+#   InspectionImpl.Builder.comments(), which "shares non-committing java.util.List": the Builder is mutable with no
+#   transition, so the contraction rightly retracts Inspection, and InspectionImpl, which leans on its super,
+#   follows (ECRETRACT: Inspection <- [InspectionImpl.Builder], InspectionImpl cascade). Nothing moved in level:
+#   InspectionImpl's verdict was @FinalFields after the mark over an unconditional @FinalFields, which it keeps.
+#   NOELEMENTSMAYHOLD=1 at cf819f77 restores InspectionImpl and removes the two new ones; it is the gate, not drift.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -314,8 +327,10 @@ io.codelaser.maddi.cst.impl.expression.InlineConditionalImpl
 io.codelaser.maddi.cst.impl.expression.InstanceOfImpl
 io.codelaser.maddi.cst.impl.expression.IntConstantImpl
 io.codelaser.maddi.cst.impl.expression.LambdaImpl
+io.codelaser.maddi.cst.impl.expression.LambdaImpl.$1
 io.codelaser.maddi.cst.impl.expression.LongConstantImpl
 io.codelaser.maddi.cst.impl.expression.MethodCallImpl
+io.codelaser.maddi.cst.impl.expression.MethodCallImpl.$5
 io.codelaser.maddi.cst.impl.expression.MethodReferenceImpl
 io.codelaser.maddi.cst.impl.expression.NegationImpl
 io.codelaser.maddi.cst.impl.expression.NullConstantImpl
@@ -365,7 +380,6 @@ io.codelaser.maddi.cst.impl.info.FieldPrinterImpl
 io.codelaser.maddi.cst.impl.info.ImportComputerImpl.PerPackage
 io.codelaser.maddi.cst.impl.info.InfoImpl
 io.codelaser.maddi.cst.impl.info.InfoMapImpl
-io.codelaser.maddi.cst.impl.info.InspectionImpl
 io.codelaser.maddi.cst.impl.info.MethodInfoImpl
 io.codelaser.maddi.cst.impl.info.MethodInspection
 io.codelaser.maddi.cst.impl.info.MethodInspectionImpl
@@ -435,7 +449,7 @@ io.codelaser.maddi.cst.impl.type.TypeParameterImpl
 io.codelaser.maddi.cst.impl.type.TypeParameterImpl.$0
 io.codelaser.maddi.cst.impl.variable.DependentVariableImpl
 io.codelaser.maddi.cst.impl.variable.FieldReferenceImpl
-io.codelaser.maddi.cst.impl.variable.FieldReferenceImpl.$0
+io.codelaser.maddi.cst.impl.variable.FieldReferenceImpl.$2
 io.codelaser.maddi.cst.impl.variable.LocalVariableImpl
 io.codelaser.maddi.cst.impl.variable.ThisImpl
 io.codelaser.maddi.cst.impl.variable.VariableImpl
