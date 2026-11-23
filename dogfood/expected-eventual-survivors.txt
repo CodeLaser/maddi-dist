@@ -98,6 +98,12 @@
 #   [InspectionImpl.Builder], InspectionImpl cascade); the woken run retracts nothing. Inspection is a survivor in
 #   neither, so it no longer forms the optimistic eventual verdict over the never-committing Builder that the
 #   contraction had to take back, and InspectionImpl no longer falls with it: the 11-17 state, now with #147 on.
+# 2026-11-23, the maddi slowTest gate 45211207625 on laser1 (maddi f00b65849, maddi-mod 8340ac50, maddi-dist a30964e):
+# 364 -> 364, ParameterizedTypeImpl.$11 lost and ParameterizedTypeImpl.$13 new. A renumbering, read off the source:
+#   both are the lambda '() -> rewireUncached(infoMap, rewiredTypeParameters)' in rewire(). maddi 2383ebcbb (a
+#   type-use annotation's arguments are referenced too) replaced the one lambda of annotationsReferenced() in
+#   front of it ('ti -> new TypeReference(..)') by three ('ae -> {..}', 'kv -> ..', 'e -> true'): +2, as
+#   FieldReferenceImpl.$2 -> $0 on 11-21. Nothing else moved.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -452,7 +458,7 @@ io.codelaser.maddi.cst.impl.type.IsAssignableFrom2
 io.codelaser.maddi.cst.impl.type.IsAssignableFrom2.Pair
 io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl
 io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl.$0
-io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl.$11
+io.codelaser.maddi.cst.impl.type.ParameterizedTypeImpl.$13
 io.codelaser.maddi.cst.impl.type.ParameterizedTypePrinter.TypeAndParameters
 io.codelaser.maddi.cst.impl.type.TypeParameterImpl
 io.codelaser.maddi.cst.impl.type.TypeParameterImpl.$0
