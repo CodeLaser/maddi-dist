@@ -176,6 +176,8 @@ tasks:
     cmds:
       - { task: vscode:compile }
       - { task: vscode:daemon }
+      # the bundled daemon's notices travel with it
+      - cp ../NOTICE ../THIRD-PARTY.txt .
       - npx --yes @vscode/vsce package
       - 'echo ">> .vsix written in {{.ROOT}}/maddi-vscode"'
 

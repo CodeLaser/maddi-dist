@@ -1,5 +1,6 @@
 # Files kept OUT of the packaged .vsix. Keep: out/ (compiled JS, the entry point), daemon/ (bundled
-# analyser), package.json, README.md, LICENSE, COPYING. Everything below is dev-only or redundant.
+# analyser), package.json, README.md (the marketplace page), icon.png, LICENSE, and the NOTICE and THIRD-PARTY.txt
+# that vscode:package copies in from the repository root. Everything below is dev-only or redundant.
 .vscode/**
 .vscode-test/**
 src/**
@@ -13,3 +14,4 @@ out/**/*.map
 .vscodeignore
 package-lock.json
 *.vsix
+DEVELOPING.md

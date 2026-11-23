@@ -10,6 +10,8 @@
 #   maddi-mcp    (maddi-mcp:distZip) — the MCP server for coding agents, with the IDE daemon in daemon/
 #                (maddi-mcp:mcpb)    — the same as an MCP bundle, maddi-mcp-<version>.mcpb, for Claude Desktop
 #                                      and the MCP Registry
+#   maddi-vscode (task vscode:package) — the VS Code extension, maddi-vscode-<version>.vsix, with the IDE daemon
+#                                      bundled in its daemon/ directory
 #
 # Each zip gets a <zip>.sha256 beside it. The IDE plugins download maddi-kotlin-<version>.zip from release
 # v<version> (KotlinFrontEndInstaller) and refuse it without a matching checksum, so the tag must be the
@@ -24,12 +26,19 @@
 # once with `mcp-publisher login github` by a member of CodeLaser. MADDI_MCP_REGISTRY=none skips that, as does a
 # trial run unless MADDI_MCP_REGISTRY=publish; a failed publish warns and leaves the rest of the release standing.
 #
+# Then the VS Code extension goes to its two stores: the VS Code Marketplace with @vscode/vsce when VSCE_PAT holds a
+# token of the `codelaser` publisher (an Azure DevOps personal access token, scope Marketplace > Manage), and Open VSX
+# with ovsx when OVSX_PAT holds a token of the `codelaser` namespace there. Either left unset skips that store, as
+# does a trial run; a refused publish warns and leaves the rest of the release standing. The .vsix stays on the
+# GitHub release either way, for Install from VSIX.
+#
 # Then the Homebrew formulas in CodeLaser/homebrew-tap (maddi, maddi-kotlin, maddi-mcp) are pointed at the new
 # zips and their checksums, committed and pushed. MADDI_HOMEBREW_TAP=none skips that; a trial run on another
 # repository (MADDI_RELEASE_REPO) skips it unless MADDI_HOMEBREW_TAP names a tap.
 #
 # Usage:   ./release-cli.sh <tag>          e.g.  ./release-cli.sh v0.8.2
-# Requires: an authenticated `gh` CLI (github.com/cli/cli) with push access to the tap, and a JDK on PATH.
+# Requires: an authenticated `gh` CLI (github.com/cli/cli) with push access to the tap, a JDK on PATH, and for the
+# VS Code extension `task` (taskfile.dev) and Node.js with npm.
 #
 set -euo pipefail
 
@@ -46,22 +55,32 @@ if [[ "$TAG" != "v$VERSION" ]]; then
     echo "tag $TAG does not match version=$VERSION in gradle.properties: the IDE plugins look for release v$VERSION" >&2
     exit 2
 fi
+# the .vsix bundles this release's daemon, and the marketplaces refuse a version they have seen before
+VSCODE_VERSION=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' maddi-vscode/package.json)
+if [[ "$VSCODE_VERSION" != "$VERSION" ]]; then
+    echo "maddi-vscode/package.json is at version $VSCODE_VERSION, not $VERSION: set it to the release's" >&2
+    exit 2
+fi
 
 echo "==> Building the CLI distributions and the MCP server (version from gradle.properties)"
 ./gradlew :maddi-cli:distZip :maddi-cli-kotlin:distZip :maddi-mcp:distZip :maddi-mcp:mcpb
+echo "==> Building the VS Code extension, with the daemon bundled"
+task vscode:package
 
 # Each zip lives in its own module's distributions dir, so these globs cannot cross-match.
 OPENJDK_ZIP=$(ls maddi-cli/build/distributions/maddi-*.zip)
 KOTLIN_ZIP=$(ls maddi-cli-kotlin/build/distributions/maddi-kotlin-*.zip)
 MCP_ZIP=$(ls maddi-mcp/build/distributions/maddi-mcp-*.zip)
 MCPB="maddi-mcp/build/distributions/maddi-mcp-$VERSION.mcpb"
+VSIX="maddi-vscode/maddi-vscode-$VERSION.vsix"
 echo "    openjdk runner: $OPENJDK_ZIP"
 echo "    kotlin  runner: $KOTLIN_ZIP"
 echo "    MCP server:     $MCP_ZIP"
 echo "    MCP bundle:     $MCPB"
+echo "    VS Code:        $VSIX"
 
 # "<hex>  <file name>", the sha256sum format; shasum ships with macOS and perl alike
-for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP" "$MCP_ZIP" "$MCPB"; do
+for zip in "$OPENJDK_ZIP" "$KOTLIN_ZIP" "$MCP_ZIP" "$MCPB" "$VSIX"; do
     (cd "$(dirname "$zip")" && shasum -a 256 "$(basename "$zip")" > "$(basename "$zip").sha256")
 done
 
@@ -104,8 +123,9 @@ else
 fi
 
 gh release upload "$TAG" -R "$REPO" "$OPENJDK_ZIP" "$OPENJDK_ZIP.sha256" "$KOTLIN_ZIP" "$KOTLIN_ZIP.sha256" \
-    "$MCP_ZIP" "$MCP_ZIP.sha256" "$MCPB" "$MCPB.sha256" --clobber
-echo "==> Both CLI zips, the MCP server's zip and bundle, and their checksums attached to release $TAG on $REPO."
+    "$MCP_ZIP" "$MCP_ZIP.sha256" "$MCPB" "$MCPB.sha256" "$VSIX" "$VSIX.sha256" --clobber
+echo "==> Both CLI zips, the MCP server's zip and bundle, the VS Code extension, and their checksums attached to" \
+     "release $TAG on $REPO."
 
 if [[ "$REPO" == "CodeLaser/maddi" ]]; then REGISTRY="${MADDI_MCP_REGISTRY:-publish}"; else REGISTRY="${MADDI_MCP_REGISTRY:-none}"; fi
 if [[ "$REGISTRY" == "none" ]]; then
@@ -120,6 +140,26 @@ else
         cp "$REGISTRY_DIR/server.json" maddi-mcp/build/server.json
         echo "    the MCP Registry refused it: after mcp-publisher login github, run mcp-publisher publish" \
              "in maddi-mcp/build" >&2
+    fi
+fi
+
+# The tokens are read from the environment by vsce (VSCE_PAT) and ovsx (OVSX_PAT) themselves.
+if [[ "$REPO" != "CodeLaser/maddi" ]]; then
+    echo "==> VS Code extension not published to its stores (a trial run)"
+else
+    if [[ -z "${VSCE_PAT:-}" ]]; then
+        echo "==> VS Code Marketplace not updated: no VSCE_PAT"
+    else
+        echo "==> Publishing maddi-vscode $VERSION on the VS Code Marketplace"
+        npx --yes @vscode/vsce publish --packagePath "$VSIX" \
+            || echo "    the VS Code Marketplace refused it: npx @vscode/vsce publish --packagePath $VSIX" >&2
+    fi
+    if [[ -z "${OVSX_PAT:-}" ]]; then
+        echo "==> Open VSX not updated: no OVSX_PAT"
+    else
+        echo "==> Publishing maddi-vscode $VERSION on Open VSX"
+        npx --yes ovsx publish "$VSIX" \
+            || echo "    Open VSX refused it: npx ovsx publish $VSIX" >&2
     fi
 fi
 

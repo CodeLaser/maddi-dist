@@ -1,131 +1,52 @@
 # maddi for VS Code
 
-**Status: working.** Analysis runs end to end, findings appear as diagnostics and computed annotations as
-inline hints — all verified in a running VS Code against a real project. Packaging is not done. See
-*What is missing*.
+maddi analyses a whole Java project and shows what it concludes beside each declaration, written as the annotations
+you would otherwise write by hand: whether a type is immutable or a container, whether a method modifies its object,
+whether a parameter is changed by the call, what may be `null`, and who may hold an object. It also checks the
+annotations you *did* write, and reports a contract the code breaks.
 
-Third front-end after IntelliJ and Eclipse. Same architecture — the analyzer runs out of process and is
-spoken to over a socket in plain JSON — with one thing that is genuinely different here.
+- **Hints**: the computed annotations, inline, after each type, method, field and parameter name.
+- **Why**: hover over a hint for the reasons, step by step, each step a link to the statement behind it.
+- **Problems**: a contract you wrote that the code breaks, in the *Problems* panel, with the reasoning.
 
-## The problem this front-end had to solve
-
-maddi's openjdk parser needs the project's **`.class` files** on the classpath. IntelliJ and Eclipse both
-have a compiler and a project model to ask, so the other two plugins just read the compiler output
-directories. VS Code has neither: it is an editor, and Java support is an extension.
-
-The answer is that the extension it delegates to — `redhat.java` — runs **jdt.ls**, which is Eclipse JDT.
-That gives us both halves at once: a real project model *and* a real compiler writing real `.class` files.
-So this extension asks jdt.ls rather than reimplementing anything:
-
-| What | How |
-|---|---|
-| projects | `java.project.getAll` (minus jdt.ls's synthetic catch-all project) |
-| per-module source sets | `java.project.getSettings(uri, [keys])` — each project's raw class path (containers expanded, JRE left out), its output folder and `--release` |
-| classpath + output dirs (fallback) | `java.project.getClasspaths(uri, {scope})` — the runtime classpath, which includes the compiler output folders |
-| source roots | `java.project.listSourcePaths` |
-| fresh `.class` files | `java.workspace.compile(false)` — resolves only when the build has finished |
-
-All of it goes through `java.execute.workspaceCommand`, the bridge `redhat.java` exposes onto jdt.ls's
-delegate commands.
-
-The daemon gets the project as **module source sets**, as from the Eclipse plugin (`MaddiEclipseConfigBuilder`,
-which reads the same JDT model): each project a main and a test set, with its own libraries and the main sets of
-the projects it requires. Only when jdt.ls cannot describe the workspace that way — no `getSettings`, or a source
-root no set covers, such as a source folder that is the project's root, which jdt.ls leaves out — does it fall back
-to the flat pair of all source roots and one union class path. The output channel says which.
-
-## In the editor
-
-- **Findings** are diagnostics, with their why-chain as related information.
-- **Computed annotations** are inline hints. The hover says what IntelliJ's gutter and Eclipse's ruler say
-  (`gutterText.ts`, a port of `GutterText`): each annotation's why, step by step with links to the statements,
-  why a type close to `@Container` is not one, and for a method its parameters with theirs.
-- **Hints follow their declarations through edits.** IntelliJ and Eclipse find each declaration again by name
-  (`owner` and `signature`, an erased signature their compilers' bindings give); jdt.ls offers no bindings here, so
-  `edits.ts` moves the positions with every change VS Code reports, as a range marker does, and drops a hint whose
-  declaration was deleted. Edits never saved are forgotten when their editor closes.
-- **Analyze saves the Java editors first**: the daemon reads the files on disk. Asking again during a run that has
-  already saved runs once more when it ends.
-- **Stop maddi Analysis** (or the progress notification's cancel) kills the daemon, the one way out of a fixpoint
-  iteration in progress. What the run streamed stays on screen, marked provisional; the next analysis starts a
-  fresh daemon.
-
-## Two things that fail silently, and are handled
-
-**LightWeight mode.** `java.server.launchMode` defaults to *Hybrid*, so jdt.ls starts in a mode where
-`java.execute.workspaceCommand` does not fail — it logs a warning and returns `undefined`. Query it then and
-you get an empty project model and an analysis of nothing, with no error to explain it. The extension waits
-for `Standard` (`onDidServerModeChange`, then `serverReady()`).
-
-**Stale `.class` files.** jdt.ls autobuilds by default, but "autobuild is on" and "the build has finished"
-are different claims. `java.workspace.compile` is awaited as a genuine barrier before the model is read.
+The analysis runs in a separate process, on your machine; nothing leaves it.
 
 ## Requirements
 
-- `redhat.java` (declared as an extension dependency)
-- a **JDK 25+** in `maddi.jdkHome` — maddi runs on this and reads `java.base` from it. It is not the JDK the
-  project targets, and not the one VS Code runs on.
+- **Language Support for Java** (`redhat.java`), which VS Code installs with this extension. maddi asks it for the
+  project model and the compiled classes, so the project must build in VS Code.
+- **A JDK 25 or later**, set in `maddi.jdkHome`. maddi runs on it; it need not be the JDK your project targets, nor
+  the one VS Code runs on. The first analysis offers to open the setting.
 
-## Building
+## Using it
 
-```bash
-npm install
-npm run compile   # or: npm test
-```
+1. Open a Java project, and wait until the Java extension has loaded it.
+2. Run **Analyze with maddi** from the Command Palette. A notification shows the progress; hints appear while the
+   analysis runs. A large project takes minutes.
+3. **Stop maddi Analysis**, or the notification's cancel button, stops a run.
 
-Debug with **Run Extension** in VS Code (F5), which opens an Extension Development Host.
+The [IDE user guide](https://github.com/CodeLaser/maddi-dist/blob/main/docs/ide-user-guide.md) explains each
+annotation, which hints are shown, and the settings:
 
-The daemon distribution has to be reachable. Either build it and point `maddi.daemonInstall` at it:
+| Setting | Default | |
+|---|---|---|
+| `maddi.jdkHome` | none | the JDK 25+ maddi runs on |
+| `maddi.hints` | `hide-implied-defaults` | which annotations appear as hints: also `all`, `positive-only`, `negative-only`, `none` |
+| `maddi.warnNearMisses` | off | report types and methods that narrowly miss a property |
+| `maddi.closedWorld` | off | the folder is an application: no code outside it calls its public methods |
+| `maddi.incrementalReanalysis` | off | experimental: after an edit, re-analyse only what changed; such a result is never certified |
+| `maddi.daemonXmxMb` | 4096 | the analysis process's heap, in MB |
+| `maddi.daemonInstall` | empty | a daemon built from source, for developing maddi itself |
 
-```bash
-./gradlew :maddi-ide-daemon:installDist   # -> maddi-ide-daemon/build/install/maddi-ide-daemon
-```
+## Limitations
 
-or copy that tree to `maddi-vscode/daemon/`, which is where a packaged extension looks. Note the launcher
-loses its executable bit inside a `.vsix` (a zip, exactly as a p2 install and a Maven copy do); the launcher
-restores it before spawning.
+- Java only; Kotlin sources are analysed by the IntelliJ plugin.
+- The JDK's and libraries' sources show no hints yet.
 
-## Tests
+## More
 
-`npm test` — Node's built-in runner over the compiled output. The modules holding the logic worth testing
-(`analysisModel`, `configBuilder`, `daemonClient`'s framing) deliberately import no `vscode`, since that
-module only exists inside the extension host and anything touching it cannot be unit-tested.
+- maddi itself, and the book behind it: [github.com/CodeLaser/maddi](https://github.com/CodeLaser/maddi).
+- The same analysis in [IntelliJ IDEA](https://plugins.jetbrains.com/) (search for *maddi*) and Eclipse.
+- Bugs and questions: [github.com/CodeLaser/maddi/issues](https://github.com/CodeLaser/maddi/issues).
 
-The config-builder tests drive the mapping with canned jdt.ls responses in the exact shapes jdt.ls 1.59
-returns. That is the part worth pinning: a wrong mapping produces an analysis of nothing rather than an
-error.
-
-## Tests
-
-- `npm test` (`task vscode:test`): unit tests of the modules that do not need VS Code, on Node's test runner.
-- `npm run uitest` (`task vscode:uitest`): the UI tests in `src/uitest`. `@vscode/test-cli` downloads a VS Code into
-  `.vscode-test/`, installs `redhat.java` there, and opens a copy of `uitest-fixture/Demo`, a small Eclipse project.
-  The tests run inside that VS Code: they run *Analyze with maddi*, then read the inline hints
-  (`vscode.executeInlayHintProvider`) and the diagnostics, as the editor shows them, and check that the hints follow an
-  edit. A second suite turns on incremental re-analysis and edits `Box`, between `Cell`, which `Box` uses, and
-  `Shelf`, which uses both and is rewired: only `Box` is parsed again, `Cell` keeps its hints, `Shelf` picks up the
-  change, an edit `Shelf` cannot see leaves it as it was (the early cutoff holds), and a cold run says the same.
-  A window opens while they run; on Linux without a display, run them under `xvfb-run`.
-  They need a JDK 25 or later for the daemon (`MADDI_JDK_HOME`, else `java_home -v 25+` on macOS, else `JAVA_HOME`)
-  and a daemon distribution (`MADDI_DAEMON_INSTALL`, else the bundled `daemon/`, else `maddi-ide-daemon`'s
-  `installDist`, which `task gradle-ide` builds). `VSCODE_TEST_VERSION` picks the VS Code version, `stable` by default.
-  The extension exports `lastRun()` for them: how the last *Analyze* ended, with its summary line, the result's
-  outcome (`INCREMENTAL`, `CERTIFIED`, …) and the daemon's progress messages.
-  Rebuild the daemon after a change to it (`./gradlew :maddi-ide-daemon:installDist`): the tests run the installed one.
-
-## What is missing
-
-- **packaging** — no `.vsix` is produced by this module's own scripts (the repo-root `Taskfile.yml` has a
-  `vscode:package` task that does it).
-- **hints are inline only, unlike the other two front-ends** — and this is settled, not a gap to close.
-  IntelliJ and Eclipse put a declaration's annotations on a line of their own above it. VS Code has no
-  equivalent: an `InlayHint` is positioned at a `Position` and renders within the line, and nothing in the
-  API adds one. The only route is injecting `display: block` CSS through a decoration's `textDecoration`,
-  which is unsupported and version-fragile; inline was reviewed in situ and judged fine, so do not add the
-  hack.
-- **no gutter or findings view** — the Problems panel covers the second, and VS Code has no real analogue of
-  the first; the hover carries what the gutter says elsewhere.
-- **library files** — the JDK's and libraries' sources (`jdt://` editors) show no annotations yet. The daemon
-  answers `libraryAnnotations`, but places them by erased signature, and jdt.ls's document symbols give only
-  unerased simple names (`add(E)`).
-- not in step with the other front-ends, by choice: Kotlin sources, and Translate to Kotlin.
+Licensed under the Apache License, Version 2.0.

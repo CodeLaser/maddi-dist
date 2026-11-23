@@ -4,3 +4,6 @@ daemon/
 *.vsix
 package-lock.json
 .vscode-test/
+# copied in from the repository root by task vscode:package
+NOTICE
+THIRD-PARTY.txt
