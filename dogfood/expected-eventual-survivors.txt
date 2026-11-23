@@ -90,6 +90,14 @@
 #   follows (ECRETRACT: Inspection <- [InspectionImpl.Builder], InspectionImpl cascade). Nothing moved in level:
 #   InspectionImpl's verdict was @FinalFields after the mark over an unconditional @FinalFields, which it keeps.
 #   NOELEMENTSMAYHOLD=1 at cf819f77 restores InspectionImpl and removes the two new ones; it is the gate, not drift.
+# 2026-11-23, the maddi slowTest gate 45128082328 on laser1 (maddi 34cab9389, maddi-mod 7ef83410, maddi-dist 2a6d255),
+# then twice at devel on laser3, identical sets: 363 -> 364, InspectionImpl back, nothing lost. The cause is
+#   maddi-mod 49d41e90 (eventual-family writes wake their dependents through the worklist): NOEVENTUALWAKE=1 at
+#   7ef83410 removes InspectionImpl and changes nothing else; SELFNULLRETURNS=1 (d15f9d0f) and NOOVERLAPBYTYPE=1
+#   (ca738802) change nothing. With EC_RETRACT_DEBUG the gated run retracts as on 11-21 (Inspection <-
+#   [InspectionImpl.Builder], InspectionImpl cascade); the woken run retracts nothing. Inspection is a survivor in
+#   neither, so it no longer forms the optimistic eventual verdict over the never-committing Builder that the
+#   contraction had to take back, and InspectionImpl no longer falls with it: the 11-17 state, now with #147 on.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -380,6 +388,7 @@ io.codelaser.maddi.cst.impl.info.FieldPrinterImpl
 io.codelaser.maddi.cst.impl.info.ImportComputerImpl.PerPackage
 io.codelaser.maddi.cst.impl.info.InfoImpl
 io.codelaser.maddi.cst.impl.info.InfoMapImpl
+io.codelaser.maddi.cst.impl.info.InspectionImpl
 io.codelaser.maddi.cst.impl.info.MethodInfoImpl
 io.codelaser.maddi.cst.impl.info.MethodInspection
 io.codelaser.maddi.cst.impl.info.MethodInspectionImpl
