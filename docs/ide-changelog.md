@@ -9,6 +9,23 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 - **Incremental re-analysis (experimental)**, a new setting in IntelliJ, Eclipse and VS Code, off by default. After an
   edit, the daemon re-analyses only the changed types and what depends on them, on the state the previous run left.
   Java only. Such a result is never certified; turn the setting off for a full run. Changing it restarts the daemon.
+- **Ownership**: `@Fresh` methods, `@Borrowed` parameters and `@Owned` fields are shown with the other annotations,
+  and the tooltip or hover says why an element is not one of them. A `@Borrowed` argument of immutable type is a
+  default, hidden unless you ask for all annotations.
+- **Closed world**, off by default: tell the analysis that the project is an application, so no code outside it calls
+  its public methods. A per-project toggle in IntelliJ's Tools menu, the `maddi.closedWorld` setting in VS Code, a
+  workspace preference in Eclipse.
+- **The analysis is faster**: the engine runs fernflower, timefold and langchain4j in about half the time of 0.9.6.
+- VS Code: the hover shows why each verdict holds, as the gutter and ruler do elsewhere, with links to the statements.
+- VS Code: a Stop command, also the cancel button of the progress notification; a daemon that dies ends the run at
+  once.
+- VS Code: the workspace is sent as per-module main and test source sets, read from the Java language server.
+- VS Code: hints follow their declarations through edits; Analyze saves the Java editors first, and asking during a
+  run queues one more.
+- VS Code: fixed, no hints on a workspace opened through a symbolic link.
+- Eclipse: the plugin bundles the current client, no longer a stale one.
+- IntelliJ: no deprecated or internal platform API.
+- A project with many source sets needs far less memory: one copy of each jar, not one per source set.
 
 ## 0.9.6.1
 
