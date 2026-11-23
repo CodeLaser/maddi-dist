@@ -36,6 +36,9 @@ maddi --compile-log build.log --analysis-steps modification --analysis-results-d
 `--compile-log` also reads Maven and Ant logs. The analysis loads the JDK and library results that ship with maddi;
 `--preload-analysis-results-dirs none` turns that off.
 
+`--ownership` adds the ownership pass: `@Fresh` methods, `@Borrowed` parameters and `@Owned` fields. Add
+`--closed-world` when the project is an application, so no code outside it calls its public methods.
+
 ### Translation
 
 The same command line translates the project's main sources:
@@ -58,11 +61,12 @@ Portal:
 ```kotlin
 plugins {
     java
-    id("io.codelaser.maddi.analyzer") version "0.9.5"
+    id("io.codelaser.maddi.analyzer") version "0.9.7"
 }
 
 maddi {
     analysisSteps = "modification"   // parse -> prep -> modification -> write results
+    ownership = true                 // optional: @Fresh, @Borrowed, @Owned
 }
 ```
 
@@ -71,27 +75,34 @@ maddi {
 ```
 
 The plugin takes the source sets, the classpath, the language level and `--enable-preview` from the Gradle model,
-and forks a worker JVM with the flags the analyzer needs. Its options are in
-[`maddi-gradleplugin/README.md`](maddi-gradleplugin/README.md).
+and forks a worker JVM with the flags the analyzer needs. A project with Kotlin sources is analysed whole by the
+Kotlin-capable analyzer, which the plugin downloads from the release and runs on a JDK 26 toolchain. Its options are
+in [`maddi-gradleplugin/README.md`](maddi-gradleplugin/README.md).
 
 ## Maven plugin
 
 `io.codelaser:maddi-mvnplugin` on Maven Central, goal prefix `maddi`, five goals: `run`,
 `write-input-configuration`, `statistics`, `write-analysis-hints` and `compile-analysis-hints`. The JVM that runs
 Maven needs javac's `--add-exports` flags for the analysis goals. Set them once in `.mvn/jvm.config` or
-`MAVEN_OPTS`; the [user manual](https://www.codelaser.io/maddi/manual/) lists them.
+`MAVEN_OPTS`; the [user manual](https://www.codelaser.io/maddi/manual/) lists them. `-Downership` and
+`-DclosedWorld` add the ownership pass, as the CLI's options do.
 
-## IDE plugins (build from source)
+## IDE plugins
 
-The IntelliJ, Eclipse and VS Code plugins are not published yet. Each shows maddi's computed annotations in the
-editor. All three talk to the same analysis daemon (`maddi-ide-daemon`), which runs out of process, so the IDE can stay on any
-JVM.
+Each shows maddi's computed annotations in the editor, says why each one holds, and checks the contracts you write.
+All three talk to the same analysis daemon (`maddi-ide-daemon`), which runs out of process on a JDK 25 or later, so
+the IDE can stay on any JVM. The [IDE user guide](docs/ide-user-guide.md) covers setup, the results and the
+settings; [`docs/ide-changelog.md`](docs/ide-changelog.md) what changed.
 
-| IDE | Module | Build | Notes |
+| IDE | Install | Build from source | Notes |
 |---|---|---|---|
-| IntelliJ IDEA | `maddi-intellij` | `./gradlew :maddi-intellij:buildPlugin`, or `runIde` to try it | Java and Kotlin. The Kotlin front end is downloaded on demand from the release and checked against its SHA-256. |
-| Eclipse 2025-09+ | `maddi-eclipse` | `task eclipse:build` (a p2 update site) | [`maddi-eclipse/README.md`](maddi-eclipse/README.md) |
-| VS Code | `maddi-vscode` | `task vscode:package` (a `.vsix`) | Needs `redhat.java`. [`maddi-vscode/README.md`](maddi-vscode/README.md) |
+| IntelliJ IDEA 2025.3+ | *maddi* on [JetBrains Marketplace](https://plugins.jetbrains.com/) | `./gradlew :maddi-intellij:buildPlugin`, or `runIde` to try it | Java and Kotlin. The Kotlin front end is downloaded on demand from the release and checked against its SHA-256. Translate to Kotlin. |
+| Eclipse 2025-09+ | update site `https://codelaser.github.io/maddi-dist/eclipse/`, also on the Eclipse Marketplace | `task eclipse:build` (a p2 update site) | Java. [`maddi-eclipse/README.md`](maddi-eclipse/README.md) |
+| VS Code 1.90+ | not published yet | `task vscode:package` (a `.vsix`), then *Install from VSIX…* | Java. Needs `redhat.java` and `maddi.jdkHome`. [`maddi-vscode/README.md`](maddi-vscode/README.md) |
+
+Two options are shared by all three, both off by default: *Incremental re-analysis (experimental)*, which after an
+edit re-analyses only what changed (never certified), and *Closed world*, which tells the ownership analysis that
+the project is an application.
 
 `task --list` shows the other tasks, and `task doctor` checks the toolchain.
 
@@ -117,7 +128,7 @@ Claude Desktop, `maddi-mcp-<version>.mcpb` on the same release is the server as 
 |---|---|
 | `configure_project`, `list_projects` | a Gradle or Maven build by its directory alone; any other build by a command whose output shows javac's command lines, or a log of it (`build` `compileLog`); or an `inputConfiguration.json` (the Gradle plugin's task `maddi-write-input-configuration`, the Maven plugin's goal `maddi:write-input-configuration`, the CLI's `--write-input-configuration`); or directories and a class path |
 | `analyze`, `run_status`, `stop_run` | a run in the background: a large project takes minutes. `sourceSets` and `packages` analyse part of the project |
-| `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, findings by category, per package |
+| `overview` | a project, package or type in one answer: types by immutability level, modifying methods, modified fields and parameters, `@Fresh` methods, `@Owned` fields and `@Borrowed` parameters, findings by category, per package |
 | `verdicts`, `explain`, `findings` | the annotations of types and members, the properties behind them, why they hold, the findings with their why-chains |
 | `element_at` | the element at a file and line, explained |
 | `diff_runs` | what changed between two runs: analyse, edit, analyse again, compare |
@@ -183,6 +194,7 @@ variable:
 | `--log` | `MADDI_DAEMON_LOG` | `maddi-mcp-daemon-<pid>.log` in the temporary directory |
 | `--store` | `MADDI_MCP_STORE` | `~/.maddi/mcp` |
 | `--incremental` | `MADDI_INCREMENTAL` | `false`; `true` re-analyses only what an edit changed (above) |
+| `--persist` | `MADDI_PERSIST` | `false`; `true` stores each result under the store's `daemon-results/`, and answers a project whose inputs did not change with the stored one, across restarts (`analyze` with `cold` skips it) |
 
 How the server is built on the daemon, and what comes next (asking what an edit would do to the verdicts, and
 whether it would break a contract, before making it): [`docs/roadmap/mcp-server.md`](docs/roadmap/mcp-server.md).
@@ -199,7 +211,8 @@ Check out the three repositories side by side, as described in maddi's
 ./gradlew :maddi-mcp:installDist           # the MCP server, with that daemon in daemon/
 ```
 
-`release-cli.sh <tag>` builds both zips and publishes them, with their checksums, on the GitHub release for that tag.
+`release-cli.sh <tag>` builds the CLI, Kotlin and MCP zips and the MCP bundle, and publishes them with their
+checksums on the GitHub release for that tag; `release-eclipse.sh <tag>` publishes the Eclipse update site.
 
 `dogfood/` is a standalone build that applies the Gradle plugin to maddi's own CST. It is the proving ground for
 eventual immutability; see [`dogfood/README.md`](dogfood/README.md).
@@ -216,4 +229,4 @@ Every module here reaches the analyses through `io.codelaser.maddi.analysis.api.
 may appear only in `runtimeOnly` configurations, or `shadeRuntime` in the plugins. The `maddi-tier-guard` plugin, in
 maddi's `build-logic`, fails the build when a compile class path resolves one.
 
-Licence: LGPL-3.0-or-later (`COPYING`, `COPYING.LESSER`), as maddi.
+Licence: Apache-2.0 (`LICENSE`), as maddi.

@@ -50,6 +50,14 @@ cached under `<gradle user home>/caches/maddi-kotlin`. It needs JDK 26 or later.
 - `kotlinJavaVersion` (integer, default 26): the version of that toolchain.
 - `kotlinJvmArgs` (single string): extra JVM options for the analyzer process, space-separated, e.g. `-Xmx8g`.
 
+Ownership
+---------
+
+- `ownership` (boolean, default false): run the ownership pass, which computes `@Fresh` methods, `@Borrowed`
+  parameters and `@Owned` fields.
+- `closedWorld` (boolean, default false): with `ownership`, the project is an application: no code outside it calls
+  its public methods, so a parameter's argument can be judged from the project's own calls.
+
 Analysis hints
 --------------
 

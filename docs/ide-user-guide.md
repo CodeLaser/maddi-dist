@@ -6,15 +6,18 @@ modifies its object, whether a parameter is changed by the call, what may be `nu
 annotations you *did* write, and reports a contract the code breaks. In IntelliJ it can also translate Java to
 Kotlin, using those verdicts.
 
-This guide covers the IntelliJ IDEA and Eclipse plugins. They work the same way; where they differ, each has its
-own short section.
+This guide covers the IntelliJ IDEA and Eclipse plugins and the VS Code extension. They work the same way; where
+they differ, each has its own short section. VS Code analyses Java only, and cannot translate to Kotlin.
 
 ## Before you start
 
 - **A JDK 25 or later.** The analysis runs in a separate process (the *daemon*, bundled with the plugin), and that
   process needs JDK 25+. The IDE itself can keep running on whatever it runs on. The plugin picks a JDK 25+ the
   IDE already knows about; if there is none, add one (IntelliJ: *File → Project Structure → SDKs*; Eclipse:
-  *Preferences → Java → Installed JREs*) or choose one in the maddi settings.
+  *Preferences → Java → Installed JREs*) or choose one in the maddi settings. VS Code does not pick one: set
+  `maddi.jdkHome` to the JDK's home directory (the first analysis offers to open the setting).
+- **VS Code: the Java extension.** The extension asks *Language Support for Java* (`redhat.java`) for the project
+  model and the compiled classes, and VS Code installs it with maddi.
 - **A project that compiles.** maddi reads your sources and the compiled classes next to them. The plugin builds
   the project before each analysis. Files that do not parse are left out and the result says so; the rest is
   still analysed.
@@ -25,6 +28,7 @@ own short section.
 |---|---|---|
 | IntelliJ IDEA | 2025.3 or later | *Settings → Plugins → Marketplace*, search for **maddi** |
 | Eclipse | 2025-09 or later | *Help → Install New Software… → Add…*, location `https://codelaser.github.io/maddi-dist/eclipse/` |
+| VS Code | 1.90 or later | not published yet: build the `.vsix` from [maddi-dist](https://github.com/CodeLaser/maddi-dist) with `task vscode:package`, then *Extensions → … → Install from VSIX…* |
 
 ## Try it on a demo project
 
@@ -37,29 +41,38 @@ saying what to look for:
 Each has an `EXPECTED-HINTS.md` listing, per declaration, what the analysis computes, so you can tell a missing
 hint from a broken setup, and a package `demo.guard` whose contracts are wrong on purpose, to see a violation and
 its reasoning. Clone one and open it: IntelliJ, *File → Open* on the directory; Eclipse (Java demo), *File →
-Import… → Maven → Existing Maven Projects*. Then run the analysis as below.
+Import… → Maven → Existing Maven Projects*; VS Code (Java demo), *File → Open Folder…*. Then run the analysis as
+below.
 
 ## Your first analysis
 
 - IntelliJ: *Tools → Analyze with maddi*. The **maddi** tool window (bottom) shows the run.
 - Eclipse: *Project → Analyze with maddi*, or right-click a Java project. *Window → Show View → Other… → maddi →
   maddi Findings* shows the run.
+- VS Code: *Analyze with maddi* in the Command Palette, with a Java file open in the folder to analyse. A
+  notification shows the run's progress, and the **maddi** output channel its log. The Java extension must have
+  finished loading the project (its status bar item no longer spins); maddi waits for it, and for its build.
 
 The first run starts the daemon and loads maddi's knowledge of the JDK and common libraries; later runs reuse
 the daemon. Hints appear in open editors while the analysis is still running and fill in as it goes. A large
-project can take minutes: the tool window shows the phase, the pass and the elapsed time.
+project can take minutes: the tool window shows the phase, the pass and the elapsed time. VS Code saves the open
+Java editors first, since the analysis reads the files on disk; asking again during a run starts one more run when
+it ends.
 
 ### Stopping a run
 
 Any of these stops a running analysis at once:
 
 - the **Stop** button in the maddi tool window (IntelliJ) or the maddi Findings view (Eclipse);
-- *Tools → Stop maddi Analysis* (IntelliJ), *Project → Stop maddi Analysis* (Eclipse);
-- the cancel button on the progress bar (IntelliJ) or in the Progress view (Eclipse).
+- *Tools → Stop maddi Analysis* (IntelliJ), *Project → Stop maddi Analysis* (Eclipse), *Stop maddi Analysis* in
+  the Command Palette (VS Code);
+- the cancel button on the progress bar (IntelliJ), in the Progress view (Eclipse) or on the progress
+  notification (VS Code).
 
 What the run had shown so far stays in the editor. The next analysis starts from scratch.
 
-Closing the IDE stops the daemon too, also in the middle of a run.
+Closing the IDE stops the daemon too, also in the middle of a run. In VS Code, stopping ends the daemon itself, and
+what the run had shown is marked provisional; the next analysis starts a new daemon.
 
 ## Turning the hints on
 
@@ -83,21 +96,29 @@ once:
 Without this, the analysis runs and the ruler icons and problems appear, but no hints. *Preferences → maddi →
 Show hints in the editor* must be ticked too (it is by default).
 
+### VS Code
+
+Hints are on by default, as inlay hints. If you see none, *Editor › Inlay Hints: Enabled* must not be `off`, and
+`maddi.hints` must not be `none`. VS Code shows the hints inline, after the name, and has no line of their own
+above a declaration.
+
 ## Reading the results
 
 maddi shows its results on three surfaces:
 
 - **Hints**: the computed annotations, on a line of their own above each type, method and field, and before
   each parameter, where you would write them. *Hint placement* in the settings puts them after the name instead.
-- **Gutter (IntelliJ) / ruler (Eclipse) icons**: on each analysed type, method and field. The tooltip has the
+- **Gutter (IntelliJ) / ruler (Eclipse) icons, hover (VS Code)**: on each analysed type, method and field; in
+  VS Code, hover over a hint. The tooltip or hover has the
   full set, each parameter's included, and the reasons: under each annotation that has one, the chain of
   statements behind it, from the element to the statement that decides it (`⇐ line 9: calls store(..)`). A method,
   field or parameter that is `@Modified`, `@Dependent` or `@Nullable`, and a method with `@StaticSideEffects`, says
   why. A type below `@Immutable` says which rule it fails, at the member that fails it. A type that is not
   `@Container`, but is at most 2 parameters away from it, says so under `not @Container:`, one line per parameter
   that is modified. A verdict that holds only after a mark (see `after=` below) has an icon of its own (Eclipse: a
-  ring instead of a dot).
-- **Problems**: a contract you wrote that the code breaks, underlined, with the reasoning that led to it.
+  ring instead of a dot). In VS Code each step of the chain is a link to its statement.
+- **Problems**: a contract you wrote that the code breaks, underlined, with the reasoning that led to it (in VS
+  Code, in the *Problems* panel, the reasoning as related information).
 
 ### What the annotations mean
 
@@ -117,6 +138,9 @@ maddi shows its results on three surfaces:
 | `@Identity`, `@Fluent` | method | returns its first argument / returns `this` |
 | `@StaticSideEffects` | method | changes static state |
 | `@Nullable` / `@NotNull` | field, parameter, method | may be / is never `null` |
+| `@Fresh` | method | every object it returns was created during the call and is held nowhere else |
+| `@Borrowed` | parameter | nothing that outlives the call keeps the argument |
+| `@Owned`, `@Owned(elements=true)` | field | the object (or each element) is reachable only through this field's holder |
 | `…(after="m")` | type, method | the property holds once the mark `m` has been set, e.g. after a `freeze()` |
 
 ### Which hints you see
@@ -131,6 +155,11 @@ Many verdicts are the expected default in their context, and showing them all wo
 - **Positive only**: the guarantees (`@NotModified`, `@Immutable`, …);
 - **Negative only**: the warnings (`@Modified`, `@Mutable`, …);
 - **Off (gutter only)**: no hints; the icons keep everything.
+
+The last three describe *ownership*: who may hold an object. The tooltip or hover also says why an element is not
+`@Fresh`, `@Borrowed` or `@Owned`. A `@Borrowed` argument of immutable type is a context default (see below). By
+default maddi treats the project as a library, which anyone may call; when it is an application, say so (*Closed
+world*, under Settings), and many more parameters become `@Borrowed`.
 
 ## Library code
 
@@ -147,7 +176,7 @@ says which kind each is:
   defaults.
 
 Library hints appear once an analysis has finished in this IDE session; a library file opened during a run
-shows them when the run ends. A decompiled class (no sources) shows none. In Eclipse, the library's hints need
+shows them when the run ends. VS Code does not show them yet. A decompiled class (no sources) shows none. In Eclipse, the library's hints need
 code minings on, as the project's do (see *Turning the hints on*); its ruler icons do not.
 
 ## Writing your own contracts
@@ -191,19 +220,22 @@ the Java's is not in the Kotlin) and *ERROR* (not translated: the file will not 
 
 ## Settings
 
-IntelliJ: *Settings → Tools → maddi*. Eclipse: *Preferences → maddi*.
+IntelliJ: *Settings → Tools → maddi*. Eclipse: *Preferences → maddi*. VS Code: *Settings → Extensions → maddi*,
+per folder where it matters; the setting's id is in the last column.
 
-| Setting | Default | |
-|---|---|---|
-| maddi JDK | the IDE's newest JDK 25+ | the JDK the daemon runs on |
-| Daemon max heap (MB) | 4096 | raise it for a large project that runs out of memory |
-| Re-analyze automatically after a build | IntelliJ on, Eclipse off | Eclipse builds on every save |
-| Inline hints | Hide context defaults | see *Which hints you see* |
-| Hint placement | Above the declaration | or inline, after the name |
-| Show gutter / ruler icons | on | |
-| Mark guard contract violations | on | the problems for violated contracts |
-| Warn about near misses | off | |
-| Daemon install override | empty | a daemon built from source, for developing maddi itself |
+| Setting | Default | | VS Code |
+|---|---|---|---|
+| maddi JDK | the IDE's newest JDK 25+ (VS Code: none) | the JDK the daemon runs on | `maddi.jdkHome` |
+| Daemon max heap (MB) | 4096 | raise it for a large project that runs out of memory | `maddi.daemonXmxMb` |
+| Re-analyze automatically after a build | IntelliJ on, Eclipse off | Eclipse builds on every save | — |
+| Inline hints | Hide context defaults | see *Which hints you see* | `maddi.hints` |
+| Hint placement | Above the declaration | or inline, after the name | — (inline) |
+| Show gutter / ruler icons | on | | — |
+| Mark guard contract violations | on | the problems for violated contracts | — (always) |
+| Warn about near misses | off | | `maddi.warnNearMisses` |
+| Closed world | off | the project is an application: no code outside it calls its public methods. IntelliJ: *Tools → maddi: Project Is an Application (Closed World)*, per project | `maddi.closedWorld` |
+| Incremental re-analysis (experimental) | off | after an edit, re-analyse only the changed types and what depends on them; Java only; a result is never certified, so turn it off for a full run; changing it restarts the daemon | `maddi.incrementalReanalysis` |
+| Daemon install override | empty | a daemon built from source, for developing maddi itself | `maddi.daemonInstall` |
 
 IntelliJ also has the Kotlin settings below.
 
@@ -218,14 +250,16 @@ points at a front end you downloaded by hand.
 ## When something is wrong
 
 - **No hints at all**: see *Turning the hints on*. Then check that the analysis finished: the maddi tool window
-  (IntelliJ) or the maddi Findings view (Eclipse) says how the last run ended.
+  (IntelliJ), the maddi Findings view (Eclipse) or the **maddi** output channel (VS Code) says how the last run
+  ended. In VS Code, the analysis needs the Java extension in *Standard* mode, not *LightWeight*.
 - **"maddi needs a JDK 25 or later"**: add one to the IDE (see *Before you start*) or choose one in the settings.
+  In VS Code, set `maddi.jdkHome`.
 - **Results look incomplete**: some files did not parse, or the analysis stopped before it converged; the tool
   window says which. A partial result can show weaker verdicts than the code deserves.
 - **The translation says "a daemon from before the translate request"**: the daemon that answered is older than
   the plugin. *Restart daemon* in the maddi tool window, then translate again.
 - **The analysis fails**: the tool window has the message. The daemon's own log is next to the IDE's
   (IntelliJ: *Help → Show Log in Finder/Explorer*; Eclipse: `.metadata/.plugins/io.codelaser.maddi.eclipse/
-  maddi-daemon.log` in the workspace).
+  maddi-daemon.log` in the workspace; VS Code: the **maddi** output channel).
 
 Questions and bug reports: https://github.com/CodeLaser/maddi/issues.
