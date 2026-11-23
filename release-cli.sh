@@ -27,8 +27,8 @@
 # trial run unless MADDI_MCP_REGISTRY=publish; a failed publish warns and leaves the rest of the release standing.
 #
 # Then the VS Code extension goes to its two stores: the VS Code Marketplace with @vscode/vsce when VSCE_PAT holds a
-# token of the `codelaser` publisher (an Azure DevOps personal access token, scope Marketplace > Manage), and Open VSX
-# with ovsx when OVSX_PAT holds a token of the `codelaser` namespace there. Either left unset skips that store, as
+# token of the `CodeLaser` publisher (an Azure DevOps personal access token, scope Marketplace > Manage), and Open VSX
+# with ovsx when OVSX_PAT holds a token of the `CodeLaser` namespace there. Either left unset skips that store, as
 # does a trial run; a refused publish warns and leaves the rest of the release standing. The .vsix stays on the
 # GitHub release either way, for Install from VSIX.
 #

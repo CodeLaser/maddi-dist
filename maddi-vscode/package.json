@@ -3,7 +3,7 @@
   "displayName": "maddi",
   "description": "Modification, immutability and independence analysis for Java",
   "version": "0.9.7",
-  "publisher": "codelaser",
+  "publisher": "CodeLaser",
   "icon": "icon.png",
   "preview": true,
   "license": "Apache-2.0",
