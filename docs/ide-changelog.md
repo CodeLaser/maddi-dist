@@ -16,6 +16,7 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
   its public methods. A per-project toggle in IntelliJ's Tools menu, the `maddi.closedWorld` setting in VS Code, a
   workspace preference in Eclipse.
 - **The analysis is faster**: the engine runs fernflower, timefold and langchain4j in about half the time of 0.9.6.
+- VS Code: first release on the VS Code Marketplace and Open VSX, as a preview.
 - VS Code: the hover shows why each verdict holds, as the gutter and ruler do elsewhere, with links to the statements.
 - VS Code: a Stop command, also the cancel button of the progress notification; a daemon that dies ends the run at
   once.

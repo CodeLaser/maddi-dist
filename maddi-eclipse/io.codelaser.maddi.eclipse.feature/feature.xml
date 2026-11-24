@@ -2,7 +2,7 @@
 <feature
       id="io.codelaser.maddi.eclipse.feature"
       label="maddi"
-      version="0.9.6.qualifier"
+      version="0.9.7.qualifier"
       provider-name="CodeLaser">
 
    <description url="https://github.com/CodeLaser/maddi">

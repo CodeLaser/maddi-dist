@@ -98,7 +98,7 @@ settings; [`docs/ide-changelog.md`](docs/ide-changelog.md) what changed.
 |---|---|---|---|
 | IntelliJ IDEA 2025.3+ | *maddi* on [JetBrains Marketplace](https://plugins.jetbrains.com/) | `./gradlew :maddi-intellij:buildPlugin`, or `runIde` to try it | Java and Kotlin. The Kotlin front end is downloaded on demand from the release and checked against its SHA-256. Translate to Kotlin. |
 | Eclipse 2025-09+ | update site `https://codelaser.github.io/maddi-dist/eclipse/`, also on the Eclipse Marketplace | `task eclipse:build` (a p2 update site) | Java. [`maddi-eclipse/README.md`](maddi-eclipse/README.md) |
-| VS Code 1.90+ | not published yet | `task vscode:package` (a `.vsix`), then *Install from VSIX…* | Java. Needs `redhat.java` and `maddi.jdkHome`. [`maddi-vscode/README.md`](maddi-vscode/README.md) |
+| VS Code 1.90+ | *maddi* (`CodeLaser.maddi-vscode`) on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=CodeLaser.maddi-vscode) and [Open VSX](https://open-vsx.org/extension/CodeLaser/maddi-vscode); `maddi-vscode-<version>.vsix` on the GitHub release | `task vscode:package` (a `.vsix`), then *Install from VSIX…* | Java. Needs `redhat.java` and `maddi.jdkHome`. [`maddi-vscode/README.md`](maddi-vscode/README.md) |
 
 Two options are shared by all three, both off by default: *Incremental re-analysis (experimental)*, which after an
 edit re-analyses only what changed (never certified), and *Closed world*, which tells the ownership analysis that

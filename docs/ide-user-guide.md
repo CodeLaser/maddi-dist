@@ -28,7 +28,7 @@ they differ, each has its own short section. VS Code analyses Java only, and can
 |---|---|---|
 | IntelliJ IDEA | 2025.3 or later | *Settings → Plugins → Marketplace*, search for **maddi** |
 | Eclipse | 2025-09 or later | *Help → Install New Software… → Add…*, location `https://codelaser.github.io/maddi-dist/eclipse/` |
-| VS Code | 1.90 or later | not published yet: build the `.vsix` from [maddi-dist](https://github.com/CodeLaser/maddi-dist) with `task vscode:package`, then *Extensions → … → Install from VSIX…* |
+| VS Code | 1.90 or later | *Extensions*, search for **maddi** (`CodeLaser.maddi-vscode`, on the VS Code Marketplace and Open VSX); or download `maddi-vscode-<version>.vsix` from the [GitHub release](https://github.com/CodeLaser/maddi/releases), then *Extensions → … → Install from VSIX…* |
 
 ## Try it on a demo project
 
