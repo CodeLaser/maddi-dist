@@ -104,6 +104,10 @@
 #   type-use annotation's arguments are referenced too) replaced the one lambda of annotationsReferenced() in
 #   front of it ('ti -> new TypeReference(..)') by three ('ae -> {..}', 'kv -> ..', 'e -> true'): +2, as
 #   FieldReferenceImpl.$2 -> $0 on 11-21. Nothing else moved.
+# 2026-11-24, the maddi slowTest gate 45424678905 on laser1 (maddi 34e44f85c, maddi-mod c5ce22f9, maddi-dist 3b77f32):
+# 364 -> 365, CompilationUnitStub new, nothing lost; the same in a second run on the Mac at maddi-mod 37acd825. Its
+#   fields are a String and a 'SetOnce<List<TypeInfo>> types'. The range since the last slowTest gate holds maddi-mod#159
+#   (the holder's view) and maddi-all's guard work; which of them brought it is not traced.
 io.codelaser.maddi.cst.api.analysis.Codec.PropertyValue
 io.codelaser.maddi.cst.api.analysis.Codec.TypeAndSorted
 io.codelaser.maddi.cst.api.analysis.Message
@@ -294,6 +298,7 @@ io.codelaser.maddi.cst.impl.analysis.ValueTypes.Builder
 io.codelaser.maddi.cst.impl.analysis.ValueTypes.Site
 io.codelaser.maddi.cst.impl.analysis.ValueTypes.Verdict
 io.codelaser.maddi.cst.impl.element.CompilationUnitImpl
+io.codelaser.maddi.cst.impl.element.CompilationUnitStub
 io.codelaser.maddi.cst.impl.element.DetailedSourcesImpl
 io.codelaser.maddi.cst.impl.element.DetailedSourcesImpl.Prefix
 io.codelaser.maddi.cst.impl.element.ElementImpl
