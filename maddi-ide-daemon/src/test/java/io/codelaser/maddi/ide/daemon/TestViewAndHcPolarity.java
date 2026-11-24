@@ -114,10 +114,11 @@ public class TestViewAndHcPolarity {
         assertEquals("@Modified", added.text());
         assertEquals(AnnotationTagger.NEGATIVE, added.polarity());
 
-        // method: the same pair, on the object's own field
+        // method, on the object's own field: no longer a pair. X wrote 'List<Item> items', so to X the items are
+        // accessible content, and touchOwn modifies X itself (CodeLaser/maddi-mod#159, the holder's view)
         DaemonProtocol.Annotation touchOwn = one(annotationsFor(r, "METHOD", "X.touchOwn"), "@Modified");
-        assertEquals("@Modified(hc=true)", touchOwn.text());
-        assertEquals(AnnotationTagger.POSITIVE, touchOwn.polarity());
+        assertEquals("@Modified", touchOwn.text());
+        assertEquals(AnnotationTagger.NEGATIVE, touchOwn.polarity());
         DaemonProtocol.Annotation addOwn = one(annotationsFor(r, "METHOD", "X.addOwn"), "@Modified");
         assertEquals("@Modified", addOwn.text());
         assertEquals(AnnotationTagger.NEGATIVE, addOwn.polarity());
