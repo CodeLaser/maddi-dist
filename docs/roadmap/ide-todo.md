@@ -15,7 +15,7 @@ daemon keeps the inspector and the model, and finds the changed files itself (`W
 IDEs' own changed-file lists, the analysis carry onto rewired types (so the seed is the whole dependent cone), and the
 terminal passes, so an incremental result is never certified. Switched on by the plugins' "Incremental re-analysis
 (experimental)" setting (IntelliJ, Eclipse, VS Code; `MaddiDaemonProcess.incrementalJvmArgs`), by the MCP server's
-`--incremental`, or through the start script's environment: `MADDI_IDE_DAEMON_OPTS=-Dmaddi.daemon.warm=true`.
+`--incremental`, or, for a daemon started by hand from its start script: `MADDI_IDE_DAEMON_OPTS=-Dmaddi.daemon.warm=true`.
 
 **The first request after a restart (2026-11-12): stored results behind `-Dmaddi.daemon.persist`** (a directory, or
 `true` for `~/.maddi/daemon-results`; the MCP server's `--persist`). Every result is written to disk, keyed by the

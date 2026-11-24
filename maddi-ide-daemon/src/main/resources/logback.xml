@@ -8,8 +8,8 @@
   maddi-daemon.log, so every DEBUG line lands on the user's disk.
   Measured 2026-08-21 on Apache Pulsar, 98 source roots: 880 MB in roughly six minutes of analysis.
 
-  The daemon runs from the `application` start script on a class path rather than a module path, so this file
-  is found in the ordinary way; see bin/maddi-ide-daemon.
+  The daemon runs on a class path rather than a module path, so this file is found in the ordinary way; see
+  bin/maddi-ide-daemon.launch, from which the launchers start it.
 
   INFO is not silent on a large project. Measured over one whole-tree analysis (37,347 INFO lines),
   io.codelaser.maddi.modification.link.impl.LinkComputerImpl alone accounted for 29,934 of them (80%), because

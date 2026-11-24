@@ -40,9 +40,19 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Launches the bundled maddi daemon distribution (the {@code installDist} layout: a {@code bin/}
- * launcher + {@code lib/*.jar}) on a chosen JDK (25+), and reads back the ephemeral port it prints.
- * Plain JDK only — no IntelliJ types — so it is unit-testable against a real install.
+ * Launches the bundled maddi daemon distribution (the {@code installDist} layout: {@code bin/} + {@code lib/*.jar})
+ * on a chosen JDK (25+), and reads back the ephemeral port it prints. Plain JDK only — no IntelliJ types — so it is
+ * unit-testable against a real install.
+ * <p>
+ * It starts {@code java} itself, from the distribution's {@code bin/maddi-ide-daemon.launch}, and not through the
+ * start scripts in {@code bin/} (maddi-dist#9): the Windows {@code .bat} spells out every jar in one line, which
+ * {@code cmd.exe} refuses past 8191 characters, so whether the daemon started depended on how long the install path
+ * was; and Node, for the VS Code extension, does not spawn a {@code .bat} at all without a shell.
+ * <p>
+ * The class path names the jars relative to the install directory, which is the daemon's working directory:
+ * {@code lib/<jar>}, about 2,400 characters for the 59 jars of 0.9.7, whatever the install path. Not absolute paths in
+ * an {@code @argfile}: the launcher reads an argfile in the platform's encoding, the ANSI code page on Windows, so a
+ * user name outside it would break the class path. Each JVM argument is an argument of its own.
  */
 public final class DaemonLauncher {
     /**
@@ -54,9 +64,39 @@ public final class DaemonLauncher {
     private static final Pattern PORT_LINE = Pattern.compile("DAEMON_PORT=(\\d+)");
     private static final Pattern PID_LINE = Pattern.compile("DAEMON_PID=(\\d+)");
     private static final int TAIL_LINES = 30;
+    static final String LAUNCH_FILE = "maddi-ide-daemon.launch";
     // end of the daemon's output; compared by identity
     @SuppressWarnings("StringOperationCanBeSimplified")
     private static final String END = new String("<end of output>");
+
+    /** The distribution's launch description: main class, JVM arguments, and the jars of {@code lib/} in order. */
+    record LaunchFile(String mainClass, List<String> jvmArgs, List<String> jars) {
+        static LaunchFile read(Path installDir) throws IOException {
+            Path file = installDir.resolve("bin").resolve(LAUNCH_FILE);
+            if (!Files.isRegularFile(file)) {
+                throw new IOException("daemon launch description not found: " + file
+                                      + " (did :maddi-ide-daemon:installDist run?)");
+            }
+            String main = null;
+            List<String> jvm = new ArrayList<>();
+            List<String> jars = new ArrayList<>();
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                if (line.isBlank() || line.startsWith("#")) continue;
+                int eq = line.indexOf('=');
+                if (eq < 0) throw new IOException("malformed line in " + file + ": " + line);
+                String key = line.substring(0, eq);
+                String value = line.substring(eq + 1);
+                switch (key) {
+                    case "main" -> main = value;
+                    case "jvm" -> jvm.add(value);
+                    case "lib" -> jars.add(value);
+                    default -> throw new IOException("unknown key '" + key + "' in " + file);
+                }
+            }
+            if (main == null || jars.isEmpty()) throw new IOException("incomplete launch description: " + file);
+            return new LaunchFile(main, List.copyOf(jvm), List.copyOf(jars));
+        }
+    }
 
     /** A running daemon: its process, the port it listens on, and (best-effort) its pid. */
     public record Handle(Process process, int port, long pid) implements Closeable {
@@ -84,37 +124,77 @@ public final class DaemonLauncher {
         return launch(installDir, jdkHome, jvmArgs, Map.of(), startTimeoutMillis, logFile);
     }
 
-    /**
-     * As above, with extra environment variables for the daemon process. A path goes here rather than in
-     * {@code jvmArgs}: those travel as one space-joined {@code JAVA_OPTS}, which splits a path containing a space.
-     */
+    /** As above, with extra environment variables for the daemon process. */
     public Handle launch(Path installDir, Path jdkHome, List<String> jvmArgs, Map<String, String> environment,
                          long startTimeoutMillis, Path logFile)
             throws IOException {
-        Path launcher = launcherScript(installDir);
-        // A bundle that ships the daemon via a copy step (e.g. the Eclipse plugin) may lose the executable
-        // bit; restore it. No-op on Windows and when already executable.
-        launcher.toFile().setExecutable(true, false);
-        List<String> command = new ArrayList<>();
-        command.add(launcher.toAbsolutePath().toString());
-        command.add("--port");
-        command.add("0");
-
+        LaunchFile launchFile = LaunchFile.read(installDir);
+        List<String> command = command(jdkHome, System.getenv("JAVA_HOME"), windows(), launchFile, jvmArgs);
         ProcessBuilder pb = new ProcessBuilder(command);
+        // the class path is relative to it
         pb.directory(installDir.toFile());
         pb.redirectErrorStream(true);
-        if (jdkHome != null) {
-            pb.environment().put("JAVA_HOME", jdkHome.toAbsolutePath().toString());
-        }
-        if (jvmArgs != null && !jvmArgs.isEmpty()) {
-            // the Gradle 'application' start script honours JAVA_OPTS / DEFAULT_JVM_OPTS
-            pb.environment().put("JAVA_OPTS", String.join(" ", jvmArgs));
-        }
+        // the daemon itself may run builds, which look for JAVA_HOME
+        if (jdkHome != null) pb.environment().put("JAVA_HOME", jdkHome.toAbsolutePath().toString());
         // this process, unless the caller names another (a test standing in for an IDE that dies)
         pb.environment().put(ENV_PARENT_PID, Long.toString(ProcessHandle.current().pid()));
         if (environment != null) pb.environment().putAll(environment);
+        Process process;
+        try {
+            process = pb.start();
+        } catch (IOException e) {
+            throw new IOException("could not start the maddi daemon with " + command.getFirst()
+                                  + (jdkHome == null ? " (no JDK configured: JAVA_HOME, else the PATH)" : "")
+                                  + ": " + e.getMessage(), e);
+        }
+        return awaitPort(process, jdkHome, startTimeoutMillis, logFile);
+    }
 
-        Process process = pb.start();
+    /**
+     * {@code <java> <the launch file's JVM args> <jvmArgs> -cp lib/<jar>... <main> --port 0}, to run in the install
+     * directory. Without a {@code jdkHome}, the {@code java} of {@code JAVA_HOME}, else the one on the {@code PATH},
+     * as the start scripts chose.
+     */
+    static List<String> command(Path jdkHome, String javaHomeVariable, boolean windows, LaunchFile launchFile,
+                                List<String> jvmArgs) {
+        String exe = windows ? "java.exe" : "java";
+        String java;
+        if (jdkHome != null) {
+            java = jdkHome.toAbsolutePath().resolve("bin").resolve(exe).toString();
+        } else if (javaHomeVariable != null && !javaHomeVariable.isBlank()) {
+            java = Path.of(javaHomeVariable).resolve("bin").resolve(exe).toString();
+        } else {
+            java = exe;
+        }
+        List<String> command = new ArrayList<>();
+        command.add(java);
+        command.addAll(launchFile.jvmArgs());
+        if (jvmArgs != null) command.addAll(jvmArgs);
+        command.add("-cp");
+        command.add(classPath(launchFile, windows));
+        command.add(launchFile.mainClass());
+        command.add("--port");
+        command.add("0");
+        return command;
+    }
+
+    /** The jars of {@code lib/}, relative to the install directory, in the launch file's order. */
+    static String classPath(LaunchFile launchFile, boolean windows) {
+        String separator = windows ? ";" : ":";
+        String prefix = windows ? "lib\\" : "lib/";
+        StringBuilder classPath = new StringBuilder();
+        for (String jar : launchFile.jars()) {
+            if (!classPath.isEmpty()) classPath.append(separator);
+            classPath.append(prefix).append(jar);
+        }
+        return classPath.toString();
+    }
+
+    private static boolean windows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private Handle awaitPort(Process process, Path jdkHome, long startTimeoutMillis, Path logFile) throws IOException {
         Writer log = openLog(logFile);
         BufferedReader stdout = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
@@ -203,16 +283,6 @@ public final class DaemonLauncher {
         }
         if (logFile != null) sb.append("Full output: ").append(logFile);
         return sb.toString().strip();
-    }
-
-    private static Path launcherScript(Path installDir) throws IOException {
-        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
-        String name = windows ? "maddi-ide-daemon.bat" : "maddi-ide-daemon";
-        Path script = installDir.resolve("bin").resolve(name);
-        if (!Files.isRegularFile(script)) {
-            throw new IOException("daemon launcher not found: " + script + " (did :maddi-ide-daemon:installDist run?)");
-        }
-        return script;
     }
 
     private static void drainInBackground(BlockingQueue<String> lines, Writer log) {

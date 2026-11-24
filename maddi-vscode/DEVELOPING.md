@@ -80,9 +80,10 @@ The daemon distribution has to be reachable. Either build it and point `maddi.da
 ./gradlew :maddi-ide-daemon:installDist   # -> maddi-ide-daemon/build/install/maddi-ide-daemon
 ```
 
-or copy that tree to `maddi-vscode/daemon/`, which is where a packaged extension looks. Note the launcher
-loses its executable bit inside a `.vsix` (a zip, exactly as a p2 install and a Maven copy do); the launcher
-restores it before spawning.
+or copy that tree to `maddi-vscode/daemon/`, which is where a packaged extension looks. The extension does not
+run the start scripts in `bin/`: it starts `<maddi.jdkHome>/bin/java` with what `bin/maddi-ide-daemon.launch` lists,
+the class path relative to the daemon directory (`daemonLauncher.ts`, maddi-dist#9). Node does not spawn a `.bat`
+without a shell, and the `.bat` failed on a long install path anyway.
 
 ## Tests
 

@@ -99,10 +99,11 @@ under `~/.m2/repository/.cache/tycho`.
 
 ## Two things worth knowing
 
-**The bundle must be installed unpacked.** It carries the daemon as a distribution with a launch script that
-has to be a real file on disk. That is why the manifest says `Eclipse-BundleShape: dir` and the feature says
+**The bundle must be installed unpacked.** It carries the daemon as a distribution (`daemon/bin/` and
+`daemon/lib/*.jar`) that has to be real files on disk: the launcher starts `java` on those jars. That is why the manifest says `Eclipse-BundleShape: dir` and the feature says
 `unpack="true"`; drop either and the plugin installs as a jar and cannot start its analyzer.
 
-**p2 does not preserve the executable bit** on that launch script, so a freshly installed plugin has a
-non-executable `daemon/bin/maddi-ide-daemon`. `DaemonLauncher` restores it before launching, which is the
-only reason installs work — do not remove that call.
+**p2 does not preserve the executable bit**, so a freshly installed plugin has a non-executable
+`daemon/bin/maddi-ide-daemon`. Since 0.9.7 that does not matter: `DaemonLauncher` runs the JDK's `java` with the
+main class, JVM options and jars that `daemon/bin/maddi-ide-daemon.launch` lists, not the start scripts
+(maddi-dist#9: the Windows `.bat` failed on a long install path).

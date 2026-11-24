@@ -24,6 +24,8 @@ section in plain bullets: `- ` items, with `**bold**` and `` `code` `` as the on
 - VS Code: hints follow their declarations through edits; Analyze saves the Java editors first, and asking during a
   run queues one more.
 - VS Code: fixed, no hints on a workspace opened through a symbolic link.
+- The daemon is started as `java` on its jars, no longer through its start script, whose Windows version failed on
+  a long install path. JVM options in `JAVA_OPTS` or `MADDI_IDE_DAEMON_OPTS` no longer reach it.
 - Eclipse: the plugin bundles the current client, no longer a stale one.
 - IntelliJ: no deprecated or internal platform API.
 - A project with many source sets needs far less memory: one copy of each jar, not one per source set.

@@ -80,8 +80,8 @@ public final class DaemonMain {
 
     /**
      * The environment variable a front end sets to the directory of K2 jars it installed. An environment variable
-     * rather than a {@code -D}: the launcher passes JVM options as one space-joined {@code JAVA_OPTS}, which would
-     * split a path containing a space. Mirrors {@code KotlinFrontEndInstaller.ENV_K2_HOME} in maddi-ide-client.
+     * rather than a {@code -D}: until 0.9.7 the launcher passed JVM options as one space-joined {@code JAVA_OPTS},
+     * which would split a path containing a space. Mirrors {@code KotlinFrontEndInstaller.ENV_K2_HOME} in maddi-ide-client.
      */
     static final String ENV_K2_HOME = "MADDI_K2_HOME";
 

@@ -63,7 +63,8 @@ distributions {
             // found by McpMain next to lib/, unless --daemon-install says otherwise
             from(project(":maddi-ide-daemon").tasks.named("installDist")) {
                 into("daemon")
-                // the server runs daemon/bin/maddi-ide-daemon: the zip, unlike installDist, would drop its x bit
+                // the server starts java from daemon/bin/maddi-ide-daemon.launch; the start scripts stay executable for
+                // a daemon started by hand (the zip, unlike installDist, would drop their x bit)
                 filesMatching("bin/*") { permissions { unix("rwxr-xr-x") } }
             }
             // the zip is published on the GitHub release (release-cli.sh): the licence and what it bundles
@@ -112,7 +113,7 @@ tasks.register<Zip>("mcpb") {
     from("mcpb") {
         filesMatching("manifest.json") { filter { it.replace("@VERSION@", version) } }
     }
-    // the manifest runs bin/maddi-mcp through /bin/sh, but the server runs daemon/bin/maddi-ide-daemon itself
+    // the manifest runs bin/maddi-mcp through /bin/sh; daemon/bin/ as in the zip above
     filesMatching(listOf("bin/*", "daemon/bin/*")) { permissions { unix("rwxr-xr-x") } }
     dependsOn(checkThirdPartyNotices)
 }

@@ -34,36 +34,76 @@ export interface LaunchOptions {
     log?: (line: string) => void;
 }
 
-export function launcherPath(installDir: string): string {
-    const name = process.platform === 'win32' ? 'maddi-ide-daemon.bat' : 'maddi-ide-daemon';
-    return path.join(installDir, 'bin', name);
+/** The distribution's launch description, `bin/maddi-ide-daemon.launch`: main class, JVM arguments, jars of `lib/`. */
+export interface LaunchFile {
+    mainClass: string;
+    jvmArgs: string[];
+    jars: string[];
+}
+
+export function launchFilePath(installDir: string): string {
+    return path.join(installDir, 'bin', 'maddi-ide-daemon.launch');
+}
+
+export function parseLaunchFile(text: string, where: string): LaunchFile {
+    let mainClass: string | undefined;
+    const jvmArgs: string[] = [];
+    const jars: string[] = [];
+    for (const raw of text.split(/\r?\n/)) {
+        if (raw.trim() === '' || raw.startsWith('#')) continue;
+        const eq = raw.indexOf('=');
+        if (eq < 0) throw new Error(`malformed line in ${where}: ${raw}`);
+        const key = raw.substring(0, eq);
+        const value = raw.substring(eq + 1);
+        if (key === 'main') mainClass = value;
+        else if (key === 'jvm') jvmArgs.push(value);
+        else if (key === 'lib') jars.push(value);
+        else throw new Error(`unknown key '${key}' in ${where}`);
+    }
+    if (mainClass === undefined || jars.length === 0) throw new Error(`incomplete launch description: ${where}`);
+    return { mainClass, jvmArgs, jars };
+}
+
+/**
+ * The command that starts the daemon, run in the install directory: `<jdk>/bin/java`, the JVM arguments, a class
+ * path of `lib/<jar>` relative to the install directory, the main class, `--port 0`.
+ *
+ * Not the start scripts in `bin/` (maddi-dist#9): Node does not spawn a `.bat` without a shell, and the `.bat` spells
+ * out every jar with its absolute path in one line, which cmd.exe refuses past 8191 characters. The relative class
+ * path stays about 2,400 characters whatever the install path, and holds no character outside ASCII.
+ */
+export function daemonCommand(launch: LaunchFile, jdkHome: string, extraJvmArgs: string[],
+                              windows: boolean): { java: string; args: string[] } {
+    const p = windows ? path.win32 : path.posix;
+    const java = p.join(jdkHome, 'bin', windows ? 'java.exe' : 'java');
+    const classPath = launch.jars.map((jar) => p.join('lib', jar)).join(windows ? ';' : ':');
+    return {
+        java,
+        args: [...launch.jvmArgs, ...extraJvmArgs, '-cp', classPath, launch.mainClass, '--port', '0'],
+    };
 }
 
 export async function launchDaemon(options: LaunchOptions): Promise<DaemonHandle> {
-    const launcher = launcherPath(options.installDir);
-    if (!fs.existsSync(launcher)) {
-        throw new Error(`no daemon launcher at ${launcher}; set maddi.daemonInstall`);
+    const launchFile = launchFilePath(options.installDir);
+    if (!fs.existsSync(launchFile)) {
+        throw new Error(`no daemon launch description at ${launchFile}; set maddi.daemonInstall`);
     }
-    // Packaging strips the executable bit (a .vsix is a zip, exactly as p2 and Maven copies do), so restore
-    // it rather than failing with a bare EACCES the user cannot act on.
-    if (process.platform !== 'win32') {
-        try {
-            fs.chmodSync(launcher, 0o755);
-        } catch {
-            // if this fails the spawn below reports the real problem
-        }
-    }
+    const launch = parseLaunchFile(fs.readFileSync(launchFile, 'utf8'), launchFile);
+    const extraJvmArgs = [`-Xmx${options.maxHeapMb}m`, '-XX:+UseG1GC'];
+    if (options.incremental) extraJvmArgs.push('-Dmaddi.daemon.warm=true');
+    const { java, args } = daemonCommand(launch, options.jdkHome, extraJvmArgs, process.platform === 'win32');
 
-    const child = spawn(launcher, ['--port', '0'], {
+    const child = spawn(java, args, {
         env: {
             ...process.env,
+            // the daemon itself may run builds, which look for JAVA_HOME
             JAVA_HOME: options.jdkHome,
-            JAVA_OPTS: `-Xmx${options.maxHeapMb}m -XX:+UseG1GC`
-                + (options.incremental ? ' -Dmaddi.daemon.warm=true' : ''),
             // the daemon exits when this process (the extension host) does, also when it never gets to stop it
             MADDI_PARENT_PID: String(process.pid),
         },
+        // the class path is relative to it
         cwd: options.installDir,
+        windowsHide: true,
     });
 
     const timeoutMs = options.timeoutMs ?? 60_000;
@@ -102,8 +142,8 @@ export async function launchDaemon(options: LaunchOptions): Promise<DaemonHandle
 }
 
 /**
- * Kill the daemon now, whatever it is doing. On Unix the launcher script `exec`s java, so the child IS the JVM; on
- * Windows the `.bat` leaves java running as a grandchild, which only killing the tree reaches.
+ * Kill the daemon now, whatever it is doing. The child is the JVM itself; on Windows the tree is killed as well, for
+ * whatever the daemon started.
  */
 export function killDaemon(handle: DaemonHandle): void {
     const pid = handle.process.pid;
