@@ -34,14 +34,17 @@ the annotations you would otherwise write by hand: whether a type is immutable o
 modifies its object, whether a parameter is changed by the call, what may be <code class="notranslate">null</code>. It also checks the<br>
 annotations you <em>did</em> write, and reports a contract the code breaks. In IntelliJ it can also translate Java to<br>
 Kotlin, using those verdicts.</p>
-<p>This guide covers the IntelliJ IDEA and Eclipse plugins. They work the same way; where they differ, each has its<br>
-own short section.</p>
+<p>This guide covers the IntelliJ IDEA and Eclipse plugins and the VS Code extension. They work the same way; where<br>
+they differ, each has its own short section. VS Code analyses Java only, and cannot translate to Kotlin.</p>
 <h2>Before you start</h2>
 <ul>
 <li><strong>A JDK 25 or later.</strong> The analysis runs in a separate process (the <em>daemon</em>, bundled with the plugin), and that<br>
 process needs JDK 25+. The IDE itself can keep running on whatever it runs on. The plugin picks a JDK 25+ the<br>
 IDE already knows about; if there is none, add one (IntelliJ: <em>File → Project Structure → SDKs</em>; Eclipse:<br>
-<em>Preferences → Java → Installed JREs</em>) or choose one in the maddi settings.</li>
+<em>Preferences → Java → Installed JREs</em>) or choose one in the maddi settings. VS Code does not pick one: set<br>
+<code class="notranslate">maddi.jdkHome</code> to the JDK's home directory (the first analysis offers to open the setting).</li>
+<li><strong>VS Code: the Java extension.</strong> The extension asks <em>Language Support for Java</em> (<code class="notranslate">redhat.java</code>) for the project<br>
+model and the compiled classes, and VS Code installs it with maddi.</li>
 <li><strong>A project that compiles.</strong> maddi reads your sources and the compiled classes next to them. The plugin builds<br>
 the project before each analysis. Files that do not parse are left out and the result says so; the rest is<br>
 still analysed.</li>
@@ -66,6 +69,11 @@ still analysed.</li>
 <td>2025-09 or later</td>
 <td><em>Help → Install New Software… → Add…</em>, location <code class="notranslate">https://codelaser.github.io/maddi-dist/eclipse/</code></td>
 </tr>
+<tr>
+<td>VS Code</td>
+<td>1.90 or later</td>
+<td><em>Extensions</em>, search for <strong>maddi</strong> (<code class="notranslate">CodeLaser.maddi-vscode</code>, on the VS Code Marketplace and Open VSX); or download <code class="notranslate">maddi-vscode-&lt;version&gt;.vsix</code> from the <a href="https://github.com/CodeLaser/maddi/releases">GitHub release</a>, then <em>Extensions → … → Install from VSIX…</em></td>
+</tr>
 </tbody>
 </table></markdown-accessiblity-table>
 <h2>Try it on a demo project</h2>
@@ -78,25 +86,34 @@ saying what to look for:</p>
 <p>Each has an <code class="notranslate">EXPECTED-HINTS.md</code> listing, per declaration, what the analysis computes, so you can tell a missing<br>
 hint from a broken setup, and a package <code class="notranslate">demo.guard</code> whose contracts are wrong on purpose, to see a violation and<br>
 its reasoning. Clone one and open it: IntelliJ, <em>File → Open</em> on the directory; Eclipse (Java demo), <em>File →<br>
-Import… → Maven → Existing Maven Projects</em>. Then run the analysis as below.</p>
+Import… → Maven → Existing Maven Projects</em>; VS Code (Java demo), <em>File → Open Folder…</em>. Then run the analysis as<br>
+below.</p>
 <h2>Your first analysis</h2>
 <ul>
 <li>IntelliJ: <em>Tools → Analyze with maddi</em>. The <strong>maddi</strong> tool window (bottom) shows the run.</li>
 <li>Eclipse: <em>Project → Analyze with maddi</em>, or right-click a Java project. <em>Window → Show View → Other… → maddi →<br>
 maddi Findings</em> shows the run.</li>
+<li>VS Code: <em>Analyze with maddi</em> in the Command Palette, with a Java file open in the folder to analyse. A<br>
+notification shows the run's progress, and the <strong>maddi</strong> output channel its log. The Java extension must have<br>
+finished loading the project (its status bar item no longer spins); maddi waits for it, and for its build.</li>
 </ul>
 <p>The first run starts the daemon and loads maddi's knowledge of the JDK and common libraries; later runs reuse<br>
 the daemon. Hints appear in open editors while the analysis is still running and fill in as it goes. A large<br>
-project can take minutes: the tool window shows the phase, the pass and the elapsed time.</p>
+project can take minutes: the tool window shows the phase, the pass and the elapsed time. VS Code saves the open<br>
+Java editors first, since the analysis reads the files on disk; asking again during a run starts one more run when<br>
+it ends.</p>
 <h3>Stopping a run</h3>
 <p>Any of these stops a running analysis at once:</p>
 <ul>
 <li>the <strong>Stop</strong> button in the maddi tool window (IntelliJ) or the maddi Findings view (Eclipse);</li>
-<li><em>Tools → Stop maddi Analysis</em> (IntelliJ), <em>Project → Stop maddi Analysis</em> (Eclipse);</li>
-<li>the cancel button on the progress bar (IntelliJ) or in the Progress view (Eclipse).</li>
+<li><em>Tools → Stop maddi Analysis</em> (IntelliJ), <em>Project → Stop maddi Analysis</em> (Eclipse), <em>Stop maddi Analysis</em> in<br>
+the Command Palette (VS Code);</li>
+<li>the cancel button on the progress bar (IntelliJ), in the Progress view (Eclipse) or on the progress<br>
+notification (VS Code).</li>
 </ul>
 <p>What the run had shown so far stays in the editor. The next analysis starts from scratch.</p>
-<p>Closing the IDE stops the daemon too, also in the middle of a run.</p>
+<p>Closing the IDE stops the daemon too, also in the middle of a run. In VS Code, stopping ends the daemon itself, and<br>
+what the run had shown is marked provisional; the next analysis starts a new daemon.</p>
 <h2>Turning the hints on</h2>
 <h3>IntelliJ IDEA</h3>
 <p>Hints are on by default. If you see none after an analysis:</p>
@@ -115,20 +132,26 @@ once:</p>
 </ol>
 <p>Without this, the analysis runs and the ruler icons and problems appear, but no hints. <em>Preferences → maddi →<br>
 Show hints in the editor</em> must be ticked too (it is by default).</p>
+<h3>VS Code</h3>
+<p>Hints are on by default, as inlay hints. If you see none, <em>Editor › Inlay Hints: Enabled</em> must not be <code class="notranslate">off</code>, and<br>
+<code class="notranslate">maddi.hints</code> must not be <code class="notranslate">none</code>. VS Code shows the hints inline, after the name, and has no line of their own<br>
+above a declaration.</p>
 <h2>Reading the results</h2>
 <p>maddi shows its results on three surfaces:</p>
 <ul>
 <li><strong>Hints</strong>: the computed annotations, on a line of their own above each type, method and field, and before<br>
 each parameter, where you would write them. <em>Hint placement</em> in the settings puts them after the name instead.</li>
-<li><strong>Gutter (IntelliJ) / ruler (Eclipse) icons</strong>: on each analysed type, method and field. The tooltip has the<br>
+<li><strong>Gutter (IntelliJ) / ruler (Eclipse) icons, hover (VS Code)</strong>: on each analysed type, method and field; in<br>
+VS Code, hover over a hint. The tooltip or hover has the<br>
 full set, each parameter's included, and the reasons: under each annotation that has one, the chain of<br>
 statements behind it, from the element to the statement that decides it (<code class="notranslate">⇐ line 9: calls store(..)</code>). A method,<br>
 field or parameter that is <code class="notranslate">@Modified</code>, <code class="notranslate">@Dependent</code> or <code class="notranslate">@Nullable</code>, and a method with <code class="notranslate">@StaticSideEffects</code>, says<br>
 why. A type below <code class="notranslate">@Immutable</code> says which rule it fails, at the member that fails it. A type that is not<br>
 <code class="notranslate">@Container</code>, but is at most 2 parameters away from it, says so under <code class="notranslate">not @Container:</code>, one line per parameter<br>
 that is modified. A verdict that holds only after a mark (see <code class="notranslate">after=</code> below) has an icon of its own (Eclipse: a<br>
-ring instead of a dot).</li>
-<li><strong>Problems</strong>: a contract you wrote that the code breaks, underlined, with the reasoning that led to it.</li>
+ring instead of a dot). In VS Code each step of the chain is a link to its statement.</li>
+<li><strong>Problems</strong>: a contract you wrote that the code breaks, underlined, with the reasoning that led to it (in VS<br>
+Code, in the <em>Problems</em> panel, the reasoning as related information).</li>
 </ul>
 <h3>What the annotations mean</h3>
 <markdown-accessiblity-table><table role="table">
@@ -211,6 +234,21 @@ ring instead of a dot).</li>
 <td>may be / is never <code class="notranslate">null</code></td>
 </tr>
 <tr>
+<td><code class="notranslate">@Fresh</code></td>
+<td>method</td>
+<td>every object it returns was created during the call and is held nowhere else</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Borrowed</code></td>
+<td>parameter</td>
+<td>nothing that outlives the call keeps the argument</td>
+</tr>
+<tr>
+<td><code class="notranslate">@Owned</code>, <code class="notranslate">@Owned(elements=true)</code></td>
+<td>field</td>
+<td>the object (or each element) is reachable only through this field's holder</td>
+</tr>
+<tr>
 <td><code class="notranslate">…(after="m")</code></td>
 <td>type, method</td>
 <td>the property holds once the mark <code class="notranslate">m</code> has been set, e.g. after a <code class="notranslate">freeze()</code></td>
@@ -229,6 +267,10 @@ ring instead of a dot).</li>
 <li><strong>Negative only</strong>: the warnings (<code class="notranslate">@Modified</code>, <code class="notranslate">@Mutable</code>, …);</li>
 <li><strong>Off (gutter only)</strong>: no hints; the icons keep everything.</li>
 </ul>
+<p>The last three describe <em>ownership</em>: who may hold an object. The tooltip or hover also says why an element is not<br>
+<code class="notranslate">@Fresh</code>, <code class="notranslate">@Borrowed</code> or <code class="notranslate">@Owned</code>. A <code class="notranslate">@Borrowed</code> argument of immutable type is a context default (see below). By<br>
+default maddi treats the project as a library, which anyone may call; when it is an application, say so (<em>Closed<br>
+world</em>, under Settings), and many more parameters become <code class="notranslate">@Borrowed</code>.</p>
 <h2>Library code</h2>
 <p>Follow a call into the JDK or a library (<code class="notranslate">Set.add</code>, <code class="notranslate">List.of</code>) after an analysis, and the library's source shows<br>
 the hints and icons too, provided the IDE has the library's sources (the JDK's <code class="notranslate">src.zip</code>, a sources jar).<br>
@@ -243,7 +285,7 @@ assumes the safe answer: the method may modify;</li>
 defaults.</li>
 </ul>
 <p>Library hints appear once an analysis has finished in this IDE session; a library file opened during a run<br>
-shows them when the run ends. A decompiled class (no sources) shows none. In Eclipse, the library's hints need<br>
+shows them when the run ends. VS Code does not show them yet. A decompiled class (no sources) shows none. In Eclipse, the library's hints need<br>
 code minings on, as the project's do (see <em>Turning the hints on</em>); its ruler icons do not.</p>
 <h2>Writing your own contracts</h2>
 <p>Annotate your code with maddi's annotations (<code class="notranslate">io.codelaser:maddi-annotation</code>) to state what a type or method<br>
@@ -278,60 +320,83 @@ While an analysis is running the action waits: start it again when the run has f
 the Java's is not in the Kotlin) and <em>ERROR</em> (not translated: the file will not compile as is). Read the<br>
 <em>BEHAVIOUR_CHANGE</em> and <em>ERROR</em> lines before replacing the sources.</p>
 <h2>Settings</h2>
-<p>IntelliJ: <em>Settings → Tools → maddi</em>. Eclipse: <em>Preferences → maddi</em>.</p>
+<p>IntelliJ: <em>Settings → Tools → maddi</em>. Eclipse: <em>Preferences → maddi</em>. VS Code: <em>Settings → Extensions → maddi</em>,<br>
+per folder where it matters; the setting's id is in the last column.</p>
 <markdown-accessiblity-table><table role="table">
 <thead>
 <tr>
 <th>Setting</th>
 <th>Default</th>
 <th></th>
+<th>VS Code</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>maddi JDK</td>
-<td>the IDE's newest JDK 25+</td>
+<td>the IDE's newest JDK 25+ (VS Code: none)</td>
 <td>the JDK the daemon runs on</td>
+<td><code class="notranslate">maddi.jdkHome</code></td>
 </tr>
 <tr>
 <td>Daemon max heap (MB)</td>
 <td>4096</td>
 <td>raise it for a large project that runs out of memory</td>
+<td><code class="notranslate">maddi.daemonXmxMb</code></td>
 </tr>
 <tr>
 <td>Re-analyze automatically after a build</td>
 <td>IntelliJ on, Eclipse off</td>
 <td>Eclipse builds on every save</td>
+<td>—</td>
 </tr>
 <tr>
 <td>Inline hints</td>
 <td>Hide context defaults</td>
 <td>see <em>Which hints you see</em></td>
+<td><code class="notranslate">maddi.hints</code></td>
 </tr>
 <tr>
 <td>Hint placement</td>
 <td>Above the declaration</td>
 <td>or inline, after the name</td>
+<td>— (inline)</td>
 </tr>
 <tr>
 <td>Show gutter / ruler icons</td>
 <td>on</td>
 <td></td>
+<td>—</td>
 </tr>
 <tr>
 <td>Mark guard contract violations</td>
 <td>on</td>
 <td>the problems for violated contracts</td>
+<td>— (always)</td>
 </tr>
 <tr>
 <td>Warn about near misses</td>
 <td>off</td>
 <td></td>
+<td><code class="notranslate">maddi.warnNearMisses</code></td>
+</tr>
+<tr>
+<td>Closed world</td>
+<td>off</td>
+<td>the project is an application: no code outside it calls its public methods. IntelliJ: <em>Tools → maddi: Project Is an Application (Closed World)</em>, per project</td>
+<td><code class="notranslate">maddi.closedWorld</code></td>
+</tr>
+<tr>
+<td>Incremental re-analysis (experimental)</td>
+<td>off</td>
+<td>after an edit, re-analyse only the changed types and what depends on them; Java only; a result is never certified, so turn it off for a full run; changing it restarts the daemon</td>
+<td><code class="notranslate">maddi.incrementalReanalysis</code></td>
 </tr>
 <tr>
 <td>Daemon install override</td>
 <td>empty</td>
 <td>a daemon built from source, for developing maddi itself</td>
+<td><code class="notranslate">maddi.daemonInstall</code></td>
 </tr>
 </tbody>
 </table></markdown-accessiblity-table>
@@ -345,17 +410,19 @@ points at a front end you downloaded by hand.</p>
 <h2>When something is wrong</h2>
 <ul>
 <li><strong>No hints at all</strong>: see <em>Turning the hints on</em>. Then check that the analysis finished: the maddi tool window<br>
-(IntelliJ) or the maddi Findings view (Eclipse) says how the last run ended.</li>
-<li><strong>"maddi needs a JDK 25 or later"</strong>: add one to the IDE (see <em>Before you start</em>) or choose one in the settings.</li>
+(IntelliJ), the maddi Findings view (Eclipse) or the <strong>maddi</strong> output channel (VS Code) says how the last run<br>
+ended. In VS Code, the analysis needs the Java extension in <em>Standard</em> mode, not <em>LightWeight</em>.</li>
+<li><strong>"maddi needs a JDK 25 or later"</strong>: add one to the IDE (see <em>Before you start</em>) or choose one in the settings.<br>
+In VS Code, set <code class="notranslate">maddi.jdkHome</code>.</li>
 <li><strong>Results look incomplete</strong>: some files did not parse, or the analysis stopped before it converged; the tool<br>
 window says which. A partial result can show weaker verdicts than the code deserves.</li>
 <li><strong>The translation says "a daemon from before the translate request"</strong>: the daemon that answered is older than<br>
 the plugin. <em>Restart daemon</em> in the maddi tool window, then translate again.</li>
 <li><strong>The analysis fails</strong>: the tool window has the message. The daemon's own log is next to the IDE's<br>
-(IntelliJ: <em>Help → Show Log in Finder/Explorer</em>; Eclipse: <code class="notranslate">.metadata/.plugins/io.codelaser.maddi.eclipse/ maddi-daemon.log</code> in the workspace).</li>
+(IntelliJ: <em>Help → Show Log in Finder/Explorer</em>; Eclipse: <code class="notranslate">.metadata/.plugins/io.codelaser.maddi.eclipse/ maddi-daemon.log</code> in the workspace; VS Code: the <strong>maddi</strong> output channel).</li>
 </ul>
 <p>Questions and bug reports: <a href="https://github.com/CodeLaser/maddi/issues">https://github.com/CodeLaser/maddi/issues</a>.</p>
-<footer>maddi 0.9.6 · Eclipse update site: <a href="eclipse/">https://codelaser.github.io/maddi-dist/eclipse/</a> ·
+<footer>maddi 0.9.7 · Eclipse update site: <a href="eclipse/">https://codelaser.github.io/maddi-dist/eclipse/</a> ·
 <a href="https://github.com/CodeLaser/maddi">source</a></footer>
 </main>
 </body>
